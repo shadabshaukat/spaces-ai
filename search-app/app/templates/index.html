@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LiveLab Search App</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h2>Oracle Cloud / OCI Generative AI / PostgreSQL</h2>
+    <div class="spacer"></div>
+    <button id="themeBtn" class="ghost" title="Toggle dark mode">🌓</button>
+  </header>
+
+  <main class="container">
+    <!-- Hero: Google-like minimalist landing -->
+    <section class="card card--wide hero">
+      <div class="logo" aria-label="SEARCH">
+        <span class="g g-blue">S</span>
+        <span class="g g-red">E</span>
+        <span class="g g-yellow">A</span>
+        <span class="g g-blue">R</span>
+        <span class="g g-green">C</span>
+        <span class="g g-red">H</span>
+      </div>
+
+      <div class="searchbar">
+        <input id="query" class="search-input" type="text" placeholder="Search..." autocomplete="off" />
+        <div class="search-actions">
+          <button id="searchBtn" class="primary">Search</button>
+          <button id="settingsBtn" class="ghost" title="Settings" aria-expanded="false">⚙️</button>
+        </div>
+      </div>
+
+      <div id="settingsPanel" class="settings" hidden>
+        <div class="row wrap">
+          <div class="row no-grow">
+            <label for="mode">Mode</label>
+            <select id="mode">
+              <option value="hybrid">Hybrid</option>
+              <option value="semantic">Semantic</option>
+              <option value="fulltext">Full-text</option>
+              <option value="rag"selected>RAG</option>
+            </select>
+          </div>
+          <div class="row no-grow">
+            <label for="topk" class="leftpad">Top K</label>
+            <input id="topk" type="number" value="25" min="1" max="50" />
+          </div>
+          <div class="row no-grow">
+            <label for="autoSearch" class="leftpad">Auto search</label>
+            <input id="autoSearch" type="checkbox" />
+            <label for="debounceMs" class="leftpad">Debounce (ms)</label>
+            <input id="debounceMs" type="number" value="400" min="100" max="2000" />
+          </div>
+        </div>
+      </div>
+
+      <div class="row middle">
+        <div class="loader" id="searchLoading" hidden>
+          <div class="spinner"></div>
+          <span>Searching…</span>
+        </div>
+      </div>
+
+      <div class="row" id="answerRow" hidden>
+        <label>Answer / Context <span id="llmBadge" class="badge" style="display:none"></span></label>
+        <pre id="answer" class="panel"></pre>
+        <div id="refs" class="panel" style="margin-top:8px; display:none"></div>
+      </div>
+      <div class="row" id="resultsRow" hidden>
+        <label>Results</label>
+        <div id="results" class="results"></div>
+      </div>
+    </section>
+
+    <!-- Upload -->
+    <section class="card card--wide">
+      <h2>Upload</h2>
+      <div class="row wrap">
+        <button id="uploadBtn">Upload</button>
+        <div class="loader" id="uploadLoading" hidden>
+          <div class="spinner small"></div>
+          <span>Processing…</span>
+        </div>
+      </div>
+      <div class="row">
+        <div id="dropzone" class="dropzone">Drag & drop files here</div>
+      </div>
+      <div class="row">
+        <input id="files" type="file" multiple webkitdirectory directory />
+      </div>
+      <div class="row" id="uploadListRow" hidden>
+        <div id="uploadList" class="progress-list"></div>
+      </div>
+      <div class="row" id="uploadStatusRow" hidden>
+        <pre id="uploadStatus" class="panel"></pre>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script>
+    // Theme toggle
+    (function(){
+      const btn = document.getElementById('themeBtn');
+      const curr = localStorage.getItem('theme');
+      if (curr === 'dark') document.body.classList.add('dark');
+      btn.addEventListener('click', () => {
+        document.body.classList.toggle('dark');
+        localStorage.setItem('theme', document.body.classList.contains('dark') ? 'dark' : 'light');
+      });
+    })();
+
+    // Clear inputs on load/refresh
+    window.addEventListener('DOMContentLoaded', () => {
+      const q = document.getElementById('query');
+      const files = document.getElementById('files');
+      const status = document.getElementById('uploadStatus');
+      if (q) q.value = '';
+      if (files) files.value = '';
+      if (status) status.textContent = '';
+    });
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.hidden = false;
+      setTimeout(() => { t.hidden = true; t.textContent = ''; }, 3000);
+    }
+
+    function escapeHtml(s) {
+      return (s || '')
+        .replace(/&/g, '&')
+        .replace(/</g, '<')
+        .replace(/>/g, '>')
+        .replace(/\"/g, '"')
+        .replace(/'/g, '&#039;');
+    }
+
+    function highlight(text, query) {
+      if (!query) return escapeHtml(text);
+      try {
+        const esc = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const re = new RegExp(esc, 'ig');
+        return escapeHtml(text).replace(re, m => `<mark>${escapeHtml(m)}</mark>`);
+      } catch {
+        return escapeHtml(text);
+      }
+    }
+
+    async function api(path, opts={}) {
+      const res = await fetch(path, {
+        method: opts.method || 'GET',
+        headers: opts.body instanceof FormData ? undefined : { 'Content-Type': 'application/json' },
+        body: opts.body ? (opts.body instanceof FormData ? opts.body : JSON.stringify(opts.body)) : undefined,
+        signal: opts.signal
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return await res.json();
+    }
+
+    function renderResults(hits, query) {
+      const wrap = document.getElementById('results');
+      const row = document.getElementById('resultsRow');
+      wrap.innerHTML = '';
+      if (!hits || !hits.length) {
+        row.hidden = false;
+        wrap.textContent = 'No results';
+        return;
+      }
+      for (const h of hits) {
+        const div = document.createElement('div');
+        div.className = 'hit';
+        const title = h.title ? escapeHtml(h.title) : '';
+        const source = h.source_path ? escapeHtml(h.source_path) : '';
+        const distance = (h.distance !== null && h.distance !== undefined) ? `distance: ${h.distance.toFixed ? h.distance.toFixed(4) : h.distance}` : '';
+        const rank = (h.rank !== null && h.rank !== undefined) ? `rank: ${h.rank.toFixed ? h.rank.toFixed(4) : h.rank}` : '';
+        div.innerHTML = `
+          <div class="hit-head">
+            <div class="hit-title">${title || '(untitled)'}</div>
+            <div class="hit-badges">${distance ? `<span class="badge">${distance}</span>` : ''}${rank ? `<span class="badge">${rank}</span>` : ''}</div>
+          </div>
+          <div class="hit-meta">${source}</div>
+          <div class="hit-content">${highlight(h.content || '', query)}</div>
+        `;
+        wrap.appendChild(div);
+      }
+      row.hidden = false;
+    }
+
+    let currentSearchController = null;
+    let searchTimer = null;
+
+    async function doSearch() {
+      const query = document.getElementById('query').value.trim();
+      const mode = document.getElementById('mode').value;
+      const topk = parseInt(document.getElementById('topk').value || '25', 10);
+      const ans = document.getElementById('answer');
+      const answerRow = document.getElementById('answerRow');
+      const loading = document.getElementById('searchLoading');
+      const btn = document.getElementById('searchBtn');
+
+      if (!query) { ans.textContent = ''; renderResults([], ''); return; }
+
+      if (currentSearchController) currentSearchController.abort();
+      const ctrl = new AbortController();
+      currentSearchController = ctrl;
+
+      loading.hidden = false;
+      btn.disabled = true;
+      ans.textContent = '';
+
+      try {
+        const data = await api('/api/search', { method: 'POST', body: { query, mode, top_k: topk }, signal: ctrl.signal });
+        if (data.answer) {
+          ans.textContent = data.answer;
+          answerRow.hidden = false;
+          const badge = document.getElementById('llmBadge');
+          if (badge) {
+            if (data.used_llm === true) {
+              badge.textContent = 'LLM answer';
+              badge.style.display = 'inline-block';
+            } else {
+              badge.textContent = 'Context-only';
+              badge.style.display = 'inline-block';
+            }
+          }
+          // Render references if provided
+          const refsEl = document.getElementById('refs');
+          if (refsEl) {
+            if (Array.isArray(data.references) && data.references.length) {
+              refsEl.style.display = 'block';
+              const items = data.references.map((r, idx) => {
+                const fn = r.file_name || '';
+                const ft = r.file_type || '';
+                // Prefer link to Object Storage when available
+                const label = r.url ? `<a href="${r.url}" target="_blank" rel="noopener">${escapeHtml(fn || r.url)}</a>` : escapeHtml(fn);
+                // Find matching hit for chunk text (by chunk_id)
+                const match = data.hits.find(h => h.chunk_id === r.chunk_id);
+                const txt = match ? escapeHtml(match.content) : '';
+                return `<details>
+                  <summary>[${idx+1}] Source: ${label}${ft ? ` (${escapeHtml(ft)})` : ''}</summary>
+                  <p>${txt}</p>
+                </details>`;
+              }).join('');
+              refsEl.innerHTML = `<strong>References</strong>\n${items}`;
+            } else {
+              refsEl.style.display = 'none';
+              refsEl.innerHTML = '';
+            }
+          }
+        }
+        renderResults(data.hits, query);
+      } catch (e) {
+        if (e.name !== 'AbortError') {
+          showToast('Search failed');
+          console.error(e);
+        }
+      } finally {
+        if (currentSearchController === ctrl) currentSearchController = null;
+        loading.hidden = true;
+        btn.disabled = false;
+      }
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      const q = document.getElementById('query');
+      if (e.key === 'Enter' && document.activeElement === q) {
+        e.preventDefault();
+        doSearch();
+      } else if (e.key === 'Escape') {
+        q.value = '';
+        document.getElementById('answer').textContent = '';
+        document.getElementById('answerRow').hidden = true;
+        const res = document.getElementById('results');
+        res.innerHTML = '';
+        document.getElementById('resultsRow').hidden = true;
+      }
+    });
+
+    document.getElementById('searchBtn').addEventListener('click', () => doSearch());
+
+    document.getElementById('query').addEventListener('input', () => {
+      const auto = document.getElementById('autoSearch')?.checked ?? false;
+      const delay = parseInt(document.getElementById('debounceMs')?.value || '400', 10);
+      if (auto) {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => doSearch().catch(console.error), delay);
+      }
+    });
+
+    document.getElementById('mode').addEventListener('change', () => {
+      if (document.getElementById('autoSearch').checked) doSearch();
+    });
+    document.getElementById('topk').addEventListener('change', () => {
+      if (document.getElementById('autoSearch').checked) doSearch();
+    });
+
+    document.getElementById('settingsBtn').addEventListener('click', () => {
+      const p = document.getElementById('settingsPanel');
+      const b = document.getElementById('settingsBtn');
+      const nowHidden = !p.hidden;
+      p.hidden = nowHidden;
+      b.setAttribute('aria-expanded', String(!nowHidden));
+    });
+
+    // Drag-and-drop support
+    const dropzone = document.getElementById('dropzone');
+    let droppedFiles = [];
+
+    function addFilesToList(fileList) {
+      for (const f of fileList) droppedFiles.push(f);
+      const dz = document.getElementById('dropzone');
+      if (dz) dz.textContent = `${droppedFiles.length} file(s) ready`;
+      showToast(`${droppedFiles.length} file(s) ready`);
+    }
+
+    async function traverseEntry(entry) {
+      return new Promise((resolve) => {
+        if (entry.isFile) {
+          entry.file(file => resolve([file]));
+        } else if (entry.isDirectory) {
+          const reader = entry.createReader();
+          const out = [];
+          const read = () => reader.readEntries(async entries => {
+            if (!entries.length) return resolve(out);
+            for (const e of entries) {
+              const nested = await traverseEntry(e);
+              out.push(...nested);
+            }
+            read();
+          });
+          read();
+        } else {
+          resolve([]);
+        }
+      });
+    }
+
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzone.classList.add('dragover');
+    });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+    dropzone.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('dragover');
+      const items = e.dataTransfer.items;
+      if (items && items.length && items[0].webkitGetAsEntry) {
+        let all = [];
+        for (const it of items) {
+          const entry = it.webkitGetAsEntry();
+          if (entry) {
+            const files = await traverseEntry(entry);
+            all.push(...files);
+          }
+        }
+        addFilesToList(all);
+      } else {
+        addFilesToList(e.dataTransfer.files);
+      }
+    });
+
+    // Update dropzone text when browsing files
+    const filesInputEl = document.getElementById('files');
+    if (filesInputEl) {
+      filesInputEl.addEventListener('change', () => {
+        const count = filesInputEl.files ? filesInputEl.files.length : 0;
+        const dz = document.getElementById('dropzone');
+        if (dz) dz.textContent = count ? `${count} file(s) selected` : 'Drag & drop files here';
+      });
+    }
+
+    const readyBtn = document.getElementById('readyBtn');
+    if (readyBtn) {
+      readyBtn.addEventListener('click', async () => {
+        const box = document.getElementById('readyJson');
+        const row = document.getElementById('statusRow');
+        try {
+          const data = await api('/api/ready');
+          if (box) box.textContent = JSON.stringify(data, null, 2);
+          if (row) row.hidden = false;
+        } catch (e) {
+          if (box) box.textContent = 'Error: ' + (e && e.message ? e.message : String(e));
+          if (row) row.hidden = false;
+        }
+      });
+    }
+
+    // Per-file upload with retries + concurrency + folder/files + dropped files
+    document.getElementById('uploadBtn').addEventListener('click', async () => {
+      const filesInput = document.getElementById('files');
+      const status = document.getElementById('uploadStatus');
+      const statusRow = document.getElementById('uploadStatusRow');
+      const loading = document.getElementById('uploadLoading');
+      const list = document.getElementById('uploadList');
+      const listRow = document.getElementById('uploadListRow');
+      status.textContent = '';
+
+      const selA = filesInput?.files ? Array.from(filesInput.files) : [];
+      const allFiles = [...selA, ...droppedFiles];
+      if (!allFiles.length) { showToast('No files selected'); return; }
+
+      list.innerHTML = '';
+      listRow.hidden = false;
+      statusRow.hidden = false;
+      const entries = new Map();
+      for (const f of allFiles) {
+        const item = document.createElement('div');
+        item.className = 'progress-item';
+        item.innerHTML = `
+          <div class="progress-row"><span>${escapeHtml(f.webkitRelativePath || f.name)}</span><span class="pct">0%</span></div>
+          <div class="progress"><div class="progress-bar"></div></div>
+        `;
+        list.appendChild(item);
+        entries.set(f, item);
+      }
+
+      loading.hidden = false;
+
+      const maxRetries = 3;
+      const backoff = (attempt) => Math.min(2000, 300 * Math.pow(2, attempt - 1));
+
+      function uploadOne(file, attempt = 1) {
+        return new Promise((resolve) => {
+          const item = entries.get(file);
+          const bar = item.querySelector('.progress-bar');
+          const pctLabel = item.querySelector('.pct');
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', '/api/upload');
+
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              const pct = Math.round((e.loaded / e.total) * 100);
+              bar.style.width = pct + '%';
+              pctLabel.textContent = pct + '%';
+            } else {
+              // Fallback when total length is unknown: show animated bar and ellipsis
+              bar.style.width = '50%';
+              pctLabel.textContent = '…';
+            }
+          };
+          // When upload phase finishes, show processing state until the server responds
+          xhr.upload.onload = () => {
+            pctLabel.textContent = 'processing…';
+          };
+
+          xhr.onerror = () => {
+            if (attempt < maxRetries) {
+              const delay = backoff(attempt);
+              pctLabel.textContent = `retrying (${attempt}/${maxRetries})…`;
+              setTimeout(() => resolve(uploadOne(file, attempt + 1)), delay);
+            } else {
+              pctLabel.textContent = 'failed';
+              resolve({ file, ok: false, error: 'network error' });
+            }
+          };
+
+          xhr.onreadystatechange = function () {
+            if (xhr.readyState === XMLHttpRequest.DONE) {
+              if (xhr.status >= 200 && xhr.status < 300) {
+                try {
+                  const data = JSON.parse(xhr.responseText);
+                  bar.style.width = '100%';
+                  pctLabel.textContent = '100%';
+                  // Show per-file summary if available from server
+                  try {
+                    const res = Array.isArray(data.results) ? data.results[0] : data;
+                    if (res && typeof res === 'object') {
+                      const docId = res.document_id || res.documentId;
+                      const chunks = res.chunks || res.num_chunks;
+                      const msg = [];
+                      if (docId != null) msg.push(`doc ${docId}`);
+                      if (chunks != null) msg.push(`${chunks} chunks`);
+                      const row = item.querySelector('.progress-row span');
+                      if (row && msg.length) row.textContent = `${row.textContent} — processed (${msg.join(', ')})`;
+                    }
+                  } catch {}
+                  resolve({ file, ok: true, data });
+                } catch (e) {
+                  if (attempt < maxRetries) {
+                    const delay = backoff(attempt);
+                    pctLabel.textContent = `retrying (${attempt}/${maxRetries})…`;
+                    setTimeout(() => resolve(uploadOne(file, attempt + 1)), delay);
+                  } else {
+                    pctLabel.textContent = 'failed';
+                    resolve({ file, ok: false, error: 'parse error' });
+                  }
+                }
+              } else if (xhr.status >= 500 && attempt < maxRetries) {
+                const delay = backoff(attempt);
+                pctLabel.textContent = `retrying (${attempt}/${maxRetries})…`;
+                setTimeout(() => resolve(uploadOne(file, attempt + 1)), delay);
+              } else {
+                pctLabel.textContent = 'failed';
+                resolve({ file, ok: false, error: xhr.responseText || `HTTP ${xhr.status}` });
+              }
+            }
+          };
+
+          const form = new FormData();
+          form.append('files', file);
+          xhr.send(form);
+        });
+      }
+
+      // Limit concurrency to 4
+      const queue = [...allFiles];
+      const inFlight = new Set();
+      const results = [];
+
+      async function pump() {
+        while (inFlight.size < 4 && queue.length) {
+          const f = queue.shift();
+          const p = uploadOne(f).then((res) => {
+            inFlight.delete(p);
+            results.push(res);
+            pump();
+          });
+          inFlight.add(p);
+        }
+        if (!queue.length && !inFlight.size) {
+          loading.hidden = true;
+          try {
+            status.textContent = JSON.stringify(results.map(r => ({ file: r.file.webkitRelativePath || r.file.name, ok: r.ok, error: r.error || null })), null, 2);
+            showToast('Upload finished');
+          } catch (e) {
+            status.textContent = 'Upload finished (see progress list)';
+          }
+          // Clear dropped files after run
+          droppedFiles = [];
+        }
+      }
+
+      pump();
+    });
+  </script>
+</body>
+</html>

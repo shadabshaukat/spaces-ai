@@ -8,7 +8,6 @@ This Resource Manager–ready stack provisions:
 - Optional Compute instance
 - Object Storage bucket for application uploads
 - OpenSearch cluster (OCI managed)
-- Valkey (OCI Redis) cluster with optional user and ACL
 
 The application (search-app) uses:
 - PostgreSQL as system-of-record
@@ -77,17 +76,15 @@ OpenSearch (OCI)
 
 Valkey (OCI Redis)
 - enable_cache (bool, default true)
-- redis_display_name (string, default "spacesai-valkey")
-- redis_node_count (number, default 1)
-- redis_node_memory_gbs (number, default 2)
+- cache_display_name (string, default "spacesai-cache")
+- cache_node_count (number, default 1)
+- cache_memory_gbs (number, default 8)
 - redis_software_version (string, default "VALKEY_7_2")
-- Optional Cache User:
-  - create_cache_user (bool, default false)
-  - cache_user_name (string, default "default")
-  - cache_user_description (string, default "Default Cache user")
-  - cache_user_acl_string (string, default "+@all")
-  - cache_user_status (string, default "ON")
-  - cache_user_hashed_passwords (list(string), sensitive, default []) — values must be 64-character hex SHA-256 (not PBKDF2 strings)
+
+
+
+
+
 
 
 
@@ -107,7 +104,6 @@ Valkey (OCI Redis)
 
 - Valkey (oci_redis_redis_cluster):
   - Single or multi-node with memory and version
-  - Optional oci_redis_oci_cache_user and attach resource when create_cache_user=true
 
 - PostgreSQL DB System and optional configuration
 - Uploads bucket in Object Storage
@@ -151,7 +147,8 @@ Valkey (OCI Redis)
 ## Notes and compliance
 - This stack uses provider oracle/oci >= 5.30.0.
 - OpenSearch resource is oci_opensearch_opensearch_cluster and requires the explicit arguments shown above.
-- Valkey is provisioned via oci_redis_redis_cluster. Optional user is oci_redis_oci_cache_user + oci_redis_redis_cluster_attach_oci_cache_user.
+- Valkey is provisioned via oci_redis_redis_cluster.
+
 - NSG rule blocks use proper multi-line destination_port_range syntax.
 
 If the provider version you run requires different argument names, run terraform plan and share the exact error, and we will iterate quickly to align names.

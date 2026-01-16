@@ -114,9 +114,7 @@ opensearch_admin_password_hash = null
 # Valkey (OCI Redis)
 # ----------------------
 enable_cache       = true
-# legacy display name (unused by resources in this stack but kept for compatibility)
 cache_display_name = "spacesai-cache"
-redis_display_name = "spacesai-valkey"
-redis_node_count   = 1
-redis_node_memory_gbs  = 2
+cache_node_count   = 1
+cache_memory_gbs   = 2
 redis_software_version = "VALKEY_7_2"

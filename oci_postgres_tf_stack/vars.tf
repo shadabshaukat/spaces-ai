@@ -91,7 +91,7 @@ variable "psql_iops" {
 
 # variable "psql_passwd_type" { default = "PLAIN_TEXT" }
 
-## Compute (optional)
+## Compute 
 
 variable "create_compute" {
   type    = bool
@@ -151,7 +151,7 @@ variable "object_storage_bucket_name" {
   default     = "search-app-uploads"
 }
 
-## OCI PostgreSQL Configuration (optional)
+## OCI PostgreSQL Configuration
 
 variable "create_psql_configuration" {
   type        = bool
@@ -194,12 +194,6 @@ variable "psql_config_description" {
 }
 
 # Map of config_key => overridden_config_value
-# Example:
-# {
-#   "oci.admin_enabled_extensions" = "pg_stat_statements,pglogical,vector"
-#   "pglogical.conflict_log_level" = "debug1"
-#   "pg_stat_statements.max"       = "5000"
-# }
 variable "psql_config_overrides" {
   type        = map(string)
   description = "Configuration overrides as key/value pairs"
@@ -229,8 +223,6 @@ variable "opensearch_version" {
   default     = "3.2.0"
 }
 
-
-
 variable "opensearch_node_count" {
   type        = number
   description = "Number of data nodes in the OpenSearch cluster"
@@ -249,7 +241,6 @@ variable "opensearch_memory_gbs" {
   default     = 20
 }
 
-
 variable "opensearch_storage_gbs" {
   type        = number
   description = "Block storage per node in GB"
@@ -262,7 +253,6 @@ variable "opensearch_data_node_host_type" {
   description = "Instance type for data nodes (FLEX|BM)"
   default     = "FLEX"
 }
-
 
 variable "opensearch_master_node_count" {
   type        = number
@@ -282,7 +272,6 @@ variable "opensearch_master_node_host_memory_gb" {
   default     = 20
 }
 
-
 variable "opensearch_master_node_host_type" {
   type        = string
   description = "Instance type for master nodes (FLEX|BM)"
@@ -301,26 +290,22 @@ variable "opensearch_opendashboard_node_host_ocpu_count" {
   default     = 2
 }
 
-
 variable "opensearch_opendashboard_node_host_memory_gb" {
   type        = number
   description = "Memory (GB) per dashboard node"
   default     = 16
 }
 
-
-# Optional: Admin credentials for OpenSearch (if supported by your provider/resource)
-# Some OCI provider versions require setting an admin/master user and password during cluster creation.
-# If your provider exposes these fields, wire them in opensearch.tf accordingly.
+# Admin credentials for OpenSearch (if supported by your provider/resource)
 variable "opensearch_admin_user" {
   type        = string
-  description = "Admin (master) username for OpenSearch cluster (optional; provider may use IAM instead)"
+  description = "Master username for OpenSearch cluster. Do not use 'admin' since that is a reserved word."
   default     = null
 }
 
 variable "opensearch_admin_password_hash" {
   type        = string
-  description = "Admin (master) password HASH for OpenSearch cluster (optional). Provide a hashed password if security is configured."
+  description = "Master user's password HASH for OpenSearch cluster. Refer : https://docs.oracle.com/en-us/iaas/Content/search-opensearch/Tasks/update-opensearch-cluster-name.htm"
   sensitive   = true
   default     = null
 }
@@ -330,8 +315,6 @@ variable "opensearch_security_mode" {
   description = "OpenSearch security mode (e.g., ENFORCING)"
   default     = "ENFORCING"
 }
-
-
 
 ## OCI Cache (Valkey) in same VCN
 
@@ -359,81 +342,10 @@ variable "cache_memory_gbs" {
   default     = 8
 }
 
-variable "redis_display_name" {
-  type        = string
-  description = "Display name for Redis/Valkey cluster"
-  default     = "spacesai-valkey"
-}
 
-variable "redis_node_count" {
-  type        = number
-  description = "Number of Redis/Valkey nodes"
-  default     = 1
-}
-
-variable "redis_node_memory_gbs" {
-  type        = number
-  description = "Memory per Redis/Valkey node in GB"
-  default     = 2
-}
 
 variable "redis_software_version" {
   type        = string
   description = "Redis/Valkey software version identifier (e.g., VALKEY_7_2)"
   default     = "VALKEY_7_2"
-}
-
-# Optional Cache User configuration (attach to cluster)
-variable "create_cache_user" {
-  type        = bool
-  description = "Whether to create a Valkey/Redis cache user and attach it to the cluster"
-  default     = false
-}
-
-variable "cache_user_name" {
-  type        = string
-  description = "Cache user name"
-  default     = "default"
-}
-
-variable "cache_user_description" {
-  type        = string
-  description = "Cache user description"
-  default     = "Default Cache user"
-}
-
-variable "cache_user_acl_string" {
-  type        = string
-  description = "ACL string for the cache user (see Valkey/Redis ACL docs)."
-  default     = "+@all"
-}
-
-variable "cache_user_status" {
-  type        = string
-  description = "Cache user status (e.g., ON|OFF)"
-  default     = "ON"
-}
-
-variable "cache_user_hashed_passwords" {
-  type        = list(string)
-  description = "List of hashed passwords for the cache user (PASSWORD auth). Must be 64-character hex SHA-256 hashes."
-  sensitive   = true
-  default     = []
-  validation {
-    condition     = length(var.cache_user_hashed_passwords) == 0 || alltrue([for h in var.cache_user_hashed_passwords : can(regex("^[A-Fa-f0-9]{64}$", h))])
-    error_message = "Each cache user hashed password must be a 64-character hex SHA-256 hash (not PBKDF2)."
-  }
-}
-
-
-# Convenience: allow a single hashed password string (useful for ORM UIs that don't support list inputs)
-variable "cache_user_hashed_password" {
-  type        = string
-  description = "Single hashed password for the cache user (PASSWORD auth). If set, it will be combined with cache_user_hashed_passwords. Must be 64-character hex SHA-256."
-  sensitive   = true
-  default     = ""
-  validation {
-    condition     = var.cache_user_hashed_password == "" || can(regex("^[A-Fa-f0-9]{64}$", var.cache_user_hashed_password))
-    error_message = "cache_user_hashed_password must be a 64-character hex SHA-256 hash (not PBKDF2)."
-  }
 }

@@ -246,8 +246,9 @@ variable "opensearch_ocpus" {
 variable "opensearch_memory_gbs" {
   type        = number
   description = "Memory per node in GB"
-  default     = 16
+  default     = 20
 }
+
 
 variable "opensearch_storage_gbs" {
   type        = number
@@ -278,8 +279,9 @@ variable "opensearch_master_node_host_ocpu_count" {
 variable "opensearch_master_node_host_memory_gb" {
   type        = number
   description = "Memory (GB) per master node"
-  default     = 16
+  default     = 20
 }
+
 
 variable "opensearch_master_node_host_type" {
   type        = string
@@ -296,14 +298,16 @@ variable "opensearch_opendashboard_node_count" {
 variable "opensearch_opendashboard_node_host_ocpu_count" {
   type        = number
   description = "OCPUs per dashboard node"
-  default     = 1
+  default     = 2
 }
+
 
 variable "opensearch_opendashboard_node_host_memory_gb" {
   type        = number
   description = "Memory (GB) per dashboard node"
-  default     = 8
+  default     = 16
 }
+
 
 # Optional: Admin credentials for OpenSearch (if supported by your provider/resource)
 # Some OCI provider versions require setting an admin/master user and password during cluster creation.
@@ -411,8 +415,25 @@ variable "cache_user_status" {
 }
 
 variable "cache_user_hashed_passwords" {
-  type        = string
-  description = "List of hashed passwords for the cache user (PASSWORD auth)."
+  type        = list(string)
+  description = "List of hashed passwords for the cache user (PASSWORD auth). Must be 64-character hex SHA-256 hashes."
   sensitive   = true
   default     = []
+  validation {
+    condition     = length(var.cache_user_hashed_passwords) == 0 || alltrue([for h in var.cache_user_hashed_passwords : can(regex("^[A-Fa-f0-9]{64}$", h))])
+    error_message = "Each cache user hashed password must be a 64-character hex SHA-256 hash (not PBKDF2)."
+  }
+}
+
+
+# Convenience: allow a single hashed password string (useful for ORM UIs that don't support list inputs)
+variable "cache_user_hashed_password" {
+  type        = string
+  description = "Single hashed password for the cache user (PASSWORD auth). If set, it will be combined with cache_user_hashed_passwords. Must be 64-character hex SHA-256."
+  sensitive   = true
+  default     = ""
+  validation {
+    condition     = var.cache_user_hashed_password == "" || can(regex("^[A-Fa-f0-9]{64}$", var.cache_user_hashed_password))
+    error_message = "cache_user_hashed_password must be a 64-character hex SHA-256 hash (not PBKDF2)."
+  }
 }

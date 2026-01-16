@@ -103,7 +103,8 @@ opensearch_master_node_host_type           = "FLEX"  # FLEX | BM
 # Dashboard nodes
 opensearch_opendashboard_node_count           = 1
 opensearch_opendashboard_node_host_ocpu_count = 1
-opensearch_opendashboard_node_host_memory_gb  = 8
+opensearch_opendashboard_node_host_memory_gb  = 16
+
 # Security (optional): provide only if you want to set master user
 opensearch_security_mode       = "ENFORCING"
 opensearch_admin_user          = null
@@ -119,10 +120,3 @@ redis_display_name = "spacesai-valkey"
 redis_node_count   = 1
 redis_node_memory_gbs  = 2
 redis_software_version = "VALKEY_7_2"
-# Optional Cache User (disabled by default). Creation requires at least one hashed password
-create_cache_user           = false
-cache_user_name             = "default"
-cache_user_description      = "Default Cache user"
-cache_user_acl_string       = "+@all"
-cache_user_status           = "ON"
-cache_user_hashed_passwords = []

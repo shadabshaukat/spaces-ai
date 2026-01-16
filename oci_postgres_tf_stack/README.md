@@ -87,7 +87,8 @@ Valkey (OCI Redis)
   - cache_user_description (string, default "Default Cache user")
   - cache_user_acl_string (string, default "+@all")
   - cache_user_status (string, default "ON")
-  - cache_user_hashed_passwords (list(string), sensitive, default [])
+  - cache_user_hashed_passwords (list(string), sensitive, default []) — values must be 64-character hex SHA-256 (not PBKDF2 strings)
+
 
 
 ## What gets created
@@ -96,9 +97,8 @@ Valkey (OCI Redis)
   - VCN vcn1, private subnet vcn1_psql_priv_subnet, public subnet vcn1_pub_subnet
   - NAT, Service Gateway (optional), Internet Gateway
   - Security Lists + NSGs
-    - PSQL NSG rule: tcp/5432 ingress within VCN
-    - OpenSearch NSG rule: tcp/9200 ingress within VCN
-    - Valkey NSG rule: tcp/6379 ingress within VCN
+    - Private subnet rules within VCN: tcp/22 (SSH), tcp/5432 (PostgreSQL), tcp/6379 (Valkey), tcp/9200 (OpenSearch API), tcp/5601 (OpenSearch Dashboard)
+
 
 - OpenSearch (oci_opensearch_opensearch_cluster):
   - Required flat attributes set from vars (counts, memory_gb, ocpu_count, host_type, storage_gb, version)

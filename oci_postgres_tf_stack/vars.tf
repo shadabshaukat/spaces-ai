@@ -411,7 +411,7 @@ variable "cache_user_status" {
 }
 
 variable "cache_user_hashed_passwords" {
-  type        = list(string)
+  type        = string
   description = "List of hashed passwords for the cache user (PASSWORD auth)."
   sensitive   = true
   default     = []

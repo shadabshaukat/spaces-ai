@@ -2,6 +2,7 @@ import os
 from dataclasses import dataclass
 from typing import Optional
 from pathlib import Path
+import secrets
 
 # Load environment variables from a .env file if present so `uv run searchapp` works without exporting vars
 try:
@@ -31,14 +32,16 @@ class Settings:
     port: int = int(os.getenv("PORT", "8000"))
     workers: int = int(os.getenv("WORKERS", "1"))
 
+    app_name: str = os.getenv("APP_NAME", "SpacesAI")
+
     # Storage
     data_dir: str = os.getenv("DATA_DIR", "storage")
     upload_dir: str = os.getenv("UPLOAD_DIR", "storage/uploads")
     model_cache_dir: str = os.getenv("MODEL_CACHE_DIR", "storage/models")
-    storage_backend: str = os.getenv("STORAGE_BACKEND", "local").lower()  # local | oci
+    storage_backend: str = os.getenv("STORAGE_BACKEND", "local").lower()  # local | oci | both
     oci_os_bucket_name: Optional[str] = os.getenv("OCI_OS_BUCKET_NAME")
     # Upload & parsing
-    max_upload_size_mb: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", "50"))
+    max_upload_size_mb: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", "200"))
     use_pymupdf: bool = _get_bool("USE_PYMUPDF", False)
     # Upload lifecycle
     delete_uploaded_after_ingest: bool = _get_bool("DELETE_UPLOADED_FILES", False)
@@ -62,6 +65,8 @@ class Settings:
     embedding_model_name: str = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
     embedding_dim: int = int(os.getenv("EMBEDDING_DIM", "384"))
     embedding_batch_size: int = int(os.getenv("EMBEDDING_BATCH", "64"))
+    # Control whether to persist embeddings in Postgres (chunks.embedding)
+    db_store_embeddings: bool = _get_bool("DB_STORE_EMBEDDINGS", False)
 
     # pgvector index
     pgvector_metric: str = os.getenv("PGVECTOR_METRIC", "cosine")  # cosine|l2|ip
@@ -71,8 +76,46 @@ class Settings:
     # Full-text search
     fts_config: str = os.getenv("FTS_CONFIG", "english")
 
-    # Security
+    # Retrieval backend: pgvector | opensearch
+    search_backend: str = os.getenv("SEARCH_BACKEND", "opensearch").lower()
+
+    # OpenSearch configuration
+    opensearch_host: Optional[str] = os.getenv("OPENSEARCH_HOST")
+    opensearch_index: str = os.getenv("OPENSEARCH_INDEX", "spacesai_chunks")
+    opensearch_user: Optional[str] = os.getenv("OPENSEARCH_USER")
+    opensearch_password: Optional[str] = os.getenv("OPENSEARCH_PASSWORD")
+    opensearch_timeout: int = int(os.getenv("OPENSEARCH_TIMEOUT", "120"))
+    opensearch_max_retries: int = int(os.getenv("OPENSEARCH_MAX_RETRIES", "8"))
+    opensearch_verify_certs: bool = _get_bool("OPENSEARCH_VERIFY_CERTS", True)
+    opensearch_dual_write: bool = _get_bool("OPENSEARCH_DUAL_WRITE", True)
+
+    # Valkey (Redis-compatible) cache
+    valkey_host: Optional[str] = os.getenv("VALKEY_HOST")
+    valkey_port: int = int(os.getenv("VALKEY_PORT", "6379"))
+    valkey_password: Optional[str] = os.getenv("VALKEY_PASSWORD")
+    valkey_db: int = int(os.getenv("VALKEY_DB", "0"))
+    valkey_tls: bool = _get_bool("VALKEY_TLS", False)
+    cache_ttl_seconds: int = int(os.getenv("CACHE_TTL_SECONDS", "300"))
+
+    # AWS Bedrock (optional)
+    aws_region: Optional[str] = os.getenv("AWS_REGION")
+    aws_bedrock_model_id: Optional[str] = os.getenv("AWS_BEDROCK_MODEL_ID")
+
+    # Ollama (optional)
+    ollama_host: Optional[str] = os.getenv("OLLAMA_HOST")
+    ollama_model: Optional[str] = os.getenv("OLLAMA_MODEL")
+
+
+
+    # Security & Auth
     allow_cors: bool = _get_bool("ALLOW_CORS", True)
+    # Session and cookie config
+    secret_key: str = os.getenv("SECRET_KEY") or secrets.token_urlsafe(32)
+    session_cookie_name: str = os.getenv("SESSION_COOKIE_NAME", "spacesai_session")
+    session_max_age_seconds: int = int(os.getenv("SESSION_MAX_AGE_SECONDS", "1209600"))  # 14 days
+    allow_registration: bool = _get_bool("ALLOW_REGISTRATION", True)
+
+    # Back-compat basic auth (unused in SpacesAI but kept for compatibility in some tools)
     basic_auth_user: str = os.getenv("BASIC_AUTH_USER", "admin")
     basic_auth_password: str = os.getenv("BASIC_AUTH_PASSWORD", "changeme")
 
@@ -94,6 +137,7 @@ class Settings:
     oci_fingerprint: Optional[str] = os.getenv("OCI_FINGERPRINT")
     oci_private_key_path: Optional[str] = os.getenv("OCI_PRIVATE_KEY_PATH")
     oci_private_key_passphrase: Optional[str] = os.getenv("OCI_PRIVATE_KEY_PASSPHRASE")
+
 
 
 def build_database_url(s: Settings) -> str:

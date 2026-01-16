@@ -110,15 +110,20 @@ def _remove_common_headers_footers(pages: List[str]) -> List[str]:
 def read_text_from_file(path: str) -> Tuple[str, str]:
     """
     Return (text, source_type) from a supported file.
-    source_type: pdf|html|txt|docx|xml|csv|md|json
+    source_type: pdf|html|txt|docx|pptx|xlsx|xml|csv|md|json|image|audio|video
     """
     ext = os.path.splitext(path)[1].lower()
+    # Documents
     if ext == ".pdf":
         return extract_text_from_pdf(path), "pdf"
     if ext in {".html", ".htm"}:
         return extract_text_from_html(path), "html"
     if ext == ".docx":
         return extract_text_from_docx(path), "docx"
+    if ext == ".pptx":
+        return extract_text_from_pptx(path), "pptx"
+    if ext in {".xlsx", ".xls"}:
+        return extract_text_from_xlsx(path), "xlsx"
     if ext in {".txt", ""}:
         return extract_text_from_txt(path), "txt"
     if ext == ".xml":
@@ -129,6 +134,14 @@ def read_text_from_file(path: str) -> Tuple[str, str]:
         return extract_text_from_md(path), "md"
     if ext == ".json":
         return extract_text_from_json(path), "json"
+    # Images (OCR)
+    if ext in {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif"}:
+        return extract_text_from_image(path), "image"
+    # Audio/Video (transcription)
+    if ext in {".mp3", ".wav", ".m4a", ".flac", ".ogg"}:
+        return extract_text_from_av(path, kind="audio"), "audio"
+    if ext in {".mp4", ".mov", ".mkv", ".webm", ".avi"}:
+        return extract_text_from_av(path, kind="video"), "video"
     # Fallback: read as text if possible
     try:
         return extract_text_from_txt(path), ext.lstrip('.') or 'txt'
@@ -284,6 +297,132 @@ def extract_text_from_docx(path: str) -> str:
     text = "\n\n".join(parts)
     text = _normalize_whitespace_preserve_paragraphs(text)
     return text
+
+
+def extract_text_from_pptx(path: str) -> str:
+    try:
+        from pptx import Presentation  # type: ignore
+    except Exception as e:
+        raise ValueError("PPTX support requires optional dependency python-pptx") from e
+    prs = Presentation(path)
+    parts: List[str] = []
+    for slide in prs.slides:
+        # Shapes with text
+        for shape in slide.shapes:
+            try:
+                if hasattr(shape, 'text') and shape.text:
+                    parts.append(shape.text)
+            except Exception:
+                continue
+        # Tables
+        for shape in slide.shapes:
+            try:
+                if not hasattr(shape, 'table') or shape.table is None:
+                    continue
+                tbl = shape.table
+                for row in tbl.rows:
+                    cells = []
+                    for cell in row.cells:
+                        cells.append((cell.text or '').strip())
+                    parts.append(" \t ".join(cells))
+            except Exception:
+                continue
+    text = "\n\n".join([p.strip() for p in parts if p and p.strip()])
+    return _normalize_whitespace_preserve_paragraphs(text)
+
+
+def extract_text_from_xlsx(path: str) -> str:
+    try:
+        from openpyxl import load_workbook  # type: ignore
+    except Exception as e:
+        raise ValueError("XLSX support requires optional dependency openpyxl") from e
+    wb = load_workbook(path, data_only=True, read_only=True)
+    parts: List[str] = []
+    for ws in wb.worksheets:
+        parts.append(f"# Sheet: {ws.title}")
+        for row in ws.iter_rows(values_only=True):
+            vals = []
+            for v in row:
+                if v is None:
+                    continue
+                s = str(v).strip()
+                if s:
+                    vals.append(s)
+            if vals:
+                parts.append(" \t ".join(vals))
+    text = "\n".join(parts)
+    return _normalize_whitespace_preserve_paragraphs(text)
+
+
+def extract_text_from_image(path: str) -> str:
+    try:
+        from PIL import Image  # type: ignore
+        import pytesseract  # type: ignore
+    except Exception as e:
+        raise ValueError("Image OCR requires optional dependencies pillow and pytesseract") from e
+    img = Image.open(path)
+    try:
+        txt = pytesseract.image_to_string(img)
+    except Exception as e:
+        raise ValueError(f"OCR failed: {e}") from e
+    return _normalize_whitespace_preserve_paragraphs(txt or "")
+
+
+def extract_text_from_av(path: str, kind: str = "audio") -> str:
+    """Transcribe audio/video using Whisper if available; video is first converted to audio via ffmpeg-python.
+    kind: 'audio' or 'video'
+    """
+    try:
+        import os as _os
+        import tempfile
+        import subprocess
+        try:
+            import whisper  # type: ignore
+        except Exception as e:
+            raise ValueError("Audio/Video transcription requires optional dependency openai-whisper (whisper)") from e
+
+        src = path
+        tmp_audio = None
+        if kind == "video":
+            # Extract audio to wav using ffmpeg if available
+            try:
+                import ffmpeg  # type: ignore
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tf:
+                    tmp_audio = tf.name
+                (
+                    ffmpeg
+                    .input(path)
+                    .output(tmp_audio, ac=1, ar=16000, format='wav')
+                    .overwrite_output()
+                    .run(quiet=True)
+                )
+                src = tmp_audio
+            except Exception:
+                # Fallback to system ffmpeg if ffmpeg-python is unavailable
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tf:
+                    tmp_audio = tf.name
+                try:
+                    subprocess.run(["ffmpeg", "-y", "-i", path, "-ac", "1", "-ar", "16000", src], check=True, capture_output=True)
+                except Exception as e:
+                    raise ValueError("Failed to extract audio from video; install ffmpeg or ffmpeg-python") from e
+
+        # Transcribe with Whisper (uses default/base model; customize as needed)
+        try:
+            model = whisper.load_model("base")
+            result = model.transcribe(src)
+            text = (result.get("text") or "").strip()
+        finally:
+            if tmp_audio and os.path.exists(tmp_audio):
+                try:
+                    os.remove(tmp_audio)
+                except Exception:
+                    pass
+        return _normalize_whitespace_preserve_paragraphs(text)
+    except ValueError:
+        raise
+    except Exception as e:
+        raise ValueError(f"Transcription failed: {e}") from e
+
 
 
 def _recursive_split(text: str, chunk_size: int, separators: tuple[str, ...]) -> List[str]:

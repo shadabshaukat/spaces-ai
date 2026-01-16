@@ -63,13 +63,42 @@ def init_db(s: Settings = settings) -> None:
         with conn.cursor() as cur:
             cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
             cur.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
+            cur.execute("CREATE EXTENSION IF NOT EXISTS citext")
 
         # Create tables
         with conn.cursor() as cur:
+            # Core domain tables
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS users (
+                    id BIGSERIAL PRIMARY KEY,
+                    email CITEXT UNIQUE NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    created_at TIMESTAMPTZ DEFAULT now(),
+                    last_login_at TIMESTAMPTZ
+                );
+                """
+            )
+
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS spaces (
+                    id BIGSERIAL PRIMARY KEY,
+                    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    name TEXT NOT NULL,
+                    is_default BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMPTZ DEFAULT now(),
+                    UNIQUE(user_id, name)
+                );
+                """
+            )
+
             cur.execute(
                 f"""
                 CREATE TABLE IF NOT EXISTS documents (
                     id BIGSERIAL PRIMARY KEY,
+                    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    space_id BIGINT REFERENCES spaces(id) ON DELETE SET NULL,
                     source_path TEXT,
                     source_type TEXT NOT NULL,
                     title TEXT,
@@ -78,6 +107,12 @@ def init_db(s: Settings = settings) -> None:
                 );
                 """
             )
+
+            # Backfill columns for pre-existing deployments
+            cur.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS user_id BIGINT")
+            cur.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS space_id BIGINT")
+
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_documents_user_space ON documents(user_id, space_id, created_at DESC)")
 
             cur.execute(
                 f"""
@@ -114,6 +149,23 @@ def init_db(s: Settings = settings) -> None:
                 WITH (lists = {s.pgvector_lists});
                 """
             )
+
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS user_activity (
+                    id BIGSERIAL PRIMARY KEY,
+                    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    activity_type TEXT NOT NULL,
+                    details JSONB DEFAULT '{}'::jsonb,
+                    created_at TIMESTAMPTZ DEFAULT now()
+                );
+                """
+            )
+
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_user_activity_user_time ON user_activity(user_id, created_at DESC)")
+
+        logger.info("Database initialized with vector dim=%s, metric=%s, lists=%s", dim, metric, s.pgvector_lists)
+
 
         logger.info("Database initialized with vector dim=%s, metric=%s, lists=%s", dim, metric, s.pgvector_lists)
 

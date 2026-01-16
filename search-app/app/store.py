@@ -5,6 +5,7 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Sequence, Tuple
+import re
 
 import psycopg
 from datetime import datetime
@@ -15,6 +16,7 @@ from .db import get_conn
 from .embeddings import embed_texts
 from .text_utils import ChunkParams, chunk_text, read_text_from_file
 from .pgvector_utils import to_vec_literal
+from .opensearch_adapter import OpenSearchAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -31,10 +33,18 @@ def ensure_dirs() -> None:
     Path(settings.model_cache_dir).mkdir(parents=True, exist_ok=True)
 
 
-def _timestamp_path(base_name: str) -> Path:
+def _sanitize_email_for_path(email: str) -> str:
+    e = (email or "public").strip().lower()
+    e = e.replace("@", "_at_")
+    e = re.sub(r"[^a-z0-9._\-]", "_", e)
+    return e or "public"
+
+
+def _dated_rel(base_name: str, user_email: Optional[str]) -> Path:
     now = datetime.utcnow()
-    # YYYY/MM/DD/HHMMSS structure
-    sub = Path(str(now.year), f"{now.month:02d}", f"{now.day:02d}", now.strftime("%H%M%S"))
+    # email/YYYY/MM/DD/HHMMSS/base_name
+    email_part = _sanitize_email_for_path(user_email or "public")
+    sub = Path(email_part, str(now.year), f"{now.month:02d}", f"{now.day:02d}", now.strftime("%H%M%S"))
     return sub / base_name
 
 
@@ -75,10 +85,9 @@ def _upload_to_oci(bucket: str, object_name: str, data: bytes) -> Optional[str]:
         return None
 
 
-def save_upload(file_bytes: bytes, filename: str) -> Tuple[str, Optional[str]]:
-    """Save upload respecting storage backend selection.
-    Always writes a local file for ingestion (under storage/uploads when backend includes 'local',
-    otherwise under a temporary path). Optionally uploads to OCI when backend includes 'oci'.
+def save_upload(file_bytes: bytes, filename: str, user_email: Optional[str] = None) -> Tuple[str, Optional[str]]:
+    """Save upload respecting storage backend selection and user partitioning.
+    Object/local path: <email>/YYYY/MM/DD/HHMMSS/<filename>
     Returns (local_path_for_ingest, oci_object_url_or_None).
     """
     ensure_dirs()
@@ -89,7 +98,7 @@ def save_upload(file_bytes: bytes, filename: str) -> Tuple[str, Optional[str]]:
     persist_local = settings.storage_backend in {"local", "both"}
 
     base_name = Path(filename).name.replace("..", ".")
-    dated_rel = _timestamp_path(base_name)
+    dated_rel = _dated_rel(base_name, user_email)
 
     # Choose base dir: persistent uploads vs temp area
     if persist_local:
@@ -110,12 +119,9 @@ def save_upload(file_bytes: bytes, filename: str) -> Tuple[str, Optional[str]]:
     return str(target), oci_url
 
 
-def save_upload_stream(fileobj, filename: str) -> Tuple[str, Optional[str]]:
+def save_upload_stream(fileobj, filename: str, user_email: Optional[str] = None) -> Tuple[str, Optional[str]]:
     """Stream upload without loading whole file in memory.
-    - If backend includes 'oci', stream to OCI using UploadManager.upload_stream
-    - Always write a local file for ingestion:
-        * when backend includes 'local' -> storage/uploads/YYYY/MM/DD/HHMMSS/<basename>
-        * when backend is 'oci' only   -> storage/tmp_uploads/YYYY/MM/DD/HHMMSS/<basename>
+    Object/local path: <email>/YYYY/MM/DD/HHMMSS/<filename>
     Returns (local_path_for_ingest, oci_object_url_or_None).
     """
     import shutil
@@ -125,7 +131,7 @@ def save_upload_stream(fileobj, filename: str) -> Tuple[str, Optional[str]]:
     persist_local = settings.storage_backend in {"local", "both"}
 
     base_name = Path(filename).name.replace("..", ".")
-    dated_rel = _timestamp_path(base_name)
+    dated_rel = _dated_rel(base_name, user_email)
 
     base_dir = Path(settings.upload_dir) if persist_local else (Path(settings.data_dir) / "tmp_uploads")
     target = base_dir / dated_rel
@@ -183,11 +189,11 @@ def save_upload_stream(fileobj, filename: str) -> Tuple[str, Optional[str]]:
     return str(target), oci_url
 
 
-def insert_document(conn: psycopg.Connection, source_path: str, source_type: str, title: Optional[str] = None, metadata: Optional[dict] = None) -> int:
+def insert_document(conn: psycopg.Connection, user_id: int, space_id: Optional[int], source_path: str, source_type: str, title: Optional[str] = None, metadata: Optional[dict] = None) -> int:
     with conn.cursor() as cur:
         cur.execute(
-            "INSERT INTO documents (source_path, source_type, title, metadata) VALUES (%s, %s, %s, %s) RETURNING id",
-            (source_path, source_type, title, json.dumps(metadata or {})),
+            "INSERT INTO documents (user_id, space_id, source_path, source_type, title, metadata) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+            (user_id, space_id, source_path, source_type, title, json.dumps(metadata or {})),
         )
         doc_id = cur.fetchone()[0]
     return int(doc_id)
@@ -210,7 +216,7 @@ def insert_chunks(conn: psycopg.Connection, document_id: int, chunks: Sequence[s
     return len(rows)
 
 
-def ingest_file_path(file_path: str, title: Optional[str] = None, metadata: Optional[dict] = None, chunk_params: Optional[ChunkParams] = None) -> IngestResult:
+def ingest_file_path(file_path: str, user_id: int, space_id: Optional[int] = None, title: Optional[str] = None, metadata: Optional[dict] = None, chunk_params: Optional[ChunkParams] = None) -> IngestResult:
     text, source_type = read_text_from_file(file_path)
     # Use provided chunk params, else build from environment defaults
     cp = chunk_params or ChunkParams(settings.chunk_size, settings.chunk_overlap)
@@ -220,7 +226,26 @@ def ingest_file_path(file_path: str, title: Optional[str] = None, metadata: Opti
     embeddings = embed_texts(chunks)
 
     with get_conn() as conn:
-        doc_id = insert_document(conn, file_path, source_type, title=title, metadata=metadata)
-        n = insert_chunks(conn, doc_id, chunks, embeddings)
-    logger.info("Ingested file %s as document_id=%s with %s chunks", file_path, doc_id, n)
+        doc_id = insert_document(conn, user_id, space_id, file_path, source_type, title=title, metadata=metadata)
+        n = insert_chunks(conn, doc_id, chunks, embeddings) if settings.db_store_embeddings else insert_chunks(conn, doc_id, chunks, embeddings)
+
+    # Optional dual-write to OpenSearch
+    try:
+        if settings.search_backend == "opensearch" and settings.opensearch_dual_write:
+            adapter = OpenSearchAdapter()
+            adapter.index_chunks(
+                user_id=user_id,
+                space_id=space_id,
+                doc_id=doc_id,
+                chunks=chunks,
+                vectors=embeddings,
+                file_name=Path(file_path).name,
+                source_path=file_path,
+                file_type=source_type,
+            )
+            logger.info("OpenSearch indexed doc_id=%s chunks=%s", doc_id, len(chunks))
+    except Exception as e:
+        logger.warning("OpenSearch dual-write failed for doc_id=%s: %s", doc_id, e)
+
+    logger.info("Ingested file %s as document_id=%s with %s chunks (user_id=%s, space_id=%s)", file_path, doc_id, n, user_id, space_id)
     return IngestResult(document_id=doc_id, num_chunks=n)

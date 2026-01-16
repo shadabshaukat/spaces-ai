@@ -3,81 +3,119 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>LiveLab Search App</title>
+  <title>SpacesAI</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
   <header class="topbar">
-    <h2>Oracle Cloud / OCI Generative AI / PostgreSQL</h2>
+    <h2>SpacesAI • Personal Knowledge Spaces with RAG (OCI PostgreSQL + pgvector)</h2>
     <div class="spacer"></div>
+    <div id="userControls" class="user-controls" hidden>
+      <span id="userEmail" class="user-email"></span>
+      <button id="logoutBtn" class="ghost" title="Logout">Logout</button>
+    </div>
     <button id="themeBtn" class="ghost" title="Toggle dark mode">🌓</button>
   </header>
 
   <main class="container">
-    <!-- Hero: Google-like minimalist landing -->
+    <!-- Hero and Auth -->
     <section class="card card--wide hero">
-      <div class="logo" aria-label="SEARCH">
+      <div class="logo" aria-label="SPACE-AI">
         <span class="g g-blue">S</span>
-        <span class="g g-red">E</span>
+        <span class="g g-red">P</span>
         <span class="g g-yellow">A</span>
-        <span class="g g-blue">R</span>
-        <span class="g g-green">C</span>
-        <span class="g g-red">H</span>
+        <span class="g g-blue">C</span>
+        <span class="g g-green">E</span>
+        <span class="g g-red">-</span>
+        <span class="g g-blue">A</span>
+        <span class="g g-green">I</span>
       </div>
 
-      <div class="searchbar">
-        <input id="query" class="search-input" type="text" placeholder="Search..." autocomplete="off" />
-        <div class="search-actions">
-          <button id="searchBtn" class="primary">Search</button>
-          <button id="settingsBtn" class="ghost" title="Settings" aria-expanded="false">⚙️</button>
+      <div id="authPanel" class="auth" hidden>
+        <div class="row cols">
+          <div class="auth-card">
+            <h3>Sign in</h3>
+            <label class="block">Email</label>
+            <input id="loginEmail" type="email" placeholder="you@example.com" />
+            <label class="block">Password</label>
+            <input id="loginPassword" type="password" placeholder="••••••••" />
+            <button id="loginBtn" class="primary">Login</button>
+          </div>
+          <div class="auth-card">
+            <h3>Create account</h3>
+            <label class="block">Email</label>
+            <input id="regEmail" type="email" placeholder="you@example.com" />
+            <label class="block">Password</label>
+            <input id="regPassword" type="password" placeholder="At least 8 characters" />
+            <button id="registerBtn">Register</button>
+          </div>
         </div>
       </div>
 
-      <div id="settingsPanel" class="settings" hidden>
+      <div id="appPanel" class="app-panel" hidden>
         <div class="row wrap">
-          <div class="row no-grow">
-            <label for="mode">Mode</label>
-            <select id="mode">
-              <option value="hybrid">Hybrid</option>
-              <option value="semantic">Semantic</option>
-              <option value="fulltext">Full-text</option>
-              <option value="rag"selected>RAG</option>
-            </select>
-          </div>
-          <div class="row no-grow">
-            <label for="topk" class="leftpad">Top K</label>
-            <input id="topk" type="number" value="25" min="1" max="50" />
-          </div>
-          <div class="row no-grow">
-            <label for="autoSearch" class="leftpad">Auto search</label>
-            <input id="autoSearch" type="checkbox" />
-            <label for="debounceMs" class="leftpad">Debounce (ms)</label>
-            <input id="debounceMs" type="number" value="400" min="100" max="2000" />
+          <label for="spacesSelect">Space</label>
+          <select id="spacesSelect"></select>
+          <button id="setDefaultSpaceBtn" class="ghost">Set default</button>
+          <span class="leftpad"></span>
+          <input id="newSpaceName" placeholder="Create new space…" />
+          <button id="createSpaceBtn">Create</button>
+        </div>
+
+        <div class="searchbar">
+          <input id="query" class="search-input" type="text" placeholder="Ask or search your space…" autocomplete="off" />
+          <div class="search-actions">
+            <button id="searchBtn" class="primary">Search</button>
+            <button id="settingsBtn" class="ghost" title="Settings" aria-expanded="false">⚙️</button>
           </div>
         </div>
-      </div>
 
-      <div class="row middle">
-        <div class="loader" id="searchLoading" hidden>
-          <div class="spinner"></div>
-          <span>Searching…</span>
+        <div id="settingsPanel" class="settings" hidden>
+          <div class="row wrap">
+            <div class="row no-grow">
+              <label for="mode">Mode</label>
+              <select id="mode">
+                <option value="hybrid">Hybrid</option>
+                <option value="semantic">Semantic</option>
+                <option value="fulltext">Full-text</option>
+                <option value="rag" selected>RAG</option>
+              </select>
+            </div>
+            <div class="row no-grow">
+              <label for="topk" class="leftpad">Top K</label>
+              <input id="topk" type="number" value="25" min="1" max="50" />
+            </div>
+            <div class="row no-grow">
+              <label for="autoSearch" class="leftpad">Auto search</label>
+              <input id="autoSearch" type="checkbox" />
+              <label for="debounceMs" class="leftpad">Debounce (ms)</label>
+              <input id="debounceMs" type="number" value="400" min="100" max="2000" />
+            </div>
+          </div>
         </div>
-      </div>
 
-      <div class="row" id="answerRow" hidden>
-        <label>Answer / Context <span id="llmBadge" class="badge" style="display:none"></span></label>
-        <pre id="answer" class="panel"></pre>
-        <div id="refs" class="panel" style="margin-top:8px; display:none"></div>
-      </div>
-      <div class="row" id="resultsRow" hidden>
-        <label>Results</label>
-        <div id="results" class="results"></div>
+        <div class="row middle">
+          <div class="loader" id="searchLoading" hidden>
+            <div class="spinner"></div>
+            <span>Searching…</span>
+          </div>
+        </div>
+
+        <div class="row" id="answerRow" hidden>
+          <label>Answer / Context <span id="llmBadge" class="badge" style="display:none"></span></label>
+          <pre id="answer" class="panel"></pre>
+          <div id="refs" class="panel" style="margin-top:8px; display:none"></div>
+        </div>
+        <div class="row" id="resultsRow" hidden>
+          <label>Results</label>
+          <div id="results" class="results"></div>
+        </div>
       </div>
     </section>
 
     <!-- Upload -->
-    <section class="card card--wide">
-      <h2>Upload</h2>
+    <section id="uploadSection" class="card card--wide" hidden>
+      <h2>Upload to your space</h2>
       <div class="row wrap">
         <button id="uploadBtn">Upload</button>
         <div class="loader" id="uploadLoading" hidden>
@@ -86,7 +124,7 @@
         </div>
       </div>
       <div class="row">
-        <div id="dropzone" class="dropzone">Drag & drop files here</div>
+        <div id="dropzone" class="dropzone">Drag & drop files here (PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON, Images, Audio/Video)</div>
       </div>
       <div class="row">
         <input id="files" type="file" multiple webkitdirectory directory />
@@ -114,23 +152,13 @@
       });
     })();
 
-    // Clear inputs on load/refresh
-    window.addEventListener('DOMContentLoaded', () => {
-      const q = document.getElementById('query');
-      const files = document.getElementById('files');
-      const status = document.getElementById('uploadStatus');
-      if (q) q.value = '';
-      if (files) files.value = '';
-      if (status) status.textContent = '';
-    });
-
+    // Helpers
     function showToast(msg) {
       const t = document.getElementById('toast');
       t.textContent = msg;
       t.hidden = false;
       setTimeout(() => { t.hidden = true; t.textContent = ''; }, 3000);
     }
-
     function escapeHtml(s) {
       return (s || '')
         .replace(/&/g, '&')
@@ -139,7 +167,6 @@
         .replace(/\"/g, '"')
         .replace(/'/g, '&#039;');
     }
-
     function highlight(text, query) {
       if (!query) return escapeHtml(text);
       try {
@@ -150,18 +177,134 @@
         return escapeHtml(text);
       }
     }
-
     async function api(path, opts={}) {
       const res = await fetch(path, {
         method: opts.method || 'GET',
         headers: opts.body instanceof FormData ? undefined : { 'Content-Type': 'application/json' },
         body: opts.body ? (opts.body instanceof FormData ? opts.body : JSON.stringify(opts.body)) : undefined,
-        signal: opts.signal
       });
       if (!res.ok) throw new Error(await res.text());
-      return await res.json();
+      const ct = res.headers.get('content-type') || '';
+      return ct.includes('application/json') ? await res.json() : await res.text();
     }
 
+    // App state
+    let state = {
+      user: null,
+      spaces: [],
+      spaceId: null,
+    };
+
+    function setLoggedInUI() {
+      const auth = document.getElementById('authPanel');
+      const app = document.getElementById('appPanel');
+      const up = document.getElementById('uploadSection');
+      const uc = document.getElementById('userControls');
+      const emailEl = document.getElementById('userEmail');
+      if (state.user) {
+        auth.hidden = true;
+        app.hidden = false;
+        up.hidden = false;
+        uc.hidden = false;
+        emailEl.textContent = state.user.email;
+      } else {
+        auth.hidden = false;
+        app.hidden = true;
+        up.hidden = true;
+        uc.hidden = true;
+        emailEl.textContent = '';
+      }
+    }
+
+    function populateSpaces() {
+      const sel = document.getElementById('spacesSelect');
+      sel.innerHTML = '';
+      for (const s of state.spaces) {
+        const opt = document.createElement('option');
+        opt.value = String(s.id);
+        opt.textContent = s.name + (s.is_default ? ' (default)' : '');
+        sel.appendChild(opt);
+      }
+      if (state.spaceId) sel.value = String(state.spaceId);
+    }
+
+    async function initUser() {
+      try {
+        const me = await api('/api/me');
+        if (me && me.user) {
+          state.user = me.user;
+          state.spaces = me.spaces || [];
+          const def = (state.spaces.find(s => s.is_default) || {}).id;
+          state.spaceId = def || (state.spaces[0] ? state.spaces[0].id : null);
+          populateSpaces();
+        } else {
+          state.user = null;
+          state.spaces = [];
+          state.spaceId = null;
+        }
+      } catch (e) {
+        state.user = null;
+        state.spaces = [];
+        state.spaceId = null;
+      }
+      setLoggedInUI();
+    }
+
+    // Auth handlers
+    document.getElementById('loginBtn').addEventListener('click', async () => {
+      const email = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPassword').value;
+      try {
+        const resp = await api('/api/login', { method: 'POST', body: { email, password } });
+        state.user = resp.user; state.spaces = resp.spaces || [];
+        const def = (state.spaces.find(s => s.is_default) || {}).id;
+        state.spaceId = def || (state.spaces[0] ? state.spaces[0].id : null);
+        populateSpaces(); setLoggedInUI(); showToast('Logged in');
+      } catch (e) { showToast('Login failed'); }
+    });
+    document.getElementById('registerBtn').addEventListener('click', async () => {
+      const email = document.getElementById('regEmail').value.trim();
+      const password = document.getElementById('regPassword').value;
+      try {
+        const resp = await api('/api/register', { method: 'POST', body: { email, password } });
+        state.user = resp.user; state.spaces = resp.spaces || [];
+        const def = (state.spaces.find(s => s.is_default) || {}).id;
+        state.spaceId = def || (state.spaces[0] ? state.spaces[0].id : null);
+        populateSpaces(); setLoggedInUI(); showToast('Account created');
+      } catch (e) { showToast('Registration failed'); }
+    });
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      try { await api('/api/logout', { method: 'POST' }); } catch {}
+      state = { user: null, spaces: [], spaceId: null };
+      setLoggedInUI(); showToast('Logged out');
+    });
+
+    document.getElementById('createSpaceBtn').addEventListener('click', async () => {
+      const name = document.getElementById('newSpaceName').value.trim();
+      if (!name) return;
+      try {
+        const resp = await api('/api/spaces', { method: 'POST', body: { name } });
+        await initUser();
+        document.getElementById('newSpaceName').value = '';
+        showToast('Space created');
+      } catch (e) { showToast('Failed to create space'); }
+    });
+    document.getElementById('setDefaultSpaceBtn').addEventListener('click', async () => {
+      const sel = document.getElementById('spacesSelect');
+      const sid = parseInt(sel.value || '0', 10);
+      if (!sid) return;
+      try {
+        await api('/api/spaces/default', { method: 'POST', body: { space_id: sid } });
+        await initUser();
+        showToast('Default space updated');
+      } catch (e) { showToast('Failed to set default'); }
+    });
+    document.getElementById('spacesSelect').addEventListener('change', (e) => {
+      const sid = parseInt(e.target.value || '0', 10);
+      state.spaceId = sid || state.spaceId;
+    });
+
+    // Search
     function renderResults(hits, query) {
       const wrap = document.getElementById('results');
       const row = document.getElementById('resultsRow');
@@ -175,7 +318,6 @@
         const div = document.createElement('div');
         div.className = 'hit';
         const title = h.title ? escapeHtml(h.title) : '';
-        const source = h.source_path ? escapeHtml(h.source_path) : '';
         const distance = (h.distance !== null && h.distance !== undefined) ? `distance: ${h.distance.toFixed ? h.distance.toFixed(4) : h.distance}` : '';
         const rank = (h.rank !== null && h.rank !== undefined) ? `rank: ${h.rank.toFixed ? h.rank.toFixed(4) : h.rank}` : '';
         div.innerHTML = `
@@ -183,7 +325,6 @@
             <div class="hit-title">${title || '(untitled)'}</div>
             <div class="hit-badges">${distance ? `<span class="badge">${distance}</span>` : ''}${rank ? `<span class="badge">${rank}</span>` : ''}</div>
           </div>
-          <div class="hit-meta">${source}</div>
           <div class="hit-content">${highlight(h.content || '', query)}</div>
         `;
         wrap.appendChild(div);
@@ -214,7 +355,9 @@
       ans.textContent = '';
 
       try {
-        const data = await api('/api/search', { method: 'POST', body: { query, mode, top_k: topk }, signal: ctrl.signal });
+        const provider = document.getElementById('provider')?.value || undefined;
+        const data = await api('/api/search', { method: 'POST', body: { query, mode, top_k: topk, space_id: state.spaceId, llm_provider: provider }, signal: ctrl.signal });
+
         if (data.answer) {
           ans.textContent = data.answer;
           answerRow.hidden = false;
@@ -228,7 +371,6 @@
               badge.style.display = 'inline-block';
             }
           }
-          // Render references if provided
           const refsEl = document.getElementById('refs');
           if (refsEl) {
             if (Array.isArray(data.references) && data.references.length) {
@@ -236,9 +378,7 @@
               const items = data.references.map((r, idx) => {
                 const fn = r.file_name || '';
                 const ft = r.file_type || '';
-                // Prefer link to Object Storage when available
                 const label = r.url ? `<a href="${r.url}" target="_blank" rel="noopener">${escapeHtml(fn || r.url)}</a>` : escapeHtml(fn);
-                // Find matching hit for chunk text (by chunk_id)
                 const match = data.hits.find(h => h.chunk_id === r.chunk_id);
                 const txt = match ? escapeHtml(match.content) : '';
                 return `<details>
@@ -266,7 +406,6 @@
       }
     }
 
-    // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
       const q = document.getElementById('query');
       if (e.key === 'Enter' && document.activeElement === q) {
@@ -365,7 +504,6 @@
       }
     });
 
-    // Update dropzone text when browsing files
     const filesInputEl = document.getElementById('files');
     if (filesInputEl) {
       filesInputEl.addEventListener('change', () => {
@@ -375,24 +513,9 @@
       });
     }
 
-    const readyBtn = document.getElementById('readyBtn');
-    if (readyBtn) {
-      readyBtn.addEventListener('click', async () => {
-        const box = document.getElementById('readyJson');
-        const row = document.getElementById('statusRow');
-        try {
-          const data = await api('/api/ready');
-          if (box) box.textContent = JSON.stringify(data, null, 2);
-          if (row) row.hidden = false;
-        } catch (e) {
-          if (box) box.textContent = 'Error: ' + (e && e.message ? e.message : String(e));
-          if (row) row.hidden = false;
-        }
-      });
-    }
-
-    // Per-file upload with retries + concurrency + folder/files + dropped files
+    // Upload with per-file progress and space_id
     document.getElementById('uploadBtn').addEventListener('click', async () => {
+      if (!state.user) { showToast('Login required'); return; }
       const filesInput = document.getElementById('files');
       const status = document.getElementById('uploadStatus');
       const statusRow = document.getElementById('uploadStatusRow');
@@ -439,25 +562,18 @@
               bar.style.width = pct + '%';
               pctLabel.textContent = pct + '%';
             } else {
-              // Fallback when total length is unknown: show animated bar and ellipsis
               bar.style.width = '50%';
               pctLabel.textContent = '…';
             }
           };
-          // When upload phase finishes, show processing state until the server responds
-          xhr.upload.onload = () => {
-            pctLabel.textContent = 'processing…';
-          };
+          xhr.upload.onload = () => { pctLabel.textContent = 'processing…'; };
 
           xhr.onerror = () => {
             if (attempt < maxRetries) {
               const delay = backoff(attempt);
               pctLabel.textContent = `retrying (${attempt}/${maxRetries})…`;
               setTimeout(() => resolve(uploadOne(file, attempt + 1)), delay);
-            } else {
-              pctLabel.textContent = 'failed';
-              resolve({ file, ok: false, error: 'network error' });
-            }
+            } else { pctLabel.textContent = 'failed'; resolve({ file, ok: false, error: 'network error' }); }
           };
 
           xhr.onreadystatechange = function () {
@@ -467,7 +583,6 @@
                   const data = JSON.parse(xhr.responseText);
                   bar.style.width = '100%';
                   pctLabel.textContent = '100%';
-                  // Show per-file summary if available from server
                   try {
                     const res = Array.isArray(data.results) ? data.results[0] : data;
                     if (res && typeof res === 'object') {
@@ -486,10 +601,7 @@
                     const delay = backoff(attempt);
                     pctLabel.textContent = `retrying (${attempt}/${maxRetries})…`;
                     setTimeout(() => resolve(uploadOne(file, attempt + 1)), delay);
-                  } else {
-                    pctLabel.textContent = 'failed';
-                    resolve({ file, ok: false, error: 'parse error' });
-                  }
+                  } else { pctLabel.textContent = 'failed'; resolve({ file, ok: false, error: 'parse error' }); }
                 }
               } else if (xhr.status >= 500 && attempt < maxRetries) {
                 const delay = backoff(attempt);
@@ -504,11 +616,11 @@
 
           const form = new FormData();
           form.append('files', file);
+          if (state.spaceId) form.append('space_id', String(state.spaceId));
           xhr.send(form);
         });
       }
 
-      // Limit concurrency to 4
       const queue = [...allFiles];
       const inFlight = new Set();
       const results = [];
@@ -531,12 +643,22 @@
           } catch (e) {
             status.textContent = 'Upload finished (see progress list)';
           }
-          // Clear dropped files after run
           droppedFiles = [];
         }
       }
 
       pump();
+    });
+
+    // Initialize
+    window.addEventListener('DOMContentLoaded', async () => {
+      const q = document.getElementById('query');
+      const files = document.getElementById('files');
+      const status = document.getElementById('uploadStatus');
+      if (q) q.value = '';
+      if (files) files.value = '';
+      if (status) status.textContent = '';
+      await initUser();
     });
   </script>
 </body>

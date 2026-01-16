@@ -2,22 +2,25 @@ from __future__ import annotations
 
 import logging
 import os
+import json
 from pathlib import Path
 from typing import Any, Dict, List
 
-from fastapi import FastAPI, File, UploadFile, Request
+from fastapi import FastAPI, File, UploadFile, Request, Form, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import uvicorn
 
-from .auth import BasicAuthMiddleware
+from .auth import SessionOrBasicAuthMiddleware
 from .config import settings
 from .db import init_db, get_conn
-from .store import ensure_dirs, ingest_file_path, save_upload
+from .store import ensure_dirs, ingest_file_path, save_upload, save_upload_stream
 from .search import semantic_search, fulltext_search, hybrid_search, rag
 from .embeddings import get_model
+from .session import get_current_user, sign_session, set_session_cookie_headers, clear_session_cookie_headers
+from .users import create_user, authenticate_user, list_spaces, ensure_default_space, get_default_space_id, create_space, set_default_space
 
 logger = logging.getLogger("searchapp")
 logging.basicConfig(level=os.getenv("LOGLEVEL", "INFO"))
@@ -29,9 +32,10 @@ STATIC_DIR = BASE_DIR / "static"
 TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title="Enterprise Search App", version="0.1.0")
-# Protect root UI and API with Basic Auth
-app.add_middleware(BasicAuthMiddleware, protect_paths=("/", "/api", "/docs", "/openapi.json", "/redoc"))
+app = FastAPI(title=f"{settings.app_name}", version="0.4.0")
+
+# Protect API with session or basic auth; root UI is public (it will render login if unauthenticated)
+app.add_middleware(SessionOrBasicAuthMiddleware, protect_paths=("/api", "/docs", "/openapi.json", "/redoc"))
 
 if settings.allow_cors:
     app.add_middleware(
@@ -63,7 +67,7 @@ def on_startup():
 # UI route (minimalist, responsive search app)
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse("index.html", {"request": request, "app_name": settings.app_name})
 
 
 # API routes
@@ -72,18 +76,26 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/api/providers")
+def list_providers():
+    return {
+        "default": settings.llm_provider,
+        "supported": ["oci", "openai", "bedrock", "ollama"],
+    }
+
+
+
 @app.get("/api/ready")
 def ready():
-    checks = {"extensions": False, "documents_table": False, "chunks_table": False, "tsv_index": False, "vec_index": False}
+    checks = {"extensions": False, "users": False, "spaces": False, "documents_table": False, "chunks_table": False, "tsv_index": False, "vec_index": False}
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT 1 FROM pg_extension WHERE extname IN ('vector','pgcrypto')")
-                checks["extensions"] = len(cur.fetchall()) >= 2
-                cur.execute("SELECT to_regclass('public.documents') IS NOT NULL")
-                checks["documents_table"] = bool(cur.fetchone()[0])
-                cur.execute("SELECT to_regclass('public.chunks') IS NOT NULL")
-                checks["chunks_table"] = bool(cur.fetchone()[0])
+                cur.execute("SELECT 1 FROM pg_extension WHERE extname IN ('vector','pgcrypto','citext')")
+                checks["extensions"] = len(cur.fetchall()) >= 3
+                for tbl, key in [("users","users"),("spaces","spaces"),("documents","documents_table"),("chunks","chunks_table")]:
+                    cur.execute(f"SELECT to_regclass('public.{tbl}') IS NOT NULL")
+                    checks[key] = bool(cur.fetchone()[0])
                 cur.execute("SELECT to_regclass('public.idx_chunks_tsv') IS NOT NULL")
                 checks["tsv_index"] = bool(cur.fetchone()[0])
                 cur.execute("SELECT to_regclass('public.idx_chunks_embedding_ivfflat') IS NOT NULL")
@@ -94,18 +106,26 @@ def ready():
 
 
 @app.get("/api/chunks-preview")
-def chunks_preview(doc_id: int, limit: int = 20):
+def chunks_preview(request: Request, doc_id: int, limit: int = 20):
+    # Enforce ownership
+    from .session import verify_session
+    tok = request.cookies.get(settings.session_cookie_name)
+    user = verify_session(tok) if tok else None
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    uid = int(user.get("user_id") or user.get("id"))
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, document_id, chunk_index, content_chars, LEFT(content, 600)
-                FROM chunks
-                WHERE document_id = %s
-                ORDER BY chunk_index ASC
+                SELECT c.id, c.document_id, c.chunk_index, c.content_chars, LEFT(c.content, 600)
+                FROM chunks c
+                JOIN documents d ON d.id = c.document_id
+                WHERE c.document_id = %s AND d.user_id = %s
+                ORDER BY c.chunk_index ASC
                 LIMIT %s
                 """,
-                (doc_id, limit),
+                (doc_id, uid, limit),
             )
             rows = cur.fetchall()
     out: List[Dict[str, Any]] = []
@@ -121,13 +141,20 @@ def chunks_preview(doc_id: int, limit: int = 20):
 
 
 @app.get("/api/doc-summary")
-def doc_summary(doc_id: int):
+def doc_summary(request: Request, doc_id: int):
+    # Enforce ownership
+    from .session import verify_session
+    tok = request.cookies.get(settings.session_cookie_name)
+    user = verify_session(tok) if tok else None
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    uid = int(user.get("user_id") or user.get("id"))
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT id, source_path, source_type, COALESCE(title, '') FROM documents WHERE id = %s",
-                    (doc_id,),
+                    "SELECT id, source_path, source_type, COALESCE(title, '') FROM documents WHERE id = %s AND user_id = %s",
+                    (doc_id, uid),
                 )
                 doc = cur.fetchone()
                 if not doc:
@@ -146,13 +173,24 @@ def doc_summary(doc_id: int):
         return {"error": str(e)}
 
 
+
 @app.post("/api/upload")
-async def upload(files: List[UploadFile] = File(...)):
+async def upload(request: Request, files: List[UploadFile] = File(...), space_id: int | None = Form(None)):
+    # Identify user from session
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    uid = int(user["user_id"]) if "user_id" in user else int(user.get("id"))
+    uemail = user.get("email")
+    # default space if not provided
+    if space_id is None:
+        sid = get_default_space_id(uid)
+    else:
+        sid = int(space_id)
     results: List[Dict[str, Any]] = []
     for f in files:
-        data = await f.read()
-        local_path, oci_url = save_upload(data, Path(f.filename).name)
-        # Use basename as title and include original filename and optional object URL in metadata
+        # Stream upload using underlying SpooledTemporaryFile to avoid loading whole file in memory
+        local_path, oci_url = save_upload_stream(f.file, Path(f.filename).name, user_email=uemail)
         title = Path(f.filename).name
         title_no_ext = Path(title).stem
         logger.info("Upload stored: backend=%s local=%s oci=%s", settings.storage_backend, local_path, "yes" if oci_url else "no")
@@ -160,7 +198,7 @@ async def upload(files: List[UploadFile] = File(...)):
             meta = {"filename": title}
             if oci_url:
                 meta["object_url"] = oci_url
-            ing = ingest_file_path(local_path, title=title_no_ext, metadata=meta)
+            ing = ingest_file_path(local_path, user_id=uid, space_id=sid, title=title_no_ext, metadata=meta)
             results.append({
                 "filename": title,
                 "title": title_no_ext,
@@ -169,6 +207,16 @@ async def upload(files: List[UploadFile] = File(...)):
                 "object_url": oci_url,
                 "status": "ok",
             })
+            # Log activity
+            try:
+                with get_conn() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "INSERT INTO user_activity (user_id, activity_type, details) VALUES (%s, %s, %s)",
+                            (uid, "upload", json.dumps({"filename": title, "document_id": ing.document_id, "chunks": ing.num_chunks, "space_id": sid})),
+                        )
+            except Exception:
+                pass
         except Exception as e:
             results.append({
                 "filename": title,
@@ -182,27 +230,36 @@ async def upload(files: List[UploadFile] = File(...)):
                     os.remove(local_path)
                 except Exception:
                     pass
+
     return {"results": results}
 
 
 @app.post("/api/search")
-async def api_search(payload: Dict[str, Any]):
+async def api_search(request: Request, payload: Dict[str, Any]):
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    uid = int(user["user_id"]) if "user_id" in user else int(user.get("id"))
+    sid = payload.get("space_id")
+    sid = int(sid) if sid is not None else get_default_space_id(uid)
+
     q = payload.get("query", "")
     mode = str(payload.get("mode", "hybrid")).lower()
     top_k = int(payload.get("top_k", 25))
+    provider_override = (payload.get("llm_provider") or None)
     if not q:
         return JSONResponse(status_code=400, content={"error": "query required"})
 
     answer: str | None = None
     used_llm: bool = False
     if mode == "semantic":
-        hits = semantic_search(q, top_k=top_k)
+        hits = semantic_search(q, top_k=top_k, user_id=uid, space_id=sid)
     elif mode == "fulltext":
-        hits = fulltext_search(q, top_k=top_k)
+        hits = fulltext_search(q, top_k=top_k, user_id=uid, space_id=sid)
     elif mode == "rag":
-        answer, hits, used_llm = rag(q, mode="hybrid", top_k=top_k)
+        answer, hits, used_llm = rag(q, mode="hybrid", top_k=top_k, user_id=uid, space_id=sid, provider_override=provider_override)
     else:
-        hits = hybrid_search(q, top_k=top_k)
+        hits = hybrid_search(q, top_k=top_k, user_id=uid, space_id=sid)
 
     # Enrich with document metadata (source_path, title)
     doc_ids = sorted({h.document_id for h in hits})
@@ -235,7 +292,6 @@ async def api_search(payload: Dict[str, Any]):
         }
         meta = doc_info.get(h.document_id)
         if meta:
-            # Do not expose full source_path to UI; include file_name and file_type
             entry["file_name"] = meta.get("file_name", "")
             entry["file_type"] = meta.get("file_type", "")
             entry["title"] = meta.get("title", "")
@@ -245,7 +301,6 @@ async def api_search(payload: Dict[str, Any]):
     if answer is not None:
         out["answer"] = answer
         out["used_llm"] = bool(used_llm)
-        # Include top references for UI (file name/type and chunk anchor)
         refs = []
         for e in hits_out[: min(len(hits_out), 5)]:
             refs.append({
@@ -256,76 +311,39 @@ async def api_search(payload: Dict[str, Any]):
                 "url": doc_info.get(e.get("document_id", -1), {}).get("object_url") if doc_info else None,
             })
         out["references"] = refs
+
+    # Log activity
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO user_activity (user_id, activity_type, details) VALUES (%s, %s, %s)",
+                    (uid, "search", json.dumps({"query": q, "mode": mode, "top_k": top_k, "used_llm": used_llm, "space_id": sid, "hits": [h.document_id for h in hits_out[:5]]})),
+                )
+    except Exception:
+        pass
+
     return out
 
 
 @app.post("/api/llm-test")
 async def llm_test(payload: Dict[str, Any] | None = None):
     """
-    Simple LLM connectivity test. POST a JSON body like:
-    { "question": "...", "context": "..." }
-    If omitted, a default question/context is used. Returns provider, ok flag, and answer text.
+    LLM connectivity test. Accepts optional { provider, question, context } and uses unified LLM.
     """
+    from .llm import chat as llm_chat
+    provider = (payload or {}).get("provider") if payload else None
     q = (payload or {}).get("question") if payload else None
     ctx = (payload or {}).get("context") if payload else None
     if not q:
         q = "Test connectivity. Summarize the following context in one sentence."
     if not ctx:
         ctx = "This is a test context from the /api/llm-test endpoint."
-
-    provider = settings.llm_provider
-    answer: str | None = None
-    error: str | None = None
-    chat_ok: bool = False
-    text_ok: bool = False
     try:
-        if provider == "openai" and settings.openai_api_key:
-            try:
-                from openai import OpenAI
-                client = OpenAI(api_key=settings.openai_api_key)
-                prompt = (
-                    "You are a helpful assistant. Using the provided context, answer the question concisely.\n\n"
-                    f"Question: {q}\n\nContext:\n{ctx[:12000]}"
-                )
-                resp = client.chat.completions.create(
-                    model=settings.openai_model,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.2,
-                    max_tokens=256,
-                )
-                answer = resp.choices[0].message.content
-            except Exception as e:
-                error = str(e)
-        elif provider == "oci":
-            try:
-                from .oci_llm import (
-                    oci_chat_completion,
-                    oci_chat_completion_chat_only,
-                    oci_chat_completion_text_only,
-                )
-                # Probe both paths for diagnostics
-                ans_chat = oci_chat_completion_chat_only(q, ctx)
-                ans_text = oci_chat_completion_text_only(q, ctx)
-                chat_ok = bool(ans_chat)
-                text_ok = bool(ans_text)
-                answer = ans_chat or ans_text or oci_chat_completion(q, ctx)
-            except Exception as e:
-                error = str(e)
-        else:
-            error = "LLM provider inactive or missing credentials"
+        ans = llm_chat(q, ctx, provider_override=provider)
+        return {"provider": provider or settings.llm_provider, "ok": bool(ans), "answer": ans, "question": q, "context_chars": len(ctx or "")}
     except Exception as e:
-        error = str(e)
-
-    return {
-        "provider": provider,
-        "ok": bool(answer),
-        "answer": answer,
-        "question": q,
-        "context_chars": len(ctx or ""),
-        "error": error,
-        "chat_ok": chat_ok,
-        "text_ok": text_ok,
-    }
+        return {"provider": provider or settings.llm_provider, "ok": False, "error": str(e)}
 
 
 @app.post("/api/llm-debug")
@@ -393,8 +411,25 @@ def llm_debug_get(q: str | None = None, ctx: str | None = None):
         return {"provider": provider, "error": str(e)}
 
 
+@app.post("/api/chat")
+async def api_chat(payload: Dict[str, Any]):
+    """General chat entrypoint using unified LLM. Body: {question, context?, provider?}."""
+    from .llm import chat as llm_chat
+    q = (payload or {}).get("question") or ""
+    ctx = (payload or {}).get("context") or ""
+    provider = (payload or {}).get("provider") or None
+    if not q:
+        return JSONResponse(status_code=400, content={"error": "question required"})
+    try:
+        ans = llm_chat(q, ctx, provider_override=provider)
+        return {"provider": provider or settings.llm_provider, "answer": ans}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
 @app.get("/api/llm-config")
 def llm_config():
+
     def _mask(ocid: str | None, keep_prefix: int = 8, keep_suffix: int = 6) -> str | None:
         if not ocid:
             return None
@@ -415,8 +450,93 @@ def llm_config():
     }
 
 
+# Auth & user/space endpoints
+@app.post("/api/register")
+async def api_register(payload: Dict[str, Any]):
+    if not settings.allow_registration:
+        return JSONResponse(status_code=403, content={"error": "registration disabled"})
+    email = (payload.get("email") or "").strip().lower()
+    password = payload.get("password") or ""
+    if not email or not password:
+        return JSONResponse(status_code=400, content={"error": "email and password required"})
+    try:
+        u = create_user(email, password)
+        token = sign_session({"user_id": u["id"], "email": email})
+        headers = set_session_cookie_headers(token)
+        # also return spaces
+        spaces = list_spaces(u["id"]) or []
+        return JSONResponse(status_code=200, content={"user": {"id": u["id"], "email": email}, "spaces": spaces}, headers=headers)
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
+
+
+@app.post("/api/login")
+async def api_login(payload: Dict[str, Any]):
+    email = (payload.get("email") or "").strip().lower()
+    password = payload.get("password") or ""
+    if not email or not password:
+        return JSONResponse(status_code=400, content={"error": "email and password required"})
+    u = authenticate_user(email, password)
+    if not u:
+        return JSONResponse(status_code=401, content={"error": "invalid credentials"})
+    token = sign_session({"user_id": u["id"], "email": email})
+    headers = set_session_cookie_headers(token)
+    spaces = list_spaces(u["id"]) or []
+    return JSONResponse(status_code=200, content={"user": {"id": u["id"], "email": email}, "spaces": spaces}, headers=headers)
+
+
+@app.post("/api/logout")
+async def api_logout():
+    headers = clear_session_cookie_headers()
+    return JSONResponse(status_code=200, content={"ok": True}, headers=headers)
+
+
+@app.get("/api/me")
+async def api_me(request: Request):
+    user = await get_current_user(request)
+    if not user:
+        return {"user": None}
+    uid = int(user["user_id"]) if "user_id" in user else int(user.get("id"))
+    spaces = list_spaces(uid)
+    return {"user": {"id": uid, "email": user.get("email")}, "spaces": spaces}
+
+
+@app.get("/api/spaces")
+async def api_spaces(request: Request):
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    uid = int(user["user_id"]) if "user_id" in user else int(user.get("id"))
+    return {"spaces": list_spaces(uid)}
+
+
+@app.post("/api/spaces")
+async def api_create_space(request: Request, payload: Dict[str, Any]):
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    uid = int(user["user_id"]) if "user_id" in user else int(user.get("id"))
+    name = (payload.get("name") or "").strip()
+    if not name:
+        return JSONResponse(status_code=400, content={"error": "name required"})
+    sid = create_space(uid, name)
+    return {"space_id": sid}
+
+
+@app.post("/api/spaces/default")
+async def api_set_default_space(request: Request, payload: Dict[str, Any]):
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    uid = int(user["user_id"]) if "user_id" in user else int(user.get("id"))
+    sid = int(payload.get("space_id"))
+    set_default_space(uid, sid)
+    return {"ok": True}
+
+
 def main():
     uvicorn.run("app.main:app", host=settings.host, port=settings.port, workers=settings.workers, reload=False)
+
 
 
 if __name__ == "__main__":

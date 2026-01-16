@@ -304,6 +304,44 @@ resource "oci_core_security_list" "VCN1_PRIVATE_SL" {
       max = "5432"
     }
   }
+
+  # Valkey/Redis port allowed within VCN
+  ingress_security_rules {
+    protocol    = "6"
+    source      = var.vcn_cidr[0]
+    source_type = "CIDR_BLOCK"
+    stateless   = false
+    tcp_options {
+      min = "6379"
+      max = "6379"
+    }
+  }
+
+  # OpenSearch API port (9200) allowed within VCN
+  ingress_security_rules {
+    protocol    = "6"
+    source      = var.vcn_cidr[0]
+    source_type = "CIDR_BLOCK"
+    stateless   = false
+    tcp_options {
+      min = "9200"
+      max = "9200"
+    }
+  }
+
+  # OpenSearch Dashboard (typical 5601) allowed within VCN
+  ingress_security_rules {
+    protocol    = "6"
+    source      = var.vcn_cidr[0]
+    source_type = "CIDR_BLOCK"
+    stateless   = false
+    tcp_options {
+      min = "5601"
+      max = "5601"
+    }
+  }
+
+
 }
 
 # Security List for Public Subnet (22, 443, 8443, 8000, 9000 from Internet)

@@ -81,3 +81,17 @@ body.dark .dropzone { background: #0b1220; border-color: #1f2937; color: #94a3b8
 body.dark .dropzone.dragover { background: #0e1530; border-color: #265fa3; color: #e5e7eb; }
 body.dark .hit { background: #0e1530; border-color: #1f2937; }
 body.dark .badge { background: #122255; color: #c7d2fe; }
+
+/* SpacesAI additions */
+.user-controls { display: flex; align-items: center; gap: 10px; }
+.user-email { font-weight: 600; }
+.auth { width: 100%; max-width: 900px; }
+.auth .row.cols { display: grid; grid-template-columns: 1fr; gap: 12px; width: 100%; }
+.auth-card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; background: #fff; }
+.auth-card h3 { margin-top: 0; }
+.auth-card input { width: 100%; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; background: #fafafa; margin-bottom: 8px; }
+.app-panel input { padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 8px; background: #fafafa; }
+@media (min-width: 800px) { .auth .row.cols { grid-template-columns: 1fr 1fr; } }
+
+body.dark .auth-card { background: #0b1220; border-color: #1f2937; }
+body.dark .auth-card input, body.dark .app-panel input { background: #0b1220; color: #e5e7eb; border-color: #1f2937; }

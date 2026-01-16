@@ -209,3 +209,210 @@ variable "psql_config_overrides" {
     "pg_stat_statements.max"       = "5000"
   }
 }
+
+## OpenSearch (to be provisioned in same VCN)
+variable "enable_opensearch" {
+  type        = bool
+  description = "Whether to provision an OCI OpenSearch cluster in this stack"
+  default     = true
+}
+
+variable "opensearch_display_name" {
+  type        = string
+  description = "Display name for the OpenSearch cluster"
+  default     = "spacesai-opensearch"
+}
+
+variable "opensearch_version" {
+  type        = string
+  description = "OpenSearch engine version (e.g., 3.2.0) — confirm with OCI service"
+  default     = "3.2.0"
+}
+
+
+
+variable "opensearch_node_count" {
+  type        = number
+  description = "Number of data nodes in the OpenSearch cluster"
+  default     = 3
+}
+
+variable "opensearch_ocpus" {
+  type        = number
+  description = "OCPUs per node"
+  default     = 2
+}
+
+variable "opensearch_memory_gbs" {
+  type        = number
+  description = "Memory per node in GB"
+  default     = 16
+}
+
+variable "opensearch_storage_gbs" {
+  type        = number
+  description = "Block storage per node in GB"
+  default     = 200
+}
+
+# Host types (provider specific; typical values include COMPUTE)
+variable "opensearch_data_node_host_type" {
+  type        = string
+  description = "Instance type for data nodes (FLEX|BM)"
+  default     = "FLEX"
+}
+
+
+variable "opensearch_master_node_count" {
+  type        = number
+  description = "Number of master nodes"
+  default     = 3
+}
+
+variable "opensearch_master_node_host_ocpu_count" {
+  type        = number
+  description = "OCPUs per master node"
+  default     = 2
+}
+
+variable "opensearch_master_node_host_memory_gb" {
+  type        = number
+  description = "Memory (GB) per master node"
+  default     = 16
+}
+
+variable "opensearch_master_node_host_type" {
+  type        = string
+  description = "Instance type for master nodes (FLEX|BM)"
+  default     = "FLEX"
+}
+
+variable "opensearch_opendashboard_node_count" {
+  type        = number
+  description = "Number of OpenSearch dashboard nodes"
+  default     = 1
+}
+
+variable "opensearch_opendashboard_node_host_ocpu_count" {
+  type        = number
+  description = "OCPUs per dashboard node"
+  default     = 1
+}
+
+variable "opensearch_opendashboard_node_host_memory_gb" {
+  type        = number
+  description = "Memory (GB) per dashboard node"
+  default     = 8
+}
+
+# Optional: Admin credentials for OpenSearch (if supported by your provider/resource)
+# Some OCI provider versions require setting an admin/master user and password during cluster creation.
+# If your provider exposes these fields, wire them in opensearch.tf accordingly.
+variable "opensearch_admin_user" {
+  type        = string
+  description = "Admin (master) username for OpenSearch cluster (optional; provider may use IAM instead)"
+  default     = null
+}
+
+variable "opensearch_admin_password_hash" {
+  type        = string
+  description = "Admin (master) password HASH for OpenSearch cluster (optional). Provide a hashed password if security is configured."
+  sensitive   = true
+  default     = null
+}
+
+variable "opensearch_security_mode" {
+  type        = string
+  description = "OpenSearch security mode (e.g., ENFORCING)"
+  default     = "ENFORCING"
+}
+
+
+
+## OCI Cache (Valkey) in same VCN
+
+variable "enable_cache" {
+  type        = bool
+  description = "Whether to provision OCI Cache (Valkey) in this stack"
+  default     = true
+}
+
+variable "cache_display_name" {
+  type        = string
+  description = "Display name for the cache cluster"
+  default     = "spacesai-cache"
+}
+
+variable "cache_node_count" {
+  type        = number
+  description = "Number of cache nodes"
+  default     = 1
+}
+
+variable "cache_memory_gbs" {
+  type        = number
+  description = "Memory per cache node in GB"
+  default     = 8
+}
+
+variable "redis_display_name" {
+  type        = string
+  description = "Display name for Redis/Valkey cluster"
+  default     = "spacesai-valkey"
+}
+
+variable "redis_node_count" {
+  type        = number
+  description = "Number of Redis/Valkey nodes"
+  default     = 1
+}
+
+variable "redis_node_memory_gbs" {
+  type        = number
+  description = "Memory per Redis/Valkey node in GB"
+  default     = 2
+}
+
+variable "redis_software_version" {
+  type        = string
+  description = "Redis/Valkey software version identifier (e.g., VALKEY_7_2)"
+  default     = "VALKEY_7_2"
+}
+
+# Optional Cache User configuration (attach to cluster)
+variable "create_cache_user" {
+  type        = bool
+  description = "Whether to create a Valkey/Redis cache user and attach it to the cluster"
+  default     = false
+}
+
+variable "cache_user_name" {
+  type        = string
+  description = "Cache user name"
+  default     = "default"
+}
+
+variable "cache_user_description" {
+  type        = string
+  description = "Cache user description"
+  default     = "Default Cache user"
+}
+
+variable "cache_user_acl_string" {
+  type        = string
+  description = "ACL string for the cache user (see Valkey/Redis ACL docs)."
+  default     = "+@all"
+}
+
+variable "cache_user_status" {
+  type        = string
+  description = "Cache user status (e.g., ON|OFF)"
+  default     = "ON"
+}
+
+variable "cache_user_hashed_passwords" {
+  type        = list(string)
+  description = "List of hashed passwords for the cache user (PASSWORD auth)."
+  sensitive   = true
+  default     = []
+}

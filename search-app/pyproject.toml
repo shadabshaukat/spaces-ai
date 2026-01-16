@@ -1,7 +1,7 @@
 [project]
 name = "enterprise-searchapp"
-version = "0.1.0"
-description = "Enterprise-grade FastAPI search app with OCI PostgreSQL + pgvector backend (RAG, semantic, hybrid, full-text)"
+version = "0.4.0"
+description = "SpacesAI (NotebookLM-like) FastAPI app with OCI PostgreSQL + pgvector backend: multi-tenant users/spaces, RAG, multimodal ingestion"
 authors = [{ name = "Your Org", email = "devnull@example.com" }]
 requires-python = ">=3.10"
 readme = "README.md"
@@ -23,12 +23,22 @@ dependencies = [
   "python-dotenv>=1.0.1",
   "oci>=2.129.0",
   "python-docx>=1.1.0",
+  "passlib[bcrypt]>=1.7.4",
+  "opensearch-py>=2.6.0",
+  "redis>=5.0.0",
+  "boto3>=1.34.0",
+  "requests>=2.31.0",
 ]
+
+
 
 [project.optional-dependencies]
 # Optional LLM providers
 openai = ["openai>=1.60.0"]
 pdf = ["pymupdf>=1.24.0", "pdfplumber>=0.11.0"]
+office = ["python-pptx>=0.6.21", "openpyxl>=3.1.2"]
+vision = ["pillow>=10.3.0", "pytesseract>=0.3.10"]
+audio = ["ffmpeg-python>=0.2.0", "openai-whisper>=20231117"]
 
 [project.urls]
 Homepage = "https://github.com/your-org/enterprise-searchapp"

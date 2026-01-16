@@ -1,113 +1,157 @@
-# OCI PostgreSQL Terraform Stack (Resource Manager ready)
+# OCI PostgreSQL + OpenSearch + Valkey (Redis) Terraform Stack
 
-This module deploys:
-- VCN with:
-  - Private subnet for PostgreSQL
-  - Public subnet for Compute (with Internet Gateway and route table)
-  - Optional Service Gateway (for OSN access, e.g., backups)
-  - NAT Gateway for private egress
-- Network Security:
-  - Default Security List permits SSH (tcp/22)
-  - NSG for PostgreSQL permitting tcp/5432 only from within the VCN CIDR
-- OCI PostgreSQL DB System:
-  - Shape family via psql_shape_name and OCPUs via num_ocpu
-  - Admin user from psql_admin
-  - Admin password provided via variable or auto-generated (no Vault)
-  - Optional (default-enabled): attach an OCI PostgreSQL Configuration with overrides
-- Optional Compute Instance:
-  - In the public subnet by default
-  - Public IP attachment controlled by compute_assign_public_ip
+This Resource Manager–ready stack provisions:
+- Networking
+  - VCN with private subnet (PostgreSQL, OpenSearch private endpoint, Valkey) and public subnet (optional compute)
+  - NAT + optional Service Gateway; Internet Gateway + public RT for public subnet
+- OCI PostgreSQL DB System (with optional Configuration)
+- Optional Compute instance
+- Object Storage bucket for application uploads
+- OpenSearch cluster (OCI managed)
+- Valkey (OCI Redis) cluster with optional user and ACL
 
-Region-agnostic:
-- Availability Domain is discovered dynamically (no hard-coded AD-1/2/3)
+The application (search-app) uses:
+- PostgreSQL as system-of-record
+- OpenSearch for serving search (KNN/BM25)
+- Valkey (Redis-compatible) for caching
 
-## Inputs
+
+## Prerequisites
+- Terraform >= 1.5.0
+- OCI Terraform Provider >= 5.30.0 (declared in provider.tf)
+- Compartment OCID and region
+
+
+## Variables (high level)
 
 Core
-- compartment_ocid (string): Target compartment OCID
-- region (string): Target region (default: us-ashburn-1)
-- tenancy_ocid (string, optional): If provided, used for AD discovery; else compartment_ocid is used
+- compartment_ocid (string) — required
+- region (string, default us-ashburn-1)
+- tenancy_ocid (string, optional)
 
 Networking
-- create_vcn_subnet (bool, default true): Create VCN, subnets, gateways, route tables
-- create_service_gateway (bool, default true): Create Service Gateway
-- vcn_cidr (list(string), default ["10.10.0.0/16"]): VCN CIDR(s)
-- psql_subnet_ocid (string, default ""): Existing private subnet OCID when create_vcn_subnet=false (used for both PG and compute if you choose)
-- public_subnet_ocid (string, default ""): Existing public subnet OCID for Compute when create_vcn_subnet=false
-
-Credentials
-- psql_admin (string): PostgreSQL admin username (required)
-- psql_admin_password (string, sensitive, default ""): Optional plaintext password. If empty, a strong random password is generated and exposed as a sensitive output psql_admin_pwd.
+- create_vcn_subnet (bool, default true)
+- create_service_gateway (bool, default true)
+- vcn_cidr (list(string), default ["10.10.0.0/16"]) 
+- psql_subnet_ocid (string, default "") — use existing private subnet when create_vcn_subnet=false
+- public_subnet_ocid (string, default "") — use existing public subnet for compute
 
 PostgreSQL
+- psql_admin (string) — required
+- psql_admin_password (string, sensitive, default "") — leave empty to auto-generate
 - psql_version (number, default 16)
-- num_ocpu (number, default 2): OCPU count for PostgreSQL
+- num_ocpu (number, default 2)
 - inst_count (number, default 1)
 - psql_shape_name (string, default "PostgreSQL.VM.Standard.E5.Flex")
-- psql_iops (map(number), default as provided): IOPS profile mapping
+- psql_iops (map(number))
+- PostgreSQL Configuration (optional; default-enabled): see vars.tf for create_psql_configuration, psql_configuration_ocid, and others
 
 Compute (optional)
-- create_compute (bool, default false): Whether to create compute instance
-- compute_shape (string, default "VM.Standard.E5.Flex")
-- compute_ocpus (number, default 1)
-- compute_memory_in_gbs (number, default 8)
-- compute_assign_public_ip (bool, default false): Public IP for VNIC; ensure your subnet permits it
-- compute_display_name (string, default "app-host-1")
-- compute_ssh_public_key (string): SSH public key for opc user
-- compute_image_ocid (string, default ""): If empty, latest Oracle Linux image is selected
-- compute_nsg_ids (list(string), default []): Optional NSG OCIDs to attach
-- compute_boot_volume_size_in_gbs (number, default 50)
+- create_compute (bool, default false)
+- compute_shape, compute_ocpus, compute_memory_in_gbs, compute_assign_public_ip, compute_ssh_public_key, etc.
 
-### PostgreSQL Configuration (default-enabled)
+Object Storage
+- object_storage_bucket_name (string, default "search-app-uploads")
 
-This stack can create and attach an OCI PostgreSQL configuration to the DB System. By default, a configuration is created with common extensions and parameters unless you provide an existing configuration OCID.
+OpenSearch (OCI)
+- enable_opensearch (bool, default true)
+- opensearch_display_name (string, default "spacesai-opensearch")
+- opensearch_version (string, default "3.2.0")
 
-- create_psql_configuration (bool, default true): Create a new configuration
-- psql_configuration_ocid (string, default ""): If non-empty, use this existing configuration and skip creation
-- psql_config_display_name (string, default "livelab_flexible_configuration")
-- psql_config_is_flexible (bool, default true)
-- psql_config_compatible_shapes (list(string), defaults include Flex shapes)
-- psql_config_description (string, default "test configuration created by terraform")
-- psql_config_overrides (map(string), default): key/value overrides rendered as items under db_configuration_overrides. Defaults include:
-  - oci.admin_enabled_extensions = "pg_stat_statements,pglogical"
-  - pglogical.conflict_log_level = "debug1"
-  - pg_stat_statements.max = "5000"
+- Data nodes:
+  - opensearch_node_count (number, default 3)
+  - opensearch_ocpus (number, default 2)
+  - opensearch_memory_gbs (number, default 16)
+  - opensearch_storage_gbs (number, default 200)
+- Master nodes:
+  - opensearch_master_node_count (number, default 3)
+  - opensearch_master_node_host_ocpu_count (number, default 2)
+  - opensearch_master_node_host_memory_gb (number, default 16)
+- Dashboard nodes:
+  - opensearch_opendashboard_node_count (number, default 1)
+  - opensearch_opendashboard_node_host_ocpu_count (number, default 1)
+  - opensearch_opendashboard_node_host_memory_gb (number, default 8)
+- Security (optional):
+  - opensearch_admin_user (string, default null)
+  - opensearch_admin_password_hash (string, sensitive, default null)
 
-The DB System config_id is set to the created configuration’s OCID by default, or to psql_configuration_ocid if you provide one.
+Valkey (OCI Redis)
+- enable_cache (bool, default true)
+- redis_display_name (string, default "spacesai-valkey")
+- redis_node_count (number, default 1)
+- redis_node_memory_gbs (number, default 2)
+- redis_software_version (string, default "VALKEY_7_2")
+- Optional Cache User:
+  - create_cache_user (bool, default false)
+  - cache_user_name (string, default "default")
+  - cache_user_description (string, default "Default Cache user")
+  - cache_user_acl_string (string, default "+@all")
+  - cache_user_status (string, default "ON")
+  - cache_user_hashed_passwords (list(string), sensitive, default [])
 
-## Behavior Notes
 
-- PostgreSQL password handling:
-  - If psql_admin_password == "", a strong random password is generated via the random provider.
-  - The final password is returned as a sensitive output: psql_admin_pwd.
-  - No OCI Vault or KMS is used by this module.
+## What gets created
 
-- Networking and Security:
-  - Private subnet: no public IPs; PSQL port 5432 allowed only from within VCN via NSG.
-  - Public subnet: has IGW and route table for internet access; default security list allows SSH (22).
+- Network (when create_vcn_subnet=true):
+  - VCN vcn1, private subnet vcn1_psql_priv_subnet, public subnet vcn1_pub_subnet
+  - NAT, Service Gateway (optional), Internet Gateway
+  - Security Lists + NSGs
+    - PSQL NSG rule: tcp/5432 ingress within VCN
+    - OpenSearch NSG rule: tcp/9200 ingress within VCN
+    - Valkey NSG rule: tcp/6379 ingress within VCN
 
-- Availability Domain:
-  - Selected dynamically using the first available AD in the region.
+- OpenSearch (oci_opensearch_opensearch_cluster):
+  - Required flat attributes set from vars (counts, memory_gb, ocpu_count, host_type, storage_gb, version)
+  - Network linking via vcn_id and subnet_id in your compartment
+  - Optional security_master_user_* if provided
+
+- Valkey (oci_redis_redis_cluster):
+  - Single or multi-node with memory and version
+  - Optional oci_redis_oci_cache_user and attach resource when create_cache_user=true
+
+- PostgreSQL DB System and optional configuration
+- Uploads bucket in Object Storage
+- Optional compute instance
+
 
 ## Outputs
 
-- psql_admin_pwd (sensitive): Final PostgreSQL admin password (provided or generated)
-- psql_configuration_id: OCID of the configuration (created or provided), if applicable
-- compute_instance_id: OCID of the compute instance (if created)
-- compute_state: Lifecycle state of the compute instance (if created)
-- compute_public_ip: Public IP of the compute instance (if created and assigned)
+- psql_admin_pwd (sensitive)
+- uploads_bucket_name
+- OpenSearch:
+  - opensearch_fqdn — API endpoint FQDN
+  - opendashboard_fqdn — Dashboard FQDN
+  - opensearch_private_ip — Private IP inside VCN
+- Valkey (Redis):
+  - valkey_cluster_id
+  - valkey_port (constant 6379)
 
-## Usage in Oracle Resource Manager
 
-- Create a Stack from this directory (oci_postgres_tf_stack) or ZIP it and upload.
-- Provide required variables (compartment_ocid, psql_admin). Optional: psql_admin_password; if omitted, a random password is generated.
-- PostgreSQL Configuration (optional/default-enabled):
-  - To create a configuration: leave psql_configuration_ocid blank (default), keep create_psql_configuration=true (default), and review psql_config_overrides
-  - To use an existing configuration: set psql_configuration_ocid to your config OCID
-- For Compute, set create_compute=true and provide compute_ssh_public_key.
-- Plan and Apply. Retrieve the psql_admin_pwd and psql_configuration_id from the Job outputs.
+## Map outputs to app .env
 
-## Known Considerations
+- SEARCH_BACKEND=opensearch
+- OPENSEARCH_HOST=https://<opensearch_fqdn>:9200
+- OPENSEARCH_INDEX=spacesai_chunks
+- OPENSEARCH_USER / OPENSEARCH_PASSWORD — if you configured security in OpenSearch (optional)
+- VALKEY_HOST=<private IP or DNS of the cluster endpoint>
+- VALKEY_PORT=6379
+- DB connection for the app must reach the OCI PostgreSQL endpoint.
+- DB_STORE_EMBEDDINGS=false (already defaulted in search-app/.env.example) when OpenSearch serves queries.
 
-- If you use an existing subnet (create_vcn_subnet=false), ensure its routing and public IP policies match your compute_assign_public_ip choice.
-- For private-only access to Compute, set compute_assign_public_ip=false and use Bastion/VPN/DRG as appropriate.
+
+## Usage
+
+1) Update example.tfvars (or set variables in UI) for OpenSearch and Valkey sizing.
+2) terraform init
+3) terraform plan -var-file=example.tfvars
+4) terraform apply -var-file=example.tfvars
+5) Use outputs to configure search-app/.env
+
+
+## Notes and compliance
+- This stack uses provider oracle/oci >= 5.30.0.
+- OpenSearch resource is oci_opensearch_opensearch_cluster and requires the explicit arguments shown above.
+- Valkey is provisioned via oci_redis_redis_cluster. Optional user is oci_redis_oci_cache_user + oci_redis_redis_cluster_attach_oci_cache_user.
+- NSG rule blocks use proper multi-line destination_port_range syntax.
+
+If the provider version you run requires different argument names, run terraform plan and share the exact error, and we will iterate quickly to align names.

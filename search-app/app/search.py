@@ -7,6 +7,8 @@ from typing import Dict, List, Optional, Tuple
 from .config import settings
 from .db import get_conn, set_search_runtime
 from .embeddings import embed_texts
+from .opensearch_adapter import OpenSearchAdapter
+from .valkey_cache import get_json as cache_get, set_json as cache_set
 
 logger = logging.getLogger(__name__)
 
@@ -32,48 +34,130 @@ def _vector_operator() -> str:
     raise ValueError("Invalid PGVECTOR_METRIC")
 
 
-def semantic_search(query: str, top_k: int = 10, probes: Optional[int] = None) -> List[ChunkHit]:
-    from .pgvector_utils import to_vec_literal
+def semantic_search(query: str, top_k: int = 10, probes: Optional[int] = None, *, user_id: Optional[int] = None, space_id: Optional[int] = None) -> List[ChunkHit]:
+    # Cache key
+    ck = f"sem:{user_id}:{space_id}:{top_k}:{query.strip().lower()}"
+    cached = cache_get(ck)
+    if cached:
+        return [ChunkHit(**h) for h in cached]
+
     q_emb = embed_texts([query])[0]
+
+    if settings.search_backend == "opensearch":
+        adapter = OpenSearchAdapter()
+        hits = adapter.search_vector(query=query, vector=q_emb, top_k=top_k, user_id=user_id, space_id=space_id)
+        out: List[ChunkHit] = []
+        for h in hits:
+            src = h.get("_source", {})
+            out.append(ChunkHit(
+                chunk_id=src.get("chunk_id") or 0,  # optional
+                document_id=int(src.get("doc_id")),
+                chunk_index=int(src.get("chunk_index")),
+                content=src.get("text") or "",
+                distance=float(h.get("_score") or 0.0),
+            ))
+        cache_set(ck, [vars(x) for x in out])
+        return out
+
+    # Fallback: Postgres pgvector
+    from .pgvector_utils import to_vec_literal
     op = _vector_operator()
     with get_conn() as conn:
         with conn.cursor() as cur:
             set_search_runtime(cur, probes or settings.pgvector_probes)
-            cur.execute(
-                f"""
-                SELECT id, document_id, chunk_index, content, (embedding {op} %s::vector) AS distance
-                FROM chunks
-                WHERE embedding IS NOT NULL
-                ORDER BY distance ASC
-                LIMIT %s
-                """,
-                (to_vec_literal(q_emb), top_k),
-            )
+            if user_id is not None:
+                cur.execute(
+                    f"""
+                    SELECT c.id, c.document_id, c.chunk_index, c.content, (c.embedding {op} %s::vector) AS distance
+                    FROM chunks c
+                    JOIN documents d ON d.id = c.document_id
+                    WHERE c.embedding IS NOT NULL
+                      AND d.user_id = %s
+                      AND (%s IS NULL OR d.space_id = %s)
+                    ORDER BY distance ASC
+                    LIMIT %s
+                    """,
+                    (to_vec_literal(q_emb), int(user_id), space_id, space_id, top_k),
+                )
+            else:
+                cur.execute(
+                    f"""
+                    SELECT id, document_id, chunk_index, content, (embedding {op} %s::vector) AS distance
+                    FROM chunks
+                    WHERE embedding IS NOT NULL
+                    ORDER BY distance ASC
+                    LIMIT %s
+                    """,
+                    (to_vec_literal(q_emb), top_k),
+                )
             rows = cur.fetchall()
-    return [ChunkHit(chunk_id=r[0], document_id=r[1], chunk_index=r[2], content=r[3], distance=float(r[4])) for r in rows]
+    out = [ChunkHit(chunk_id=r[0], document_id=r[1], chunk_index=r[2], content=r[3], distance=float(r[4])) for r in rows]
+    cache_set(ck, [vars(x) for x in out])
+    return out
 
 
-def fulltext_search(query: str, top_k: int = 10) -> List[ChunkHit]:
+def fulltext_search(query: str, top_k: int = 10, *, user_id: Optional[int] = None, space_id: Optional[int] = None) -> List[ChunkHit]:
+    ck = f"fts:{user_id}:{space_id}:{top_k}:{query.strip().lower()}"
+    cached = cache_get(ck)
+    if cached:
+        return [ChunkHit(**h) for h in cached]
+
+    if settings.search_backend == "opensearch":
+        adapter = OpenSearchAdapter()
+        hits = adapter.search_bm25(query=query, top_k=top_k, user_id=user_id, space_id=space_id)
+        out: List[ChunkHit] = []
+        for h in hits:
+            src = h.get("_source", {})
+            out.append(ChunkHit(
+                chunk_id=src.get("chunk_id") or 0,
+                document_id=int(src.get("doc_id")),
+                chunk_index=int(src.get("chunk_index")),
+                content=src.get("text") or "",
+                rank=float(h.get("_score") or 0.0),
+            ))
+        cache_set(ck, [vars(x) for x in out])
+        return out
+
+    # Fallback: Postgres FTS
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                f"""
-                SELECT id, document_id, chunk_index, content,
-                       ts_rank_cd(content_tsv, plainto_tsquery(%s, %s)) AS rank
-                FROM chunks
-                WHERE content_tsv @@ plainto_tsquery(%s, %s)
-                ORDER BY rank DESC
-                LIMIT %s
-                """,
-                (settings.fts_config, query, settings.fts_config, query, top_k),
-            )
+            if user_id is not None:
+                cur.execute(
+                    f"""
+                    SELECT c.id, c.document_id, c.chunk_index, c.content,
+                           ts_rank_cd(c.content_tsv, plainto_tsquery(%s, %s)) AS rank
+                    FROM chunks c
+                    JOIN documents d ON d.id = c.document_id
+                    WHERE c.content_tsv @@ plainto_tsquery(%s, %s)
+                      AND d.user_id = %s
+                      AND (%s IS NULL OR d.space_id = %s)
+                    ORDER BY rank DESC
+                    LIMIT %s
+                    """,
+                    (settings.fts_config, query, settings.fts_config, query, int(user_id), space_id, space_id, top_k),
+                )
+            else:
+                cur.execute(
+                    f"""
+                    SELECT id, document_id, chunk_index, content,
+                           ts_rank_cd(content_tsv, plainto_tsquery(%s, %s)) AS rank
+                    FROM chunks
+                    WHERE content_tsv @@ plainto_tsquery(%s, %s)
+                    ORDER BY rank DESC
+                    LIMIT %s
+                    """,
+                    (settings.fts_config, query, settings.fts_config, query, top_k),
+                )
             rows = cur.fetchall()
-    return [ChunkHit(chunk_id=r[0], document_id=r[1], chunk_index=r[2], content=r[3], rank=float(r[4])) for r in rows]
+    out = [ChunkHit(chunk_id=r[0], document_id=r[1], chunk_index=r[2], content=r[3], rank=float(r[4])) for r in rows]
+    cache_set(ck, [vars(x) for x in out])
+    return out
 
 
-def hybrid_search(query: str, top_k: int = 10, alpha: float = 0.5) -> List[ChunkHit]:
-    sem = semantic_search(query, top_k=top_k)
-    fts = fulltext_search(query, top_k=top_k)
+def hybrid_search(query: str, top_k: int = 10, alpha: float = 0.5, *, user_id: Optional[int] = None, space_id: Optional[int] = None) -> List[ChunkHit]:
+    # Note: alpha unused with RRF approach; kept for API compatibility
+    sem = semantic_search(query, top_k=top_k, user_id=user_id, space_id=space_id)
+    fts = fulltext_search(query, top_k=top_k, user_id=user_id, space_id=space_id)
 
     k = 60.0
     scores: Dict[int, float] = {}
@@ -91,54 +175,28 @@ def hybrid_search(query: str, top_k: int = 10, alpha: float = 0.5) -> List[Chunk
     return out
 
 
-def rag(query: str, mode: str = "hybrid", top_k: int = 6) -> Tuple[str, List[ChunkHit], bool]:
-    logger.info("rag: query=%r mode=%s top_k=%s provider=%s", query, mode, top_k, settings.llm_provider)
+def rag(query: str, mode: str = "hybrid", top_k: int = 6, *, user_id: Optional[int] = None, space_id: Optional[int] = None, provider_override: Optional[str] = None) -> Tuple[str, List[ChunkHit], bool]:
+    logger.info("rag: query=%r mode=%s top_k=%s provider=%s user_id=%s space_id=%s", query, mode, top_k, provider_override or settings.llm_provider, user_id, space_id)
     mode = mode.lower()
     if mode == "semantic":
-        hits = semantic_search(query, top_k=top_k)
+        hits = semantic_search(query, top_k=top_k, user_id=user_id, space_id=space_id)
     elif mode == "fulltext":
-        hits = fulltext_search(query, top_k=top_k)
+        hits = fulltext_search(query, top_k=top_k, user_id=user_id, space_id=space_id)
     else:
-        hits = hybrid_search(query, top_k=top_k)
+        hits = hybrid_search(query, top_k=top_k, user_id=user_id, space_id=space_id)
 
     context = "\n\n".join(h.content for h in hits)
     logger.info("rag: context_chars=%d hits=%d", len(context), len(hits))
 
-    answer = context
-    used_llm = False
+    # Call unified LLM
+    try:
+        from .llm import chat as llm_chat
+        out = llm_chat(query, context, provider_override=provider_override)
+    except Exception as e:
+        logger.exception("LLM dispatch failed: %s", e)
+        out = None
 
-    if settings.llm_provider == "openai" and settings.openai_api_key:
-        try:
-            from openai import OpenAI
-
-            client = OpenAI(api_key=settings.openai_api_key)
-            prompt = (
-                "You are a helpful assistant. Using the provided context, answer the question concisely.\n\n"
-                f"Question: {query}\n\nContext:\n{context[:12000]}"
-            )
-            logger.info("rag: calling OpenAI model=%s prompt_chars=%d", settings.openai_model, len(prompt))
-            resp = client.chat.completions.create(
-                model=settings.openai_model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.2,
-                max_tokens=512,
-            )
-            out = resp.choices[0].message.content
-            if out:
-                answer = out
-                used_llm = True
-        except Exception as e:
-            logger.exception("LLM call failed: %s", e)
-    elif settings.llm_provider == "oci":
-        try:
-            from .oci_llm import oci_chat_completion
-            logger.info("rag: calling OCI GenAI")
-            out = oci_chat_completion(query, context)
-            if out:
-                answer = out
-                used_llm = True
-        except Exception as e:
-            logger.exception("OCI LLM call failed: %s", e)
-
-    logger.info("rag: answer_chars=%d", len(answer or ''))
+    used_llm = bool(out)
+    answer = out or context
+    logger.info("rag: answer_chars=%d used_llm=%s", len(answer or ''), used_llm)
     return answer, hits, used_llm

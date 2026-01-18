@@ -34,9 +34,10 @@ def get_user_by_email(email: str) -> Optional[dict]:
                 "id": int(row[0]),
                 "email": row[1],
                 "password_hash": row[2],
-                "created_at": row[3],
-                "last_login_at": row[4],
+                "created_at": (row[3].isoformat() if row[3] else None),
+                "last_login_at": (row[4].isoformat() if row[4] else None),
             }
+
 
 
 def get_user_by_id(user_id: int) -> Optional[dict]:
@@ -50,9 +51,10 @@ def get_user_by_id(user_id: int) -> Optional[dict]:
                 "id": int(row[0]),
                 "email": row[1],
                 "password_hash": row[2],
-                "created_at": row[3],
-                "last_login_at": row[4],
+                "created_at": (row[3].isoformat() if row[3] else None),
+                "last_login_at": (row[4].isoformat() if row[4] else None),
             }
+
 
 
 def create_user(email: str, password: str) -> dict:
@@ -120,8 +122,9 @@ def list_spaces(user_id: int) -> List[dict]:
             )
             rows = cur.fetchall()
             return [
-                {"id": int(r[0]), "name": r[1], "is_default": bool(r[2]), "created_at": r[3]} for r in rows
+                {"id": int(r[0]), "name": r[1], "is_default": bool(r[2]), "created_at": (r[3].isoformat() if r[3] else None)} for r in rows
             ]
+
 
 
 def get_default_space_id(user_id: int) -> Optional[int]:

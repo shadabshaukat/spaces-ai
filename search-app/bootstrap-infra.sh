@@ -11,7 +11,7 @@ REPO_URL=${REPO_URL:-https://github.com/shadabshaukat/spaces-ai.git}
 TARGET_USER=${TARGET_USER:-opc}
 
 # OS packages
-sudo dnf install -y curl git unzip firewalld oraclelinux-developer-release-el10 python3-oci-cli postgresql16 tesseract ffmpeg || true
+sudo dnf install -y curl git unzip firewalld oraclelinux-developer-release-el10 python3-oci-cli postgresql16 tesseract || true
 
 # AWS CLI v2 (no credentials)
 sudo bash -lc 'tmpdir=$(mktemp -d) && cd "$tmpdir" && curl -s https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o awscliv2.zip && unzip -q awscliv2.zip && ./aws/install --update && cd / && rm -rf "$tmpdir"'
@@ -26,16 +26,16 @@ else
 fi
 
 # Docker & Docker Compose
-sudo curl -fsSL https://get.docker.com | sh
-sudo dnf install -y docker-compose-plugin || true
-if [ ! -x /usr/local/bin/docker-compose ]; then
-  sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.6/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose && sudo chmod +x /usr/local/bin/docker-compose || true
-  sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose || true
-fi
-sudo systemctl enable --now docker || true
-if id -u "$TARGET_USER" >/dev/null 2>&1; then
-  sudo usermod -aG docker "$TARGET_USER" || true
-fi
+#sudo curl -fsSL https://get.docker.com | sh
+#sudo dnf install -y docker-compose-plugin || true
+#if [ ! -x /usr/local/bin/docker-compose ]; then
+#  sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.6/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose && sudo chmod +x /usr/local/bin/docker-compose || true
+# sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose || true
+#fi
+#sudo systemctl enable --now docker || true
+#if id -u "$TARGET_USER" >/dev/null 2>&1; then
+# sudo usermod -aG docker "$TARGET_USER" || true
+#fi
 
 # Firewall
 sudo systemctl enable --now firewalld || true

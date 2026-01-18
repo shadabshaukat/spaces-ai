@@ -7,6 +7,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from opensearchpy import OpenSearch, helpers  # type: ignore
 
 from .config import settings
+from .runtime_config import get_os_num_candidates
 
 logger = logging.getLogger(__name__)
 
@@ -135,34 +136,46 @@ class OpenSearchAdapter:
         os_client = self.client()
         filters = self._filters(user_id, space_id)
         engine = (os.getenv("OPENSEARCH_KNN_ENGINE", "lucene") or "lucene").lower()
+        # Construct base KNN object
+        from .config import settings as _settings
         knn_obj: Dict[str, Any] = {
             "field": "vector",
             "query_vector": vector,
             "k": int(top_k),
         }
         if engine != "lucene":
-            # Allow override via settings; else default heuristic
-            from .config import settings as _settings
             rc = get_os_num_candidates()
             num_cand = rc if rc is not None else (_settings.opensearch_knn_num_candidates if getattr(_settings, "opensearch_knn_num_candidates", None) else max(int(top_k) * 10, 100))
             knn_obj["num_candidates"] = int(num_cand)
-        body: Dict[str, Any] = {
-            "size": int(top_k),
-            "knn": knn_obj,
-        }
+        # Prepare variants to handle cluster differences
+        variants: List[Dict[str, Any]] = []
+        # Variant A: top-level knn (Lucene style)
+        body_a: Dict[str, Any] = {"size": int(top_k), "knn": dict(knn_obj)}
         if filters:
-            body["query"] = {"bool": {"filter": filters}}
+            body_a["query"] = {"bool": {"filter": filters}}
         else:
-            body["query"] = {"match_all": {}}
-        try:
-            res = os_client.search(index=self.index, body=body)
-            return res.get("hits", {}).get("hits", [])
-        except Exception as e:
-            logger.warning("OpenSearch KNN search failed (%s). Falling back to BM25.", e)
+            body_a["query"] = {"match_all": {}}
+        variants.append(("top_level_knn", body_a))
+        # Variant B: query-level knn (some clusters expect knn under query)
+        body_b: Dict[str, Any] = {
+            "size": int(top_k),
+            "query": {"knn": {"field": "vector", "query_vector": vector, "k": int(top_k)}}
+        }
+        variants.append(("query_level_knn", body_b))
+        # Attempt each variant
+        last_err: Optional[Exception] = None
+        for tag, body in variants:
             try:
-                return self.search_bm25(query=query, top_k=top_k, user_id=user_id, space_id=space_id)
-            except Exception:
-                raise
+                res = os_client.search(index=self.index, body=body)
+                logger.info("OpenSearch KNN variant %s succeeded", tag)
+                return res.get("hits", {}).get("hits", [])
+            except Exception as e:
+                last_err = e
+                logger.warning("OpenSearch KNN variant %s failed: %s", tag, e)
+                continue
+        # Fallback to BM25
+        logger.warning("OpenSearch KNN search failed for all variants (%s). Falling back to BM25.", last_err)
+        return self.search_bm25(query=query, top_k=top_k, user_id=user_id, space_id=space_id)
 
     def search_bm25(self, *, query: str, top_k: int, user_id: Optional[int], space_id: Optional[int]) -> List[Dict[str, Any]]:
         os_client = self.client()

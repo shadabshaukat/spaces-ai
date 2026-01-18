@@ -84,12 +84,16 @@ def chat(question: str, context: str, provider_override: Optional[str] = None, m
                 f"Question: {question}\n\nContext:\n{context[:12000]}"
             )
             payload = {"model": model, "prompt": prompt, "stream": False, "options": {"temperature": temperature}}
+            logger.info("llm[ollama]: generate (model=%s)", model)
             r = requests.post(f"{host}/api/generate", json=payload, timeout=60)
             r.raise_for_status()
             data = r.json()
-            return data.get("response") or data.get("output")
+            out = data.get("response") or data.get("output")
+            logger.info("llm[ollama]: got answer=%s", bool(out))
+            return out
         except Exception as e:
             logger.exception("Ollama LLM failed: %s", e)
             return None
+
 
     return None

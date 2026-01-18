@@ -40,6 +40,7 @@ class Settings:
     model_cache_dir: str = os.getenv("MODEL_CACHE_DIR", "storage/models")
     storage_backend: str = os.getenv("STORAGE_BACKEND", "local").lower()  # local | oci | both
     oci_os_bucket_name: Optional[str] = os.getenv("OCI_OS_BUCKET_NAME")
+    oci_os_upload_enabled: bool = _get_bool("OCI_OS_UPLOAD", True)
     # Upload & parsing
     max_upload_size_mb: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", "200"))
     use_pymupdf: bool = _get_bool("USE_PYMUPDF", False)

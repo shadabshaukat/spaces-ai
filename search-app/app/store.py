@@ -112,7 +112,7 @@ def save_upload(file_bytes: bytes, filename: str, user_email: Optional[str] = No
         f.write(file_bytes)
 
     oci_url: Optional[str] = None
-    if settings.storage_backend in {"oci", "both"} and settings.oci_os_bucket_name:
+    if settings.storage_backend in {"oci", "both"} and settings.oci_os_bucket_name and settings.oci_os_upload_enabled:
         obj_name = str(dated_rel).replace("\\", "/")
         oci_url = _upload_to_oci(settings.oci_os_bucket_name, obj_name, file_bytes)
 
@@ -140,7 +140,7 @@ def save_upload_stream(fileobj, filename: str, user_email: Optional[str] = None)
     oci_url: Optional[str] = None
 
     # If using OCI, stream the file object to Object Storage first (then rewind for local copy)
-    if settings.storage_backend in {"oci", "both"} and settings.oci_os_bucket_name:
+    if settings.storage_backend in {"oci", "both"} and settings.oci_os_bucket_name and settings.oci_os_upload_enabled:
         try:
             import oci  # type: ignore
             cfg = None

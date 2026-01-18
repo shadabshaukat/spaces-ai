@@ -1,27 +1,31 @@
 variable "region" {
-  type    = string
-  default = "mx-queretaro-1"
+  type        = string
+  description = "OCI region identifier (e.g., mx-queretaro-1)."
+  default     = "mx-queretaro-1"
 }
 
 variable "compartment_ocid" {
-  type    = string
+  type        = string
+  description = "OCID of the target compartment where all resources will be created."
 }
 
 variable "tenancy_ocid" {
   type        = string
-  description = "Tenancy OCID (used for AD discovery). If empty, compartment_ocid is used."
+  description = "Tenancy OCID used only for Availability Domain discovery (optional). Leave unset to fall back to compartment_ocid."
 }
 
 ## Network
 
 variable "create_service_gateway" {
-  type    = bool
-  default = true
+  type        = bool
+  description = "Whether to create a Service Gateway for private access to Oracle Services Network."
+  default     = true
 }
 
 variable "create_vcn_subnet" {
-  type    = bool
-  default = true
+  type        = bool
+  description = "Create a new VCN, route tables, security lists, and subnets. Set to false to use existing subnet OCIDs."
+  default     = true
 }
 
 variable "psql_subnet_ocid" {
@@ -37,15 +41,16 @@ variable "public_subnet_ocid" {
 }
 
 variable "vcn_cidr" {
-  type    = list(string)
-  default = ["10.10.0.0/16"]
+  type        = list(string)
+  description = "VCN CIDR blocks (used only when create_vcn_subnet=true)."
+  default     = ["10.10.0.0/16"]
 }
 
 ## Credentials
 
 variable "psql_admin_password" {
   type        = string
-  description = "Optional admin password. Leave empty to auto-generate a strong random password."
+  description = "Admin password for PostgreSQL. If set to an empty string, a strong random password is generated at apply. Default is a sample value; override in tfvars for production."
   default     = "RAbbithole1234##"
   sensitive   = true
 }
@@ -59,20 +64,21 @@ variable "psql_admin" {
 }
 
 variable "psql_version" {
-  type    = number
-  default = 16
+  type        = number
+  description = "PostgreSQL major version."
+  default     = 16
 }
 
 variable "inst_count" {
-  type    = number
+  type        = number
   description = "Number of PostgreSQL nodes"
-  default = 1
+  default     = 1
 }
 
 variable "num_ocpu" {
-  type    = number
-  description = "OCPUs Number per PostgreSQL node"
-  default = 2
+  type        = number
+  description = "Number of OCPUs per PostgreSQL node"
+  default     = 2
 }
 
 variable "psql_shape_name" {
@@ -82,7 +88,8 @@ variable "psql_shape_name" {
 }
 
 variable "psql_iops" {
-  type = map(number)
+  type        = map(number)
+  description = "Internal IOPS profile map used by the module (do not modify unless you know what you are doing)."
   default = {
     75  = 75000
     150 = 150000
@@ -96,56 +103,66 @@ variable "psql_iops" {
 ## Compute 
 
 variable "create_compute" {
-  type    = bool
-  default = true
+  type        = bool
+  description = "Whether to create a small compute instance alongside the database."
+  default     = true
 }
 
 
 variable "compute_shape" {
-  type    = string
-  default = "VM.Standard.E5.Flex"
+  type        = string
+  description = "Compute instance shape (Flex shapes supported)."
+  default     = "VM.Standard.E5.Flex"
 }
 
 variable "compute_ocpus" {
-  type    = number
-  default = 1
+  type        = number
+  description = "Number of OCPUs for the compute instance."
+  default     = 1
 }
 
 variable "compute_memory_in_gbs" {
-  type    = number
-  default = 8
+  type        = number
+  description = "Memory (GB) for the compute instance."
+  default     = 8
 }
 
 variable "compute_assign_public_ip" {
-  type    = bool
-  default = true
+  type        = bool
+  description = "Assign a public IP to the compute VNIC; must be compatible with the chosen subnet."
+  default     = true
 }
 
 
 variable "compute_display_name" {
-  type    = string
-  default = "app-host-1"
+  type        = string
+  description = "Display name for the compute instance."
+  default     = "app-host-1"
 }
 
 variable "compute_ssh_public_key" {
-  type    = string
-  default = "ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAs4f9ua0AU3U08s3s7D75Z7gUkmV0WgAYL7bdolT4r/N98uGXgaa6t4AYN+wKN0gdnjbEWunmoPf0ico8Trqlto8Vdp52DlvOjMZ/26KdJu8b0ytzV/MDO8RZhmL7A/Cwcr9VcPoRoGpfY/PExMGZUXBT7XOQ+ModkkhjCCyLebnMhE7Dv8HjqGnQI9jxob/DhZ0M8Xz9j9OUK82cTUCwtRULYXRx2h9vL5wHp7HZIddNjdnssXADVBVbzerO4S7aRaKfdIEaZu8JL4JYoDrtxv/sWRB3IdSTgYco6augNcTTdkDefn+Qr2dLZFSvcqSY8lP6Tz+/Yp3SLCeWKys+xQ== shadab"
+  type        = string
+  description = "SSH public key for the opc user on the compute instance."
+  default     = "ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAs4f9ua0AU3U08s3s7D75Z7gUkmV0WgAYL7bdolT4r/N98uGXgaa6t4AYN+wKN0gdnjbEWunmoPf0ico8Trqlto8Vdp52DlvOjMZ/26KdJu8b0ytzV/MDO8RZhmL7A/Cwcr9VcPoRoGpfY/PExMGZUXBT7XOQ+ModkkhjCCyLebnMhE7Dv8HjqGnQI9jxob/DhZ0M8Xz9j9OUK82cTUCwtRULYXRx2h9vL5wHp7HZIddNjdnssXADVBVbzerO4S7aRaKfdIEaZu8JL4JYoDrtxv/sWRB3IdSTgYco6augNcTTdkDefn+Qr2dLZFSvcqSY8lP6Tz+/Yp3SLCeWKys+xQ== shadab"
 }
 
 
 variable "compute_image_ocid" {
-  type    = string
-  default = ""
+  type        = string
+  description = "Image OCID for compute. If blank, the latest Oracle Linux 10 image compatible with the shape is auto-selected."
+  default     = ""
 }
 
 variable "compute_nsg_ids" {
-  type    = list(string)
-  default = []
+  type        = list(string)
+  description = "Optional list of NSG OCIDs to attach to the compute VNIC."
+  default     = []
 }
 
 variable "compute_boot_volume_size_in_gbs" {
-  type    = number
-  default = 50
+  type        = number
+  description = "Boot volume size (GB) for the compute instance."
+  default     = 50
 }
 
 ## Object Storage
@@ -201,7 +218,7 @@ variable "psql_config_description" {
 # Map of config_key => overridden_config_value
 variable "psql_config_overrides" {
   type        = map(string)
-  description = "Configuration overrides as key/value pairs"
+  description = "Key/value map applied to the OCI PostgreSQL configuration via db_configuration_overrides.items."
   default     = {
     "oci.admin_enabled_extensions" = "pg_stat_statements,pglogical,vector"
     "pglogical.conflict_log_level" = "debug1"
@@ -358,6 +375,6 @@ variable "cache_memory_gbs" {
 
 variable "redis_software_version" {
   type        = string
-  description = "Redis/Valkey software version identifier (e.g., VALKEY_7_2)"
+  description = "OCI Cache software version identifier (e.g., VALKEY_7_2)"
   default     = "VALKEY_7_2"
 }

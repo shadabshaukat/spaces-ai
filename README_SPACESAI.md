@@ -107,6 +107,9 @@ Visit http://0.0.0.0:8000, register/login, create/select a space, upload and sea
 - Valkey cache:
   - redis-py used with small timeouts and TTL (default 300s)
   - Cache miss triggers backend search, then caches a compact JSON version of hits
+- Index layout and creation:
+  - The adapter ensures the index exists on startup with knn=true and HNSW configuration sized to EMBEDDING_DIM
+  - Shards/replicas are configurable via env: OPENSEARCH_SHARDS (default 3), OPENSEARCH_REPLICAS (default 1)
 
 
 ## 10) Terraform (Infrastructure)
@@ -172,7 +175,12 @@ Then update `search-app/.env` with the outputs and run the app.
 - search-app/.env.example updated with OpenSearch/Valkey/Bedrock/Ollama settings
 - pyproject updated to include opensearch-py, redis, boto3, requests
 - Terraform: added opensearch.tf, cache.tf, and outputs for endpoints
-
+- Terraform: added Cloud-init support for Compute (enable_cloud_init, compute_app_port, repo_url, cloud_init_user_data). Default script installs curl, git, unzip, firewalld, oraclelinux-developer-release-el10, python3-oci-cli, postgresql16, tesseract, ffmpeg, uv, AWS CLI v2, Docker & Compose; opens port 8000; clones repo. Notes added for first-boot behavior.
+- search-app: ensure-index now configures number_of_shards/replicas via env OPENSEARCH_SHARDS/OPENSEARCH_REPLICAS (defaults 3/1)
+- Added scripts: search-app/bootstrap-infra.sh (sudo-only bootstrap), search-app/build-app.sh, search-app/start-app.sh, search-app/stop-app.sh
+- Added Dockerfile for app and root docker-compose.yml (binds 0.0.0.0, mounts storage, maps port)
+- Added Kubernetes manifests: search-app/k8s (Deployment/Service/ConfigMap) with resource requests/limits, probes, and env integration
+- Documentation: Root README.md and search-app/README.md updated with cloud-init packages/commands and deployment strategies for Bare VM, Docker, and Kubernetes
 
 
 ## 13) Roadmap / Next Steps
@@ -182,6 +190,8 @@ Then update `search-app/.env` with the outputs and run the app.
 - Add integration/contract tests for adapters and caching layer
 - Admin endpoints for listing/deleting documents per space and reindex controls
 - Streaming /api/search responses and UI improvements for citations
+- Optional: Add HorizontalPodAutoscaler and Ingress manifests for K8s
+- Optional: systemd service unit for bare VM auto-start
 
 
 ## 14) How to Resume Work
@@ -190,7 +200,8 @@ Then update `search-app/.env` with the outputs and run the app.
 - Export the necessary env vars or copy .env.example to .env and set values
 - To develop locally: `uv sync --extra pdf --extra office --extra vision --extra audio && uv run searchapp`
 - To integrate Terraform: update variables and add opensearch.tf/cache.tf, then plan/apply
-
+- To containerize: `./search-app/build-app.sh && docker compose up -d`
+- To deploy on K8s: push image to a registry, update deployment.yaml, then `kubectl apply -f search-app/k8s/`
 
 ---
 Maintainers: update this file with every material change to code, infrastructure, or configuration so future sessions can pick up seamlessly.

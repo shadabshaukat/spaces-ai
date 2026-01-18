@@ -95,6 +95,27 @@
               <input id="debounceMs" type="number" value="400" min="100" max="2000" />
             </div>
           </div>
+          <div class="row wrap">
+            <div class="row no-grow">
+              <strong>Search backend:</strong>&nbsp;<span id="cfgBackend">-</span>
+            </div>
+            <div class="row no-grow">
+              <label for="cfgTopK" class="leftpad">Default Top K</label>
+              <input id="cfgTopK" type="number" min="1" max="1000" placeholder="25" />
+            </div>
+            <div class="row no-grow" id="cfgPgvectorRow" hidden>
+              <label for="cfgProbes" class="leftpad">pgvector probes</label>
+              <input id="cfgProbes" type="number" min="1" max="10000" placeholder="env default" />
+            </div>
+            <div class="row no-grow" id="cfgNumCandRow" hidden>
+              <label for="cfgNumCand" class="leftpad">OS num_candidates</label>
+              <input id="cfgNumCand" type="number" min="1" max="1000000" placeholder="heuristic default" />
+            </div>
+            <div class="row no-grow">
+              <button id="loadCfgBtn" class="ghost">Refresh config</button>
+              <button id="saveCfgBtn" class="ghost">Save</button>
+            </div>
+          </div>
         </div>
 
         <div class="row middle">
@@ -130,7 +151,8 @@
         <div id="dropzone" class="dropzone">Drag & drop files here (PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON, Images, Audio/Video)</div>
       </div>
       <div class="row">
-        <input id="files" type="file" multiple webkitdirectory directory />
+        <input id="files" type="file" multiple accept=".pdf,.txt,.csv,.md,.json,.html,.htm,.docx,.pptx,.xlsx,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.gif,.mp3,.wav,.m4a,.flac,.ogg,.mp4,.mov,.mkv,.webm,.avi" />
+        <span id="fileSelectionText" class="muted">No files selected.</span>
       </div>
       <div class="row" id="uploadListRow" hidden>
         <div id="uploadList" class="progress-list"></div>
@@ -477,6 +499,51 @@
       b.setAttribute('aria-expanded', String(!nowHidden));
     });
 
+    async function loadSearchConfig() {
+      try {
+        const cfg = await api('/api/search-config');
+        const be = document.getElementById('cfgBackend'); if (be) be.textContent = cfg.backend || '-';
+        const t = document.getElementById('cfgTopK'); if (t) t.value = cfg.default_top_k != null ? String(cfg.default_top_k) : '';
+        const tk = document.getElementById('topk'); if (tk && cfg.default_top_k != null) tk.value = String(cfg.default_top_k);
+        const pgRow = document.getElementById('cfgPgvectorRow');
+        const osRow = document.getElementById('cfgNumCandRow');
+        const pgv = document.getElementById('cfgProbes');
+        const ncd = document.getElementById('cfgNumCand');
+        if (cfg.backend === 'pgvector') {
+          if (pgRow) pgRow.hidden = false; if (osRow) osRow.hidden = true;
+          if (pgv) pgv.value = cfg.pgvector_probes != null ? String(cfg.pgvector_probes) : '';
+        } else {
+          if (pgRow) pgRow.hidden = true;
+          const engine = (cfg.opensearch?.engine || 'lucene').toLowerCase();
+          if (osRow) osRow.hidden = engine === 'lucene';
+          if (ncd) ncd.value = cfg.opensearch?.num_candidates != null ? String(cfg.opensearch.num_candidates) : '';
+        }
+      } catch (e) {
+        // ignore (likely 401 if not logged-in yet)
+      }
+    }
+
+    async function saveSearchConfig() {
+      try {
+        const t = document.getElementById('cfgTopK');
+        const pgv = document.getElementById('cfgProbes');
+        const ncd = document.getElementById('cfgNumCand');
+        const body = {};
+        if (t && t.value !== '') body.default_top_k = parseInt(t.value, 10);
+        if (pgv && !pgv.parentElement.hidden) body.pgvector_probes = pgv.value === '' ? null : parseInt(pgv.value, 10);
+        if (ncd && !ncd.parentElement.hidden) body.os_num_candidates = ncd.value === '' ? null : parseInt(ncd.value, 10);
+        const resp = await api('/api/search-config', { method: 'POST', body });
+        if (resp && resp.ok) { showToast('Saved'); await loadSearchConfig(); }
+      } catch (e) {
+        showToast('Save failed');
+      }
+    }
+
+    const loadCfgBtn = document.getElementById('loadCfgBtn');
+    if (loadCfgBtn) loadCfgBtn.addEventListener('click', () => loadSearchConfig());
+    const saveCfgBtn = document.getElementById('saveCfgBtn');
+    if (saveCfgBtn) saveCfgBtn.addEventListener('click', () => saveSearchConfig());
+
     // Drag-and-drop support
     const dropzone = document.getElementById('dropzone');
     let droppedFiles = [];
@@ -539,7 +606,9 @@
       filesInputEl.addEventListener('change', () => {
         const count = filesInputEl.files ? filesInputEl.files.length : 0;
         const dz = document.getElementById('dropzone');
+        const badge = document.getElementById('fileSelectionText');
         if (dz) dz.textContent = count ? `${count} file(s) selected` : 'Drag & drop files here';
+        if (badge) badge.textContent = count ? `${count} file(s) selected.` : 'No files selected.';
       });
     }
 
@@ -688,7 +757,11 @@
       if (q) q.value = '';
       if (files) files.value = '';
       if (status) status.textContent = '';
+      // Initialize file selection badge
+      const badge = document.getElementById('fileSelectionText');
+      if (badge) badge.textContent = 'No files selected.';
       await initUser();
+      await loadSearchConfig();
     });
   </script>
 </body>

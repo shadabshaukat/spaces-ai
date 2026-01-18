@@ -88,6 +88,8 @@ class Settings:
     opensearch_max_retries: int = int(os.getenv("OPENSEARCH_MAX_RETRIES", "8"))
     opensearch_verify_certs: bool = _get_bool("OPENSEARCH_VERIFY_CERTS", True)
     opensearch_dual_write: bool = _get_bool("OPENSEARCH_DUAL_WRITE", True)
+    # Optional tuning for non-lucene KNN engines
+    opensearch_knn_num_candidates: Optional[int] = (int(os.getenv("OPENSEARCH_KNN_NUM_CANDIDATES")) if os.getenv("OPENSEARCH_KNN_NUM_CANDIDATES") else None)
 
     # Valkey (Redis-compatible) cache
     valkey_host: Optional[str] = os.getenv("VALKEY_HOST")

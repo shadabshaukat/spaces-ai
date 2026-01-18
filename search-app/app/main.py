@@ -21,6 +21,14 @@ from .search import semantic_search, fulltext_search, hybrid_search, rag
 from .embeddings import get_model, embed_texts
 from .opensearch_adapter import OpenSearchAdapter
 from .session import get_current_user, sign_session, set_session_cookie_headers, clear_session_cookie_headers
+from .runtime_config import (
+    get_default_top_k,
+    set_default_top_k,
+    get_pgvector_probes,
+    set_pgvector_probes,
+    get_os_num_candidates,
+    set_os_num_candidates,
+)
 from .users import create_user, authenticate_user, list_spaces, ensure_default_space, get_default_space_id, create_space, set_default_space
 
 logger = logging.getLogger("searchapp")
@@ -286,7 +294,10 @@ async def api_search(request: Request, payload: Dict[str, Any]):
 
     q = payload.get("query", "")
     mode = str(payload.get("mode", "hybrid")).lower()
-    top_k = int(payload.get("top_k", 25))
+    try:
+        top_k = int(payload.get("top_k")) if payload.get("top_k") is not None else int(get_default_top_k())
+    except Exception:
+        top_k = int(get_default_top_k())
     provider_override = (payload.get("llm_provider") or None)
     if not q:
         return JSONResponse(status_code=400, content={"error": "query required"})
@@ -489,6 +500,60 @@ def llm_config():
         "config_file": settings.oci_config_file,
         "config_profile": settings.oci_config_profile,
     }
+
+
+# Runtime search tuning (process-local; requires auth)
+@app.get("/api/search-config")
+async def get_search_config(request: Request):
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    # Build snapshot
+    return {
+        "backend": settings.search_backend,
+        "default_top_k": get_default_top_k(),
+        "pgvector_probes": get_pgvector_probes() if get_pgvector_probes() is not None else settings.pgvector_probes,
+        "opensearch": {
+            "engine": os.getenv("OPENSEARCH_KNN_ENGINE", "lucene"),
+            "num_candidates": get_os_num_candidates() if get_os_num_candidates() is not None else getattr(settings, "opensearch_knn_num_candidates", None),
+            "distance": os.getenv("OPENSEARCH_DISTANCE", "cosinesimil"),
+        },
+    }
+
+
+@app.post("/api/search-config")
+async def set_search_config(request: Request, payload: Dict[str, Any]):
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    try:
+        if "default_top_k" in payload and payload["default_top_k"] is not None:
+            v = int(payload["default_top_k"])
+            if v < 1 or v > 1000:
+                return JSONResponse(status_code=400, content={"error": "default_top_k must be between 1 and 1000"})
+            set_default_top_k(v)
+        if "pgvector_probes" in payload:
+            pv = payload.get("pgvector_probes")
+            if pv is None or pv == "":
+                set_pgvector_probes(None)
+            else:
+                vv = int(pv)
+                if vv < 1 or vv > 10000:
+                    return JSONResponse(status_code=400, content={"error": "pgvector_probes must be between 1 and 10000"})
+                set_pgvector_probes(vv)
+        if "os_num_candidates" in payload:
+            ov = payload.get("os_num_candidates")
+            if ov is None or ov == "":
+                set_os_num_candidates(None)
+            else:
+                vv = int(ov)
+                if vv < 1 or vv > 1000000:
+                    return JSONResponse(status_code=400, content={"error": "os_num_candidates must be between 1 and 1000000"})
+                    
+                set_os_num_candidates(vv)
+        return {"ok": True}
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
 
 
 # Auth & user/space endpoints

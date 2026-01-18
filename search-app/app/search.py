@@ -9,6 +9,7 @@ from .db import get_conn, set_search_runtime
 from .embeddings import embed_texts
 from .opensearch_adapter import OpenSearchAdapter
 from .valkey_cache import get_json as cache_get, set_json as cache_set
+from .runtime_config import get_pgvector_probes
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +73,8 @@ def semantic_search(query: str, top_k: int = 10, probes: Optional[int] = None, *
     op = _vector_operator()
     with get_conn() as conn:
         with conn.cursor() as cur:
-            set_search_runtime(cur, probes or settings.pgvector_probes)
+            eff_probes = (probes or get_pgvector_probes() or settings.pgvector_probes)
+            set_search_runtime(cur, eff_probes)
             if user_id is not None:
                 cur.execute(
                     f"""

@@ -133,17 +133,36 @@ class OpenSearchAdapter:
 
     def search_vector(self, *, query: str, vector: List[float], top_k: int, user_id: Optional[int], space_id: Optional[int]) -> List[Dict[str, Any]]:
         os_client = self.client()
-        knn_query = {
-            "size": top_k,
-            "query": {
-                "bool": {
-                    "filter": self._filters(user_id, space_id),
-                    "must": [{"knn": {"vector": {"vector": vector, "k": top_k, "num_candidates": max(top_k * 10, 100)}}}],
-                }
-            }
+        filters = self._filters(user_id, space_id)
+        engine = (os.getenv("OPENSEARCH_KNN_ENGINE", "lucene") or "lucene").lower()
+        knn_obj: Dict[str, Any] = {
+            "field": "vector",
+            "query_vector": vector,
+            "k": int(top_k),
         }
-        res = os_client.search(index=self.index, body=knn_query)
-        return res.get("hits", {}).get("hits", [])
+        if engine != "lucene":
+            # Allow override via settings; else default heuristic
+            from .config import settings as _settings
+            rc = get_os_num_candidates()
+            num_cand = rc if rc is not None else (_settings.opensearch_knn_num_candidates if getattr(_settings, "opensearch_knn_num_candidates", None) else max(int(top_k) * 10, 100))
+            knn_obj["num_candidates"] = int(num_cand)
+        body: Dict[str, Any] = {
+            "size": int(top_k),
+            "knn": knn_obj,
+        }
+        if filters:
+            body["query"] = {"bool": {"filter": filters}}
+        else:
+            body["query"] = {"match_all": {}}
+        try:
+            res = os_client.search(index=self.index, body=body)
+            return res.get("hits", {}).get("hits", [])
+        except Exception as e:
+            logger.warning("OpenSearch KNN search failed (%s). Falling back to BM25.", e)
+            try:
+                return self.search_bm25(query=query, top_k=top_k, user_id=user_id, space_id=space_id)
+            except Exception:
+                raise
 
     def search_bm25(self, *, query: str, top_k: int, user_id: Optional[int], space_id: Optional[int]) -> List[Dict[str, Any]]:
         os_client = self.client()

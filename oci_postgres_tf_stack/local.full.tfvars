@@ -48,7 +48,11 @@ psql_config_overrides = {
   "oci.admin_enabled_extensions" = "pg_stat_statements,pglogical,vector"
   "pg_stat_statements.max"       = "5000"
   "pglogical.conflict_log_level" = "debug1"
+  "wal_level"                    = "logical"
+  "track_commit_timestamp"       = "1"
+  "max_wal_size"                 = "10240"
 }
+
 
 # ----------------------
 # OpenSearch (OCI)

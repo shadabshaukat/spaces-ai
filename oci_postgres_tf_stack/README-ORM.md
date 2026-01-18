@@ -102,8 +102,12 @@ psql_config_overrides = {
   "oci.admin_enabled_extensions" = "pg_stat_statements,pglogical"
   "pglogical.conflict_log_level" = "debug1"
   "pg_stat_statements.max"       = "5000"
+  "wal_level"                    = "logical"
+  "track_commit_timestamp"       = "1"
+  "max_wal_size"                 = "10240"
 }
 ```
+
 
 Notes:
 - If you provide psql_configuration_ocid, the DB System will use that config_id and the resource will not be created.

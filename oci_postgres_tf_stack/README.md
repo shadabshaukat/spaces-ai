@@ -162,6 +162,11 @@ Variables:
 
 Note: The default user_data opens 8000/tcp; customize cloud_init_user_data if you change the app port.
 
+Important: Cloud-init runs on first boot only. If you enabled or modified cloud-init after the instance was created, destroy and recreate the compute instance (toggle create_compute false→true or run a destroy/apply in ORM). After boot, you can verify execution on the VM via:
+- sudo cloud-init status
+- sudo tail -n 200 /var/log/cloud-init-output.log
+
+
 
 
 ## Notes and compliance

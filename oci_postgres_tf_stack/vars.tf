@@ -406,25 +406,20 @@ variable "cloud_init_user_data" {
     #cloud-config
     # Run shell commands via runcmd to ensure cloud-init compatibility
     runcmd:
-      - [ bash, -lc, 'set -euxo pipefail' ]
-      - [ bash, -lc, 'dnf install -y curl git unzip firewalld oraclelinux-developer-release-el10 python3-oci-cli postgresql16 tesseract ffmpeg || true' ]
-      - [ bash, -lc, 'tmpdir=$(mktemp -d) && cd "$tmpdir" && curl -s https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o awscliv2.zip && unzip -q awscliv2.zip && sudo ./aws/install --update && cd / && rm -rf "$tmpdir"' ]
-      - [ bash, -lc, 'curl -LsSf https://astral.sh/uv/install.sh | su - opc -c "sh"' ]
-      - [ bash, -lc, 'echo \"export PATH=\"$HOME/.local/bin:$PATH\"\" >> /home/opc/.bashrc' ]
-      - [ bash, -lc, 'curl -fsSL https://get.docker.com | sh' ]
-      - [ bash, -lc, 'dnf install -y docker-compose-plugin || true' ]
-      - [ bash, -lc, 'curl -L "https://github.com/docker/compose/releases/download/v2.24.6/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose || true' ]
-      - [ bash, -lc, 'ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose || true' ]
-      - [ bash, -lc, 'systemctl enable --now docker' ]
-      - [ bash, -lc, 'usermod -aG docker opc' ]
-      - [ bash, -lc, 'systemctl enable --now firewalld' ]
-
-      - [ bash, -lc, 'firewall-cmd --permanent --add-port=__APP_PORT__/tcp' ]
-
-
-      - [ bash, -lc, 'firewall-cmd --reload' ]
-      - [ bash, -lc, 'su - opc -c "mkdir -p ~/src && cd ~/src && git clone __REPO_URL__ || true"' ]
-
-
+      - [ bash, -lc, 'sudo set -euxo pipefail' ]
+      - [ bash, -lc, 'sudo dnf install -y curl git unzip firewalld oraclelinux-developer-release-el10 python3-oci-cli postgresql16 tesseract ffmpeg || true' ]
+      - [ bash, -lc, 'sudo tmpdir=$(mktemp -d) && cd "$tmpdir" && curl -s https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o awscliv2.zip && unzip -q awscliv2.zip && sudo ./aws/install --update && cd / && rm -rf "$tmpdir"' ]
+      - [ bash, -lc, 'sudo curl -LsSf https://astral.sh/uv/install.sh | su - opc -c "sh"' ]
+      # - [ bash, -lc, 'echo \"export PATH=\"$HOME/.local/bin:$PATH\"\" >> /home/opc/.bashrc' ]
+      - [ bash, -lc, 'sudo curl -fsSL https://get.docker.com | sh' ]
+      - [ bash, -lc, 'sudo dnf install -y docker-compose-plugin || true' ]
+      - [ bash, -lc, 'sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.6/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose || true' ]
+      - [ bash, -lc, 'sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose || true' ]
+      - [ bash, -lc, 'sudo systemctl enable --now docker' ]
+      - [ bash, -lc, 'sudo usermod -aG docker opc' ]
+      - [ bash, -lc, 'sudo systemctl enable --now firewalld' ]
+      - [ bash, -lc, 'sudo firewall-cmd --permanent --add-port=__APP_PORT__/tcp' ]
+      - [ bash, -lc, 'sudo firewall-cmd --reload' ]
+      - [ bash, -lc, 'sudo "mkdir -p ~/src && cd ~/src && git clone __REPO_URL__ || true"' ]
   EOT
 }

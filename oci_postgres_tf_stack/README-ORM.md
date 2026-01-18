@@ -202,6 +202,11 @@ Inputs:
 
 Note: The default user_data opens 8000/tcp; customize cloud_init_user_data and compute_app_port if you change the app port.
 
+Important: Cloud-init runs on first boot only. If you enable or modify cloud-init after the instance is created, you must destroy and recreate the compute instance for the script to run. In ORM, re-apply with create_compute=false, then true, or recreate the Stack Job. On the VM, verify execution with:
+- sudo cloud-init status
+- sudo tail -n 200 /var/log/cloud-init-output.log
+
+
 ## CLI usage (optional)
 
 

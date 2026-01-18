@@ -49,4 +49,4 @@ else
   sudo bash -lc "mkdir -p ~/src && cd ~/src && git clone ${REPO_URL} || true"
 fi
 
-echo "Bootstrap complete. You may need to log out/in for docker group membership to take effect."
+echo "Bootstrap complete."

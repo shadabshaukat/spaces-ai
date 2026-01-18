@@ -1,16 +1,15 @@
 variable "region" {
   type    = string
-  default = "us-ashburn-1"
+  default = "mx-queretaro-1"
 }
 
 variable "compartment_ocid" {
-  type = string
+  type    = string
 }
 
 variable "tenancy_ocid" {
   type        = string
   description = "Tenancy OCID (used for AD discovery). If empty, compartment_ocid is used."
-  default     = ""
 }
 
 ## Network
@@ -47,7 +46,7 @@ variable "vcn_cidr" {
 variable "psql_admin_password" {
   type        = string
   description = "Optional admin password. Leave empty to auto-generate a strong random password."
-  default     = ""
+  default     = "RAbbithole1234##"
   sensitive   = true
 }
 
@@ -56,6 +55,7 @@ variable "psql_admin_password" {
 variable "psql_admin" {
   type        = string
   description = "Name of PostgreSQL admin username"
+  default     = "postgres"
 }
 
 variable "psql_version" {
@@ -65,11 +65,13 @@ variable "psql_version" {
 
 variable "inst_count" {
   type    = number
+  description = "Number of PostgreSQL nodes"
   default = 1
 }
 
 variable "num_ocpu" {
   type    = number
+  description = "OCPUs Number per PostgreSQL node"
   default = 2
 }
 
@@ -95,8 +97,9 @@ variable "psql_iops" {
 
 variable "create_compute" {
   type    = bool
-  default = false
+  default = true
 }
+
 
 variable "compute_shape" {
   type    = string
@@ -115,8 +118,9 @@ variable "compute_memory_in_gbs" {
 
 variable "compute_assign_public_ip" {
   type    = bool
-  default = false
+  default = true
 }
+
 
 variable "compute_display_name" {
   type    = string
@@ -125,8 +129,9 @@ variable "compute_display_name" {
 
 variable "compute_ssh_public_key" {
   type    = string
-  default = ""
+  default = "ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAs4f9ua0AU3U08s3s7D75Z7gUkmV0WgAYL7bdolT4r/N98uGXgaa6t4AYN+wKN0gdnjbEWunmoPf0ico8Trqlto8Vdp52DlvOjMZ/26KdJu8b0ytzV/MDO8RZhmL7A/Cwcr9VcPoRoGpfY/PExMGZUXBT7XOQ+ModkkhjCCyLebnMhE7Dv8HjqGnQI9jxob/DhZ0M8Xz9j9OUK82cTUCwtRULYXRx2h9vL5wHp7HZIddNjdnssXADVBVbzerO4S7aRaKfdIEaZu8JL4JYoDrtxv/sWRB3IdSTgYco6augNcTTdkDefn+Qr2dLZFSvcqSY8lP6Tz+/Yp3SLCeWKys+xQ== shadab"
 }
+
 
 variable "compute_image_ocid" {
   type    = string
@@ -299,16 +304,18 @@ variable "opensearch_opendashboard_node_host_memory_gb" {
 # Admin credentials for OpenSearch (if supported by your provider/resource)
 variable "opensearch_admin_user" {
   type        = string
-  description = "Master username for OpenSearch cluster. Do not use 'admin' since that is a reserved word."
-  default     = null
+  description = "Admin (master) username for OpenSearch cluster (optional; provider may use IAM instead). Do not use 'admin' since that is a reserved word"
+  default     = "osmaster"
 }
+
 
 variable "opensearch_admin_password_hash" {
   type        = string
-  description = "Master user's password HASH for OpenSearch cluster. Refer : https://docs.oracle.com/en-us/iaas/Content/search-opensearch/Tasks/update-opensearch-cluster-name.htm"
+  description = "Admin (master) password HASH for OpenSearch cluster (optional). Provide a hashed password if security is configured. How to create hashed password : Refer : https://docs.oracle.com/en-us/iaas/Content/search-opensearch/Tasks/update-opensearch-cluster-name.htm"
   sensitive   = true
-  default     = null
+  default     = "pbkdf2_stretch_1000$qIGFqgw8YfVKa2yUpX4NYr2mcpWfRph7$3YcIAfLawNaKDf4QHzebHMLUjcB2VEmYEUAkEVnwfZo="
 }
+
 
 variable "opensearch_security_mode" {
   type        = string
@@ -339,8 +346,9 @@ variable "cache_node_count" {
 variable "cache_memory_gbs" {
   type        = number
   description = "Memory per cache node in GB"
-  default     = 8
+  default     = 16
 }
+
 
 
 

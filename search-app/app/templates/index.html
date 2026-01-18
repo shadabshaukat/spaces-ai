@@ -85,6 +85,16 @@
               </select>
             </div>
             <div class="row no-grow">
+              <label for="provider" class="leftpad">LLM Provider</label>
+              <select id="provider">
+                <option value="">Default</option>
+                <option value="oci">OCI</option>
+                <option value="openai">OpenAI</option>
+                <option value="bedrock">Bedrock</option>
+                <option value="ollama">Ollama</option>
+              </select>
+            </div>
+            <div class="row no-grow">
               <label for="topk" class="leftpad">Top K</label>
               <input id="topk" type="number" value="25" min="1" max="50" />
             </div>
@@ -499,6 +509,20 @@
       b.setAttribute('aria-expanded', String(!nowHidden));
     });
 
+    async function loadProviders() {
+      try {
+        const p = await api('/api/providers');
+        const sel = document.getElementById('provider');
+        if (sel && p && Array.isArray(p.supported)) {
+          const keep = sel.value;
+          sel.innerHTML = '';
+          const opt0 = document.createElement('option'); opt0.value = ''; opt0.textContent = 'Default'; sel.appendChild(opt0);
+          for (const v of p.supported) { const o = document.createElement('option'); o.value = v; o.textContent = v.toUpperCase(); sel.appendChild(o); }
+          sel.value = keep || '';
+        }
+      } catch {}
+    }
+
     async function loadSearchConfig() {
       try {
         const cfg = await api('/api/search-config');
@@ -761,6 +785,7 @@
       const badge = document.getElementById('fileSelectionText');
       if (badge) badge.textContent = 'No files selected.';
       await initUser();
+      await loadProviders();
       await loadSearchConfig();
     });
   </script>

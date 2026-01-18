@@ -238,8 +238,9 @@ async def upload(request: Request, files: List[UploadFile] = File(...), space_id
         sid = int(space_id)
     results: List[Dict[str, Any]] = []
     for f in files:
-        # Stream upload using underlying SpooledTemporaryFile to avoid loading whole file in memory
-        local_path, oci_url = save_upload_stream(f.file, Path(f.filename).name, user_email=uemail)
+        # Save upload without OCI streaming to avoid auth/complexity; read bytes and save
+        data = await f.read()
+        local_path, oci_url = save_upload(data, Path(f.filename).name, user_email=uemail)
         title = Path(f.filename).name
         title_no_ext = Path(title).stem
         logger.info("Upload stored: backend=%s local=%s oci=%s", settings.storage_backend, local_path, "yes" if oci_url else "no")

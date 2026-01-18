@@ -20,12 +20,13 @@
   <main class="container">
     <!-- Hero and Auth -->
     <section class="card card--wide hero">
-      <div class="logo" aria-label="SPACE-AI">
+      <div class="logo" aria-label="SPACES-AI">
         <span class="g g-blue">S</span>
         <span class="g g-red">P</span>
         <span class="g g-yellow">A</span>
         <span class="g g-blue">C</span>
         <span class="g g-green">E</span>
+        <span class="g g-red">S</span>
         <span class="g g-red">-</span>
         <span class="g g-blue">A</span>
         <span class="g g-green">I</span>
@@ -262,7 +263,11 @@
         const def = (state.spaces.find(s => s.is_default) || {}).id;
         state.spaceId = def || (state.spaces[0] ? state.spaces[0].id : null);
         populateSpaces(); setLoggedInUI(); showToast('Logged in');
-      } catch (e) { showToast('Login failed'); }
+      } catch (e) {
+        let msg = 'Login failed';
+        try { const js = JSON.parse(e.message || '{}'); if (js && js.error) msg = js.error; } catch {}
+        showToast(msg);
+      }
     });
     document.getElementById('registerBtn').addEventListener('click', async () => {
       const email = document.getElementById('regEmail').value.trim();
@@ -282,7 +287,9 @@
         setLoggedInUI();
         showToast('Account created. Please sign in.');
       } catch (e) {
-        showToast('Registration failed');
+        let msg = 'Registration failed';
+        try { const js = JSON.parse(e.message || '{}'); if (js && js.error) msg = js.error; } catch {}
+        showToast(msg);
       }
     });
     document.getElementById('logoutBtn').addEventListener('click', async () => {

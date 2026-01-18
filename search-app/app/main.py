@@ -67,6 +67,24 @@ def on_startup():
         logger.info("Embeddings model preloaded")
     except Exception as e:
         logger.exception("Failed to preload embeddings model: %s", e)
+    # OpenSearch connectivity and index ensure (optional)
+    try:
+        if settings.search_backend == "opensearch" and settings.opensearch_host:
+            adapter = OpenSearchAdapter()
+            try:
+                if adapter.client().ping():
+                    logger.info("OpenSearch reachable at %s", adapter.host)
+                else:
+                    logger.warning("OpenSearch ping failed at %s", adapter.host)
+            except Exception as e:
+                logger.warning("OpenSearch connectivity failed: %s", e)
+            try:
+                adapter.ensure_index(force_recreate=False)
+                logger.info("OpenSearch index ensured: %s", adapter.index)
+            except Exception as e:
+                logger.warning("OpenSearch ensure_index failed: %s", e)
+    except Exception as e:
+        logger.warning("OpenSearch init step failed: %s", e)
     logger.info("Startup complete: directories ensured and database initialized or deferred")
 
 
@@ -93,7 +111,10 @@ def list_providers():
 
 @app.get("/api/ready")
 def ready():
-    checks = {"extensions": False, "users": False, "spaces": False, "documents_table": False, "chunks_table": False, "tsv_index": False, "vec_index": False}
+    if settings.search_backend == "opensearch":
+        checks = {"extensions": False, "users": False, "spaces": False, "documents_table": False, "chunks_table": False, "tsv_index": False, "vec_index": False, "opensearch": False, "opensearch_index": False}
+    else:
+        checks = {"extensions": False, "users": False, "spaces": False, "documents_table": False, "chunks_table": False, "tsv_index": False, "vec_index": False, "opensearch": True, "opensearch_index": True}
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
@@ -106,6 +127,20 @@ def ready():
                 checks["tsv_index"] = bool(cur.fetchone()[0])
                 cur.execute("SELECT to_regclass('public.idx_chunks_embedding_ivfflat') IS NOT NULL")
                 checks["vec_index"] = bool(cur.fetchone()[0])
+        # OpenSearch checks (optional)
+        try:
+            if settings.search_backend == "opensearch" and settings.opensearch_host:
+                adapter = OpenSearchAdapter()
+                try:
+                    checks["opensearch"] = bool(adapter.client().ping())
+                except Exception:
+                    checks["opensearch"] = False
+                try:
+                    checks["opensearch_index"] = bool(adapter.client().indices.exists(index=adapter.index))
+                except Exception:
+                    checks["opensearch_index"] = False
+        except Exception:
+            pass
         return {"ready": all(checks.values()), **checks}
     except Exception as e:
         return {"ready": False, "error": str(e), **checks}
@@ -473,7 +508,18 @@ async def api_register(payload: Dict[str, Any]):
         spaces = list_spaces(u["id"]) or []
         return JSONResponse(status_code=200, content={"user": {"id": u["id"], "email": email}, "spaces": spaces}, headers=headers)
     except Exception as e:
-        return JSONResponse(status_code=400, content={"error": str(e)})
+        msg = str(e) or ""
+        low = msg.lower()
+        try:
+            # psycopg unique violation detection (best-effort)
+            from psycopg.errors import UniqueViolation  # type: ignore
+            if isinstance(e, UniqueViolation):
+                return JSONResponse(status_code=409, content={"error": "email already registered"})
+        except Exception:
+            pass
+        if "duplicate key" in low or "unique constraint" in low or "already exists" in low:
+            return JSONResponse(status_code=409, content={"error": "email already registered"})
+        return JSONResponse(status_code=400, content={"error": msg})
 
 
 @app.post("/api/login")

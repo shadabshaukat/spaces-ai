@@ -40,14 +40,16 @@
             <label class="block">Password</label>
             <input id="loginPassword" type="password" placeholder="••••••••" />
             <button id="loginBtn" class="primary">Login</button>
+            <p class="small">New here? <a href="#" id="showRegisterLink">Create account</a></p>
           </div>
-          <div class="auth-card">
+          <div class="auth-card" id="registerCard" hidden>
             <h3>Create account</h3>
             <label class="block">Email</label>
             <input id="regEmail" type="email" placeholder="you@example.com" />
             <label class="block">Password</label>
             <input id="regPassword" type="password" placeholder="At least 8 characters" />
             <button id="registerBtn">Register</button>
+            <p class="small"><a href="#" id="cancelRegisterLink">Back to sign in</a></p>
           </div>
         </div>
       </div>
@@ -267,17 +269,38 @@
       const password = document.getElementById('regPassword').value;
       try {
         const resp = await api('/api/register', { method: 'POST', body: { email, password } });
-        state.user = resp.user; state.spaces = resp.spaces || [];
-        const def = (state.spaces.find(s => s.is_default) || {}).id;
-        state.spaceId = def || (state.spaces[0] ? state.spaces[0].id : null);
-        populateSpaces(); setLoggedInUI(); showToast('Account created');
-      } catch (e) { showToast('Registration failed'); }
+        // For SaaS-like UX: redirect users back to sign in (do not auto-login)
+        try { await api('/api/logout', { method: 'POST' }); } catch {}
+        state = { user: null, spaces: [], spaceId: null };
+        // Prefill login email for convenience
+        const le = document.getElementById('loginEmail'); if (le) le.value = email;
+        // Toggle back to login view
+        const loginCard = document.querySelector('#authPanel #loginCard');
+        const regCard = document.getElementById('registerCard');
+        if (loginCard) loginCard.hidden = false;
+        if (regCard) regCard.hidden = true;
+        setLoggedInUI();
+        showToast('Account created. Please sign in.');
+      } catch (e) {
+        showToast('Registration failed');
+      }
     });
     document.getElementById('logoutBtn').addEventListener('click', async () => {
       try { await api('/api/logout', { method: 'POST' }); } catch {}
       state = { user: null, spaces: [], spaceId: null };
       setLoggedInUI(); showToast('Logged out');
     });
+
+    // Auth UI toggles
+    (function(){
+      const loginCard = document.querySelector('#authPanel .auth-card:nth-child(1)');
+      if (loginCard) loginCard.id = 'loginCard';
+      const regCard = document.getElementById('registerCard');
+      const showReg = document.getElementById('showRegisterLink');
+      const cancelReg = document.getElementById('cancelRegisterLink');
+      if (showReg) showReg.addEventListener('click', (e) => { e.preventDefault(); if (regCard) regCard.hidden = false; if (loginCard) loginCard.hidden = true; });
+      if (cancelReg) cancelReg.addEventListener('click', (e) => { e.preventDefault(); if (regCard) regCard.hidden = true; if (loginCard) loginCard.hidden = false; });
+    })();
 
     document.getElementById('createSpaceBtn').addEventListener('click', async () => {
       const name = document.getElementById('newSpaceName').value.trim();

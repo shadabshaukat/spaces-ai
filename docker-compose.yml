@@ -1,0 +1,17 @@
+version: "3.9"
+services:
+  spacesai:
+    build:
+      context: .
+      dockerfile: search-app/Dockerfile
+    image: spacesai:latest
+    env_file:
+      - search-app/.env
+    environment:
+      HOST: 0.0.0.0
+      PORT: ${PORT:-8000}
+    ports:
+      - "${PORT:-8000}:8000"
+    volumes:
+      - ./search-app/storage:/app/storage
+    restart: unless-stopped

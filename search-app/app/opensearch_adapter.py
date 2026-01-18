@@ -63,7 +63,8 @@ class OpenSearchAdapter:
             "settings": {
                 "index": {
                     "knn": True,
-                    # shards/replicas configurable via env if desired
+                    "number_of_shards": int(os.getenv("OPENSEARCH_SHARDS", "3")),
+                    "number_of_replicas": int(os.getenv("OPENSEARCH_REPLICAS", "1")),
                 }
             },
             "mappings": {
@@ -84,6 +85,7 @@ class OpenSearchAdapter:
                 }
             },
         }
+
         try:
             os_client.indices.create(index=self.index, body=mapping)
             logger.info("Created OpenSearch index %s with dim=%s", self.index, dim)

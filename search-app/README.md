@@ -31,7 +31,59 @@ This README covers application setup, configuration, endpoints, and how to run l
 - Optional: AWS CLI configured if using AWS Bedrock; local Ollama server if using Ollama
 
 
+## Compute VM bootstrap (cloud-init)
+
+If you deploy the optional Compute VM with the Terraform stack, cloud-init can preinstall tools required/recommended for SpacesAI. These are installed non-interactively on first boot:
+
+Packages/tools installed
+- curl, git, unzip
+- firewalld (enabled, opens TCP port 8000 by default)
+- oraclelinux-developer-release-el10
+- python3-oci-cli
+- postgresql16 (client)
+- tesseract (OCR)
+- ffmpeg (audio/video extraction)
+- uv package manager (user-local)
+- AWS CLI v2 (no credentials)
+- Docker and Docker Compose (service enabled; opc added to docker group)
+- Clones the repo into /home/opc/src
+
+Equivalent commands (reference)
+```bash
+# OS packages
+sudo dnf install -y curl git unzip firewalld oraclelinux-developer-release-el10 python3-oci-cli postgresql16 tesseract ffmpeg
+
+# AWS CLI v2
+TMPDIR=$(mktemp -d) && cd "$TMPDIR" && curl -s https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o awscliv2.zip && \
+  unzip -q awscliv2.zip && sudo ./aws/install --update && cd / && rm -rf "$TMPDIR"
+
+# uv (installer is user-local)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
+
+# Docker & Docker Compose
+curl -fsSL https://get.docker.com | sudo sh
+sudo dnf install -y docker-compose-plugin || true
+sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.6/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose && sudo chmod +x /usr/local/bin/docker-compose || true
+sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose || true
+sudo systemctl enable --now docker
+sudo usermod -aG docker $USER
+
+# Firewall
+sudo systemctl enable --now firewalld
+sudo firewall-cmd --permanent --add-port=8000/tcp
+sudo firewall-cmd --reload
+
+# Clone code
+mkdir -p ~/src && cd ~/src && git clone https://github.com/shadabshaukat/spaces-ai.git || true
+```
+
+Note: cloud-init runs on first boot only. If you enable or change it later, recreate the VM. Verify execution on the VM:
+- sudo cloud-init status
+- sudo tail -n 200 /var/log/cloud-init-output.log
+
 ## Quick Start
+
 
 1) Copy and edit environment file:
 
@@ -114,7 +166,41 @@ OLLAMA_MODEL=llama3.2:latest
 ```
 
 
+## Deployment options
+
+- Bare VM (no containers)
+  - Use the Compute VM cloud-init (or run bootstrap-infra.sh) to install system packages
+  - Ensure PostgreSQL and OpenSearch/Valkey endpoints are reachable
+  - Install deps and run:
+    ```bash
+    uv sync --extra pdf --extra office --extra vision --extra audio
+    uv run searchapp
+    ```
+
+- Docker
+  - Build and start:
+    ```bash
+    cd ..
+    ./search-app/build-app.sh
+    docker compose up -d
+    ```
+  - Stop:
+    ```bash
+    docker compose down
+    ```
+
+- Kubernetes
+  - Push the image `spacesai:latest` to your registry and update deployment.yaml
+  - Apply manifests:
+    ```bash
+    kubectl apply -f search-app/k8s/configmap.yaml
+    kubectl apply -f search-app/k8s/deployment.yaml
+    kubectl apply -f search-app/k8s/service.yaml
+    ```
+  - Access the service via ClusterIP or expose with Ingress/NodePort as needed
+
 ## Running locally
+
 
 - Install deps and run:
 ```bash

@@ -74,7 +74,59 @@ For production, set additional variables as needed (see [oci_postgres_tf_stack/R
 4) Use the Job outputs for bucket name and, if created, the compute instance information.
 
 
+## Compute VM bootstrap (cloud-init)
+
+If you deploy the optional Compute VM with the Terraform stack, cloud-init can preinstall tools required/recommended for SpacesAI. These are installed non-interactively on first boot:
+
+Packages/tools installed
+- curl, git, unzip
+- firewalld (enabled, opens TCP port 8000 by default)
+- oraclelinux-developer-release-el10
+- python3-oci-cli
+- postgresql16 (client)
+- tesseract (OCR)
+- ffmpeg (audio/video extraction)
+- uv package manager (user-local)
+- AWS CLI v2 (no credentials)
+- Docker and Docker Compose (service enabled; user added to docker group)
+- Clones the repo into /home/opc/src
+
+Reference commands
+```bash
+# OS packages
+sudo dnf install -y curl git unzip firewalld oraclelinux-developer-release-el10 python3-oci-cli postgresql16 tesseract ffmpeg
+
+# AWS CLI v2
+TMPDIR=$(mktemp -d) && cd "$TMPDIR" && curl -s https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o awscliv2.zip && \
+  unzip -q awscliv2.zip && sudo ./aws/install --update && cd / && rm -rf "$TMPDIR"
+
+# uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
+
+# Docker & Compose
+curl -fsSL https://get.docker.com | sudo sh
+sudo dnf install -y docker-compose-plugin || true
+sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.6/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose && sudo chmod +x /usr/local/bin/docker-compose || true
+sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose || true
+sudo systemctl enable --now docker
+sudo usermod -aG docker $USER
+
+# Firewall
+sudo systemctl enable --now firewalld
+sudo firewall-cmd --permanent --add-port=8000/tcp
+sudo firewall-cmd --reload
+
+# Clone code
+mkdir -p ~/src && cd ~/src && git clone https://github.com/shadabshaukat/spaces-ai.git || true
+```
+
+Note: cloud-init runs on first boot only. If you enable or change it later, recreate the VM. Verify execution on the VM:
+- sudo cloud-init status
+- sudo tail -n 200 /var/log/cloud-init-output.log
+
 ## Configuring and Running the Application
+
 The app can run anywhere that can reach the OCI PostgreSQL endpoint. You can run it on your workstation, on the optional Compute VM, or in a container VM.
 
 ### Prerequisites

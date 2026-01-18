@@ -202,18 +202,31 @@ def insert_document(conn: psycopg.Connection, user_id: int, space_id: Optional[i
 def insert_chunks(conn: psycopg.Connection, document_id: int, chunks: Sequence[str], embeddings: Sequence[Sequence[float]]) -> int:
     if len(chunks) != len(embeddings):
         raise ValueError("Chunks and embeddings length mismatch")
-    rows = []
-    for i, (content, emb) in enumerate(zip(chunks, embeddings)):
-        rows.append((document_id, i, content, len(content), settings.embedding_model_name, to_vec_literal(emb)))
     with conn.cursor() as cur:
-        cur.executemany(
-            """
-            INSERT INTO chunks (document_id, chunk_index, content, content_chars, embedding_model, embedding)
-            VALUES (%s, %s, %s, %s, %s, %s::vector)
-            """,
-            rows,
-        )
-    return len(rows)
+        if settings.db_store_embeddings:
+            rows = []
+            for i, (content, emb) in enumerate(zip(chunks, embeddings)):
+                rows.append((document_id, i, content, len(content), settings.embedding_model_name, to_vec_literal(emb)))
+            cur.executemany(
+                """
+                INSERT INTO chunks (document_id, chunk_index, content, content_chars, embedding_model, embedding)
+                VALUES (%s, %s, %s, %s, %s, %s::vector)
+                """,
+                rows,
+            )
+            return len(rows)
+        else:
+            rows = []
+            for i, content in enumerate(chunks):
+                rows.append((document_id, i, content, len(content), settings.embedding_model_name))
+            cur.executemany(
+                """
+                INSERT INTO chunks (document_id, chunk_index, content, content_chars, embedding_model, embedding)
+                VALUES (%s, %s, %s, %s, %s, NULL)
+                """,
+                rows,
+            )
+            return len(rows)
 
 
 def ingest_file_path(file_path: str, user_id: int, space_id: Optional[int] = None, title: Optional[str] = None, metadata: Optional[dict] = None, chunk_params: Optional[ChunkParams] = None) -> IngestResult:

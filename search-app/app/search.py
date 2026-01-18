@@ -41,6 +41,11 @@ def semantic_search(query: str, top_k: int = 10, probes: Optional[int] = None, *
     if cached:
         return [ChunkHit(**h) for h in cached]
 
+    # If using pgvector but embeddings are not stored in DB, bail early
+    if settings.search_backend != "opensearch" and not settings.db_store_embeddings:
+        logger.warning("pgvector semantic search requested but DB_STORE_EMBEDDINGS=false; returning no results")
+        return []
+
     q_emb = embed_texts([query])[0]
 
     if settings.search_backend == "opensearch":
@@ -49,10 +54,13 @@ def semantic_search(query: str, top_k: int = 10, probes: Optional[int] = None, *
         out: List[ChunkHit] = []
         for h in hits:
             src = h.get("_source", {})
+            did = int(src.get("doc_id"))
+            cix = int(src.get("chunk_index"))
+            cid = did * 1_000_000 + cix
             out.append(ChunkHit(
-                chunk_id=src.get("chunk_id") or 0,  # optional
-                document_id=int(src.get("doc_id")),
-                chunk_index=int(src.get("chunk_index")),
+                chunk_id=cid,
+                document_id=did,
+                chunk_index=cix,
                 content=src.get("text") or "",
                 distance=float(h.get("_score") or 0.0),
             ))
@@ -108,10 +116,13 @@ def fulltext_search(query: str, top_k: int = 10, *, user_id: Optional[int] = Non
         out: List[ChunkHit] = []
         for h in hits:
             src = h.get("_source", {})
+            did = int(src.get("doc_id"))
+            cix = int(src.get("chunk_index"))
+            cid = did * 1_000_000 + cix
             out.append(ChunkHit(
-                chunk_id=src.get("chunk_id") or 0,
-                document_id=int(src.get("doc_id")),
-                chunk_index=int(src.get("chunk_index")),
+                chunk_id=cid,
+                document_id=did,
+                chunk_index=cix,
                 content=src.get("text") or "",
                 rank=float(h.get("_score") or 0.0),
             ))

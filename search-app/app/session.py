@@ -57,12 +57,28 @@ async def get_current_user(request: Request) -> Optional[dict]:
 
 
 def set_session_cookie_headers(token: str) -> dict[str, str]:
-    cookie = (
-        f"{settings.session_cookie_name}={token}; Path=/; Max-Age={settings.session_max_age_seconds}; HttpOnly; SameSite=Lax"
-    )
-    return {"Set-Cookie": cookie}
+    attrs = [
+        f"{settings.session_cookie_name}={token}",
+        "Path=/",
+        f"Max-Age={settings.session_max_age_seconds}",
+        "HttpOnly",
+    ]
+    samesite = (settings.cookie_samesite or "Lax")
+    attrs.append(f"SameSite={samesite}")
+    if settings.cookie_secure:
+        attrs.append("Secure")
+    return {"Set-Cookie": "; ".join(attrs)}
 
 
 def clear_session_cookie_headers() -> dict[str, str]:
-    cookie = f"{settings.session_cookie_name}=null; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"
-    return {"Set-Cookie": cookie}
+    attrs = [
+        f"{settings.session_cookie_name}=null",
+        "Path=/",
+        "Max-Age=0",
+        "HttpOnly",
+    ]
+    samesite = (settings.cookie_samesite or "Lax")
+    attrs.append(f"SameSite={samesite}")
+    if settings.cookie_secure:
+        attrs.append("Secure")
+    return {"Set-Cookie": "; ".join(attrs)}

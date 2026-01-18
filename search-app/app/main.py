@@ -18,7 +18,8 @@ from .config import settings
 from .db import init_db, get_conn
 from .store import ensure_dirs, ingest_file_path, save_upload, save_upload_stream
 from .search import semantic_search, fulltext_search, hybrid_search, rag
-from .embeddings import get_model
+from .embeddings import get_model, embed_texts
+from .opensearch_adapter import OpenSearchAdapter
 from .session import get_current_user, sign_session, set_session_cookie_headers, clear_session_cookie_headers
 from .users import create_user, authenticate_user, list_spaces, ensure_default_space, get_default_space_id, create_space, set_default_space
 
@@ -38,9 +39,10 @@ app = FastAPI(title=f"{settings.app_name}", version="0.4.0")
 app.add_middleware(SessionOrBasicAuthMiddleware, protect_paths=("/api", "/docs", "/openapi.json", "/redoc"))
 
 if settings.allow_cors:
+    origins = ["*"] if ("*" in settings.cors_origins) else list(settings.cors_origins)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -54,14 +56,18 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 @app.on_event("startup")
 def on_startup():
     ensure_dirs()
-    init_db()
+    try:
+        init_db()
+        logger.info("Database initialized")
+    except Exception as e:
+        logger.warning("Database init skipped/failed: %s", e)
     # Preload embeddings model to avoid first-search latency
     try:
         get_model()
         logger.info("Embeddings model preloaded")
     except Exception as e:
         logger.exception("Failed to preload embeddings model: %s", e)
-    logger.info("Startup complete: directories ensured and database initialized")
+    logger.info("Startup complete: directories ensured and database initialized or deferred")
 
 
 # UI route (minimalist, responsive search app)
@@ -491,6 +497,68 @@ async def api_logout():
     return JSONResponse(status_code=200, content={"ok": True}, headers=headers)
 
 
+@app.get("/api/admin/documents")
+async def api_admin_list_documents(request: Request, space_id: int | None = None, limit: int = 50, offset: int = 0):
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    uid = int(user["user_id"]) if "user_id" in user else int(user.get("id"))
+    items: List[Dict[str, Any]] = []
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            if space_id is not None:
+                cur.execute(
+                    """
+                    SELECT d.id, d.space_id, d.source_path, d.source_type, COALESCE(d.title,''), d.created_at,
+                           (SELECT count(*) FROM chunks c WHERE c.document_id = d.id) AS chunk_count
+                    FROM documents d
+                    WHERE d.user_id = %s AND d.space_id = %s
+                    ORDER BY d.created_at DESC
+                    LIMIT %s OFFSET %s
+                    """,
+                    (uid, int(space_id), int(limit), int(offset)),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT d.id, d.space_id, d.source_path, d.source_type, COALESCE(d.title,''), d.created_at,
+                           (SELECT count(*) FROM chunks c WHERE c.document_id = d.id) AS chunk_count
+                    FROM documents d
+                    WHERE d.user_id = %s
+                    ORDER BY d.created_at DESC
+                    LIMIT %s OFFSET %s
+                    """,
+                    (uid, int(limit), int(offset)),
+                )
+            rows = cur.fetchall()
+            for r in rows:
+                items.append({
+                    "id": int(r[0]),
+                    "space_id": (int(r[1]) if r[1] is not None else None),
+                    "source_path": r[2] or "",
+                    "source_type": r[3] or "",
+                    "title": r[4] or "",
+                    "created_at": (r[5].isoformat() if r[5] else None),
+                    "chunk_count": int(r[6] or 0),
+                })
+    return {"documents": items, "limit": int(limit), "offset": int(offset)}
+
+
+@app.delete("/api/admin/documents/{doc_id}")
+async def api_admin_delete_document(request: Request, doc_id: int):
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    uid = int(user["user_id"]) if "user_id" in user else int(user.get("id"))
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM documents WHERE id = %s AND user_id = %s", (int(doc_id), uid))
+            deleted = cur.rowcount
+    if deleted:
+        return {"ok": True, "deleted": int(deleted)}
+    return JSONResponse(status_code=404, content={"error": "document not found"})
+
+
 @app.get("/api/me")
 async def api_me(request: Request):
     user = await get_current_user(request)
@@ -532,6 +600,73 @@ async def api_set_default_space(request: Request, payload: Dict[str, Any]):
     sid = int(payload.get("space_id"))
     set_default_space(uid, sid)
     return {"ok": True}
+
+
+@app.post("/api/admin/reindex")
+async def api_admin_reindex(request: Request, payload: Dict[str, Any]):
+    """
+    Reindex documents into OpenSearch. Body may include one of:
+      - { "doc_id": <id> }
+      - { "space_id": <id> }
+      - { "all": true }
+    Only documents owned by the authenticated user are processed.
+    """
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    uid = int(user["user_id"]) if "user_id" in user else int(user.get("id"))
+
+    doc_id = payload.get("doc_id")
+    space_id = payload.get("space_id")
+    scope_all = bool(payload.get("all"))
+
+    adapter = OpenSearchAdapter()
+    reindexed = 0
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                if doc_id:
+                    cur.execute("SELECT id, source_path, COALESCE(title,''), COALESCE(metadata,'{}'::jsonb) FROM documents WHERE id = %s AND user_id = %s", (int(doc_id), uid))
+                    row = cur.fetchone()
+                    if not row:
+                        return JSONResponse(status_code=404, content={"error": "document not found"})
+                    cur.execute("SELECT chunk_index, content FROM chunks WHERE document_id = %s ORDER BY chunk_index ASC", (int(doc_id),))
+                    ch = cur.fetchall()
+                    texts = [r[1] for r in ch]
+                    vecs = embed_texts(texts) if texts else []
+                    adapter.index_chunks(user_id=uid, space_id=None, doc_id=int(doc_id), chunks=texts, vectors=vecs, file_name=None, source_path=row[1], file_type="", refresh=True)
+                    reindexed = len(texts)
+                elif space_id:
+                    cur.execute("SELECT id, source_path, COALESCE(title,'') FROM documents WHERE user_id = %s AND space_id = %s", (uid, int(space_id)))
+                    docs = cur.fetchall()
+                    for d in docs:
+                        did = int(d[0])
+                        cur.execute("SELECT chunk_index, content FROM chunks WHERE document_id = %s ORDER BY chunk_index ASC", (did,))
+                        ch = cur.fetchall()
+                        texts = [r[1] for r in ch]
+                        if not texts:
+                            continue
+                        vecs = embed_texts(texts)
+                        adapter.index_chunks(user_id=uid, space_id=int(space_id), doc_id=did, chunks=texts, vectors=vecs, file_name=None, source_path=d[1], file_type="", refresh=True)
+                        reindexed += len(texts)
+                elif scope_all:
+                    cur.execute("SELECT id, space_id, source_path FROM documents WHERE user_id = %s", (uid,))
+                    docs = cur.fetchall()
+                    for d in docs:
+                        did = int(d[0]); sid = d[1]
+                        cur.execute("SELECT chunk_index, content FROM chunks WHERE document_id = %s ORDER BY chunk_index ASC", (did,))
+                        ch = cur.fetchall()
+                        texts = [r[1] for r in ch]
+                        if not texts:
+                            continue
+                        vecs = embed_texts(texts)
+                        adapter.index_chunks(user_id=uid, space_id=int(sid) if sid is not None else None, doc_id=did, chunks=texts, vectors=vecs, file_name=None, source_path=d[2], file_type="", refresh=True)
+                        reindexed += len(texts)
+                else:
+                    return JSONResponse(status_code=400, content={"error": "provide doc_id, space_id, or all:true"})
+        return {"ok": True, "reindexed_chunks": int(reindexed)}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 
 def main():

@@ -18,7 +18,7 @@ class SessionOrBasicAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable):
         path = request.url.path or "/"
         # Public API endpoints
-        public = {"/api/health", "/api/ready", "/api/login", "/api/register", "/api/llm-config"}
+        public = {"/api/health", "/api/ready", "/api/login", "/api/register", "/api/llm-config", "/api/providers", "/api/llm-test", "/api/llm-debug"}
         if any(path.startswith(prefix) for prefix in self.protect_paths):
             if path in public:
                 return await call_next(request)

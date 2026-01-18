@@ -5,7 +5,7 @@ import os
 from functools import lru_cache
 from typing import Iterable, List
 
-from sentence_transformers import SentenceTransformer
+# Lazy import in get_model to avoid import-time dependency requirement
 
 from .config import settings
 
@@ -13,7 +13,8 @@ logger = logging.getLogger(__name__)
 
 
 @lru_cache(maxsize=1)
-def get_model() -> SentenceTransformer:
+def get_model() -> "SentenceTransformer":
+    from sentence_transformers import SentenceTransformer
     logger.info("Loading embeddings model: %s", settings.embedding_model_name)
     # Ensure model cache directories are set for HF/Transformers
     os.makedirs(settings.model_cache_dir, exist_ok=True)

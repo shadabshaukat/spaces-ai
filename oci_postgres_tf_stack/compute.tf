@@ -42,7 +42,11 @@ resource "oci_core_instance" "app_host" {
 
   metadata = {
     ssh_authorized_keys = var.compute_ssh_public_key
+    user_data           = var.enable_cloud_init ? base64encode(replace(replace(var.cloud_init_user_data, "__APP_PORT__", tostring(var.compute_app_port)), "__REPO_URL__", var.repo_url)) : ""
+
+
   }
+
 
   timeouts {
     create = "60m"

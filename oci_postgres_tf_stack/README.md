@@ -143,6 +143,26 @@ Valkey (OCI Redis)
 4) terraform apply -var-file=example.tfvars
 5) Use outputs to configure search-app/.env
 
+## Cloud-init bootstrap (Compute)
+
+When create_compute=true, you can optionally enable cloud-init to bootstrap the instance with OS packages and tools to run SpacesAI:
+- Installs curl, git, unzip, firewalld, oraclelinux-developer-release-el10, python3-oci-cli, postgresql16
+- Installs uv (user-local) and adds it to PATH
+- Installs Docker and Docker Compose
+- Enables firewalld and opens TCP port 8000 by default
+
+- Installs AWS CLI v2 (no credentials)
+- Clones the repo https://github.com/shadabshaukat/spaces-ai.git under /home/opc/src
+
+Variables:
+- enable_cloud_init (bool, default true)
+- compute_app_port (number, default 8000)
+- repo_url (string, default https://github.com/shadabshaukat/spaces-ai.git)
+- cloud_init_user_data (string; a #cloud-config document). The default user_data includes the steps above; override to customize.
+
+Note: The default user_data opens 8000/tcp; customize cloud_init_user_data if you change the app port.
+
+
 
 ## Notes and compliance
 - This stack uses provider oracle/oci >= 5.30.0.

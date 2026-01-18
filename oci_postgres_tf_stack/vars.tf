@@ -378,3 +378,53 @@ variable "redis_software_version" {
   description = "OCI Cache software version identifier (e.g., VALKEY_7_2)"
   default     = "VALKEY_7_2"
 }
+
+## Cloud-init bootstrap (Compute)
+
+variable "enable_cloud_init" {
+  type        = bool
+  description = "Enable cloud-init to bootstrap the compute instance with OS packages, uv, firewall, AWS CLI, and repo clone."
+  default     = true
+}
+
+variable "compute_app_port" {
+  type        = number
+  description = "App port to open in firewalld on the compute instance."
+  default     = 8000
+}
+
+variable "repo_url" {
+  type        = string
+  description = "Git repo URL to clone on the compute instance."
+  default     = "https://github.com/shadabshaukat/spaces-ai.git"
+}
+
+variable "cloud_init_user_data" {
+  type        = string
+  description = "Cloud-init user data script (bash). Override to customize bootstrap."
+  default     = <<-EOT
+    #cloud-config
+    # Run shell commands via runcmd to ensure cloud-init compatibility
+    runcmd:
+      - [ bash, -lc, 'set -euxo pipefail' ]
+      - [ bash, -lc, 'dnf install -y curl git unzip firewalld oraclelinux-developer-release-el10 python3-oci-cli postgresql16 tesseract ffmpeg || true' ]
+      - [ bash, -lc, 'tmpdir=$(mktemp -d) && cd "$tmpdir" && curl -s https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o awscliv2.zip && unzip -q awscliv2.zip && sudo ./aws/install --update && cd / && rm -rf "$tmpdir"' ]
+      - [ bash, -lc, 'curl -LsSf https://astral.sh/uv/install.sh | su - opc -c "sh"' ]
+      - [ bash, -lc, 'echo \"export PATH=\"$HOME/.local/bin:$PATH\"\" >> /home/opc/.bashrc' ]
+      - [ bash, -lc, 'curl -fsSL https://get.docker.com | sh' ]
+      - [ bash, -lc, 'dnf install -y docker-compose-plugin || true' ]
+      - [ bash, -lc, 'curl -L "https://github.com/docker/compose/releases/download/v2.24.6/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose || true' ]
+      - [ bash, -lc, 'ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose || true' ]
+      - [ bash, -lc, 'systemctl enable --now docker' ]
+      - [ bash, -lc, 'usermod -aG docker opc' ]
+      - [ bash, -lc, 'systemctl enable --now firewalld' ]
+
+      - [ bash, -lc, 'firewall-cmd --permanent --add-port=__APP_PORT__/tcp' ]
+
+
+      - [ bash, -lc, 'firewall-cmd --reload' ]
+      - [ bash, -lc, 'su - opc -c "mkdir -p ~/src && cd ~/src && git clone __REPO_URL__ || true"' ]
+
+
+  EOT
+}

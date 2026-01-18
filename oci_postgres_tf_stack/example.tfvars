@@ -85,6 +85,12 @@ compute_image_ocid       = ""
 compute_nsg_ids          = []
 compute_boot_volume_size_in_gbs = 50
 
+# Cloud-init (Compute bootstrap)
+enable_cloud_init = true
+compute_app_port  = 8000
+repo_url          = "https://github.com/shadabshaukat/spaces-ai.git"
+
+
 # IOPS profile mapping
 psql_iops = {
   75  = 75000

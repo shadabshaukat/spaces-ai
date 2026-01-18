@@ -183,7 +183,27 @@ The compute instance is created in the public subnet by default. For private-onl
 - PostgreSQL admin password is provided or auto-generated and returned only as a sensitive output (no Vault).
 - Default Security List allows SSH from 0.0.0.0/0, but the private subnet prohibits public IPs, which prevents exposure by default. Lock down further as per your security requirements and consider NSGs tailored for the compute instance.
 
+## Cloud-init bootstrap (Compute)
+
+When create_compute=true, you can optionally enable cloud-init to bootstrap the instance with OS packages and tools to run SpacesAI:
+- Installs curl, git, unzip, firewalld, oraclelinux-developer-release-el10, python3-oci-cli, postgresql16
+- Installs uv (user-local) and adds it to PATH
+- Installs Docker and Docker Compose
+- Enables firewalld and opens TCP port 8000 by default (configurable)
+
+- Installs AWS CLI v2 (no credentials)
+- Clones the repo https://github.com/shadabshaukat/spaces-ai.git under /home/opc/src
+
+Inputs:
+- enable_cloud_init (bool, default true)
+- compute_app_port (number, default 8000)
+- repo_url (string, default https://github.com/shadabshaukat/spaces-ai.git)
+- cloud_init_user_data (string; a #cloud-config document). The default user_data includes the steps above; override to customize.
+
+Note: The default user_data opens 8000/tcp; customize cloud_init_user_data and compute_app_port if you change the app port.
+
 ## CLI usage (optional)
+
 
 You can also run the stack with Terraform CLI:
 - cd oci_postgres_tf_stack

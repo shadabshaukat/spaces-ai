@@ -166,40 +166,30 @@ OLLAMA_MODEL=llama3.2:latest
 ```
 
 
-## Deployment options
+## Deployment
 
-- Bare VM (no containers)
-  - Use the Compute VM cloud-init (or run bootstrap-infra.sh) to install system packages
-  - Ensure PostgreSQL and OpenSearch/Valkey endpoints are reachable
-  - Install deps and run:
+- Compute VM (recommended)
+  - Use Compute VM cloud-init (or run bootstrap-infra.sh) to install system packages
+  - Build deps:
     ```bash
-    uv sync --extra pdf --extra office --extra vision --extra audio
-    uv run searchapp
+    cd search-app
+    ./build-app.sh
     ```
-
-- Docker
-  - Build and start:
+  - Run (foreground):
     ```bash
-    cd ..
-    ./search-app/build-app.sh
-    docker compose up -d
+    ./run-app.sh
+    ```
+  - Start (background):
+    ```bash
+    ./start-app.sh
     ```
   - Stop:
     ```bash
-    docker compose down
+    ./stop-app.sh
     ```
-
-- Kubernetes
-  - Push the image `spacesai:latest` to your registry and update deployment.yaml
-  - Apply manifests:
-    ```bash
-    kubectl apply -f search-app/k8s/configmap.yaml
-    kubectl apply -f search-app/k8s/deployment.yaml
-    kubectl apply -f search-app/k8s/service.yaml
-    ```
-  - Access the service via ClusterIP or expose with Ingress/NodePort as needed
 
 ## Running locally
+
 
 
 - Install deps and run:

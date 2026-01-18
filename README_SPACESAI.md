@@ -200,8 +200,7 @@ Then update `search-app/.env` with the outputs and run the app.
 - Export the necessary env vars or copy .env.example to .env and set values
 - To develop locally: `uv sync --extra pdf --extra office --extra vision --extra audio && uv run searchapp`
 - To integrate Terraform: update variables and add opensearch.tf/cache.tf, then plan/apply
-- To containerize: `./search-app/build-app.sh && docker compose up -d`
-- To deploy on K8s: push image to a registry, update deployment.yaml, then `kubectl apply -f search-app/k8s/`
+
 
 ---
 Maintainers: update this file with every material change to code, infrastructure, or configuration so future sessions can pick up seamlessly.

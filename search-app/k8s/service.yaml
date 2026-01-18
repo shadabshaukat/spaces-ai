@@ -1,14 +1,1 @@
-apiVersion: v1
-kind: Service
-metadata:
-  name: spacesai
-  labels:
-    app: spacesai
-spec:
-  type: ClusterIP
-  selector:
-    app: spacesai
-  ports:
-  - name: http
-    port: 8000
-    targetPort: 8000
+# Deprecated: Kubernetes Service removed per user request. Use VM deployment scripts.

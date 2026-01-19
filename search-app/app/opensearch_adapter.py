@@ -156,12 +156,30 @@ class OpenSearchAdapter:
         else:
             body_a["query"] = {"match_all": {}}
         variants.append(("top_level_knn", body_a))
-        # Variant B: query-level knn (some clusters expect knn under query)
-        body_b: Dict[str, Any] = {
+        # Variant B: top-level knn as array of objects
+        body_b: Dict[str, Any] = {"size": int(top_k), "knn": [dict(knn_obj)]}
+        if filters:
+            body_b["query"] = {"bool": {"filter": filters}}
+        else:
+            body_b["query"] = {"match_all": {}}
+        variants.append(("top_level_knn_array", body_b))
+        # Variant C: query-level knn inside bool.must (array form)
+        body_c: Dict[str, Any] = {
+            "size": int(top_k),
+            "query": {
+                "bool": {
+                    "must": [{"knn": {"field": "vector", "query_vector": vector, "k": int(top_k)}}],
+                    "filter": filters or []
+                }
+            }
+        }
+        variants.append(("query_level_bool_must", body_c))
+        # Variant D: query-level knn (object under query)
+        body_d: Dict[str, Any] = {
             "size": int(top_k),
             "query": {"knn": {"field": "vector", "query_vector": vector, "k": int(top_k)}}
         }
-        variants.append(("query_level_knn", body_b))
+        variants.append(("query_level_knn", body_d))
         # Attempt each variant
         last_err: Optional[Exception] = None
         for tag, body in variants:

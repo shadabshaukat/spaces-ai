@@ -332,7 +332,7 @@ variable "opensearch_admin_user" {
 
 variable "opensearch_admin_password_hash" {
   type        = string
-  description = "Admin (master) password HASH for OpenSearch cluster (optional). Provide a hashed password if security is configured. How to create hashed password : Refer : https://docs.oracle.com/en-us/iaas/Content/search-opensearch/Tasks/update-opensearch-cluster-name.htm"
+  description = "Admin (master) password HASH for OpenSearch cluster (optional). Provide a hashed password if security is configured. How to create hashed password : eg : java -jar oci-crypto-common-1.0.0-SNAPSHOT.jar pbkdf2_stretch_1000 RAbbithole1234## . Refer : https://docs.oracle.com/en-us/iaas/Content/search-opensearch/Tasks/update-opensearch-cluster-name.htm"
   sensitive   = true
   default     = "pbkdf2_stretch_1000$qIGFqgw8YfVKa2yUpX4NYr2mcpWfRph7$3YcIAfLawNaKDf4QHzebHMLUjcB2VEmYEUAkEVnwfZo="
 }

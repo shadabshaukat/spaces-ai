@@ -53,14 +53,7 @@
       </div>
 
       <div id="appPanel" class="app-panel" hidden>
-        <div class="row wrap">
-          <label for="spacesSelect">Space</label>
-          <select id="spacesSelect"></select>
-          <button id="setDefaultSpaceBtn" class="ghost">Set default</button>
-          <span class="leftpad"></span>
-          <input id="newSpaceName" placeholder="Create new space…" />
-          <button id="createSpaceBtn">Create</button>
-        </div>
+
 
         <div class="searchbar">
           <input id="query" class="search-input" type="text" placeholder="Ask or search your space…" autocomplete="off" />
@@ -68,6 +61,7 @@
         <div class="search-actions-row">
           <button id="searchBtn" class="primary">Search</button>
           <button id="settingsBtn" class="ghost" title="Settings" aria-expanded="false">⚙️</button>
+          <button id="spaceBtn" class="ghost" title="Space options" aria-expanded="false">🚀</button>
         </div>
 
         <div id="settingsPanel" class="settings" hidden>
@@ -122,6 +116,17 @@
               <button id="loadCfgBtn" class="ghost">Refresh config</button>
               <button id="saveCfgBtn" class="ghost">Save</button>
             </div>
+          </div>
+        </div>
+
+        <div id="spacePanel" class="settings" hidden>
+          <div class="row wrap">
+            <label for="spacesSelect">Space</label>
+            <select id="spacesSelect"></select>
+            <button id="setDefaultSpaceBtn" class="ghost">Set default</button>
+            <span class="leftpad"></span>
+            <input id="newSpaceName" placeholder="Create new space…" />
+            <button id="createSpaceBtn">Create</button>
           </div>
         </div>
 
@@ -530,6 +535,16 @@
       p.hidden = nowHidden;
       b.setAttribute('aria-expanded', String(!nowHidden));
     });
+    const spaceBtnEl = document.getElementById('spaceBtn');
+    if (spaceBtnEl) {
+      spaceBtnEl.addEventListener('click', () => {
+        const p = document.getElementById('spacePanel');
+        const b = document.getElementById('spaceBtn');
+        const nowHidden = !p.hidden;
+        p.hidden = nowHidden;
+        b.setAttribute('aria-expanded', String(!nowHidden));
+      });
+    }
 
     async function loadProviders() {
       try {
@@ -540,7 +555,8 @@
           sel.innerHTML = '';
           const opt0 = document.createElement('option'); opt0.value = ''; opt0.textContent = 'Default'; sel.appendChild(opt0);
           for (const v of p.supported) { const o = document.createElement('option'); o.value = v; o.textContent = v.toUpperCase(); sel.appendChild(o); }
-          sel.value = keep || '';
+          const preferred = 'bedrock';
+          sel.value = keep || (p.supported.includes(preferred) ? preferred : '');
         }
       } catch {}
     }

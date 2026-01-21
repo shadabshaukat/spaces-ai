@@ -129,6 +129,7 @@
             <button id="createSpaceBtn">Create</button>
           </div>
         </div>
+        </div>
 
         <div class="row middle">
           <div class="loader" id="searchLoading" hidden>
@@ -140,7 +141,7 @@
         <div class="row" id="answerRow" hidden>
           <label>Answer / Context <span id="llmBadge" class="badge" style="display:none"></span></label>
           <pre id="answer" class="panel"></pre>
-          <div id="refs" class="panel" style="margin-top:8px; display:none"></div>
+          <div id="refs" class="results" style="margin-top:8px; display:none"></div>
         </div>
         <div class="row" id="resultsRow" hidden>
           <label>Results</label>
@@ -458,20 +459,18 @@
           const refsEl = document.getElementById('refs');
           if (refsEl) {
             if (Array.isArray(data.references) && data.references.length) {
-              refsEl.style.display = 'block';
-              const items = data.references.map((r, idx) => {
+              const limitedRefs = data.references.slice(0, 10);
+              refsEl.style.display = 'grid';
+              const items = limitedRefs.map((r, idx) => {
                 const fn = r.file_name || '';
                 const ft = r.file_type || '';
                 const docId = r.doc_id || null;
                 const link = docId ? `<a href="/api/doc-download?doc_id=${docId}" target="_blank" rel="noopener" data-doc-id="${docId}">Download source</a>` : '';
                 const match = data.hits.find(h => h.chunk_id === r.chunk_id);
-                const txt = match ? escapeHtml(match.content) : '';
-                return `<details>
-                  <summary>[${idx+1}] Source: ${escapeHtml(fn)}${ft ? ` (${escapeHtml(ft)})` : ''} ${link}</summary>
-                  <p>${txt}</p>
-                </details>`;
+                const txt = match ? highlight(match.content || '', query) : '';
+                return `<div class="hit"><details><summary>[${idx+1}] ${escapeHtml(fn)}${ft ? ` (${escapeHtml(ft)})` : ''} ${link}</summary><div class="hit-content">${txt}</div></details></div>`;
               }).join('');
-              refsEl.innerHTML = `<strong>References</strong>\n${items}`;
+              refsEl.innerHTML = items;
             } else {
               refsEl.style.display = 'none';
               refsEl.innerHTML = '';

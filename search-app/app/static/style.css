@@ -2,6 +2,7 @@
 [hidden] { display: none !important; }
 html, body { margin: 0; padding: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background: #f6f7fb; color: #1f2937; }
 :root { --content-max-width: 680px; }
+html { scrollbar-gutter: stable both-edges; }
 .topbar { background: linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.35)), url('/static/redwood_blog_banner_1600x600.jpg') center/cover no-repeat; color: #ffffff; padding: 12px 20px; border-bottom: 1px solid rgba(255,255,255,0.35); display: flex; align-items: center; gap: 10px; }
 .topbar .spacer { flex: 1; }
 .topbar h1 { margin: 0; font-size: 16px; font-weight: 600; }
@@ -66,6 +67,12 @@ button:hover { filter: brightness(0.98); }
 
 /* Search actions under bar */
 .search-actions-row { display: flex; gap: 10px; justify-content: center; margin-top: 8px; width: 100%; max-width: var(--content-max-width); margin-left: auto; margin-right: auto; }
+
+/* Unified controls wrapper width */
+.controls-wrap { width: 100%; max-width: var(--content-max-width); margin: 0 auto; }
+
+/* Constrain answer and results rows to shared width */
+#answerRow, #resultsRow { width: 100%; max-width: var(--content-max-width); margin-left: auto; margin-right: auto; }
 
 /* KB single-line row layout */
 .hit-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }

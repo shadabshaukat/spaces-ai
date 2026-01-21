@@ -4,6 +4,7 @@ import base64
 import hmac
 import json
 import logging
+import time
 from hashlib import sha256
 from typing import Optional
 
@@ -12,6 +13,11 @@ from fastapi import Request
 from .config import settings
 
 logger = logging.getLogger(__name__)
+
+# Server-start timestamp used to invalidate sessions across restarts
+SERVER_START_TS: int = int(time.time())
+# Hard session TTL (8 hours) regardless of cookie Max-Age
+SESSION_TTL_SECONDS: int = 8 * 60 * 60
 
 
 def _b64e(b: bytes) -> str:
@@ -24,7 +30,11 @@ def _b64d(s: str) -> bytes:
 
 
 def sign_session(payload: dict) -> str:
-    data = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    # add issued-at and server version for restart invalidation
+    enriched = dict(payload)
+    enriched.setdefault("iat", int(time.time()))
+    enriched.setdefault("sv", int(SERVER_START_TS))
+    data = json.dumps(enriched, separators=(",", ":"), sort_keys=True).encode("utf-8")
     sig = hmac.new(settings.secret_key.encode("utf-8"), data, sha256).digest()
     return _b64e(data) + "." + _b64e(sig)
 
@@ -43,6 +53,15 @@ def verify_session(token: str) -> Optional[dict]:
         # minimal validation
         if "user_id" not in obj or "email" not in obj:
             return None
+        # Hard expiry: 8 hours from issue time
+        iat = int(obj.get("iat")) if obj.get("iat") is not None else None
+        now = int(time.time())
+        if iat is None or (now - iat) > SESSION_TTL_SECONDS:
+            return None
+        # Invalidate sessions across process restarts
+        sv = int(obj.get("sv")) if obj.get("sv") is not None else None
+        if sv is None or sv != SERVER_START_TS:
+            return None
         return obj
     except Exception:
         return None
@@ -57,10 +76,12 @@ async def get_current_user(request: Request) -> Optional[dict]:
 
 
 def set_session_cookie_headers(token: str) -> dict[str, str]:
+    # Use the stricter of configured Max-Age and our hard TTL
+    ttl = min(int(settings.session_max_age_seconds or SESSION_TTL_SECONDS), SESSION_TTL_SECONDS)
     attrs = [
         f"{settings.session_cookie_name}={token}",
         "Path=/",
-        f"Max-Age={settings.session_max_age_seconds}",
+        f"Max-Age={ttl}",
         "HttpOnly",
     ]
     samesite = (settings.cookie_samesite or "Lax")

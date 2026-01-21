@@ -8,8 +8,8 @@ from typing import Optional, Sequence, Tuple
 import re
 
 import psycopg
-from datetime import datetime
-from urllib.parse import quote as urlquote
+from datetime import datetime, timedelta
+from urllib.parse import quote as urlquote, unquote as urlunquote
 
 from .config import settings
 from .db import get_conn
@@ -48,40 +48,145 @@ def _dated_rel(base_name: str, user_email: Optional[str]) -> Path:
     return sub / base_name
 
 
+def _build_oci_config():
+    try:
+        import oci  # type: ignore
+    except Exception:
+        return None, None
+    cfg = None
+    if settings.oci_config_file:
+        try:
+            import oci  # type: ignore
+            cfg = oci.config.from_file(settings.oci_config_file, settings.oci_config_profile)
+            if settings.oci_region:
+                cfg["region"] = settings.oci_region
+        except Exception:
+            cfg = None
+    else:
+        required = [settings.oci_tenancy_ocid, settings.oci_user_ocid, settings.oci_fingerprint, settings.oci_private_key_path]
+        if all(required):
+            cfg = {
+                "tenancy": settings.oci_tenancy_ocid,
+                "user": settings.oci_user_ocid,
+                "fingerprint": settings.oci_fingerprint,
+                "key_file": settings.oci_private_key_path,
+                "pass_phrase": settings.oci_private_key_passphrase,
+                "region": settings.oci_region,
+            }
+    return cfg, settings.oci_region
+
+
 def _upload_to_oci(bucket: str, object_name: str, data: bytes) -> Optional[str]:
     """Upload bytes to OCI Object Storage and return object URL if successful."""
     try:
         import oci  # type: ignore
-        # Build config via file or env (compatible with app config)
-        cfg = None
-        if settings.oci_config_file:
-            cfg = oci.config.from_file(settings.oci_config_file, settings.oci_config_profile)
-            if settings.oci_region:
-                cfg["region"] = settings.oci_region
-        else:
-            # API key envs path
-            required = [settings.oci_tenancy_ocid, settings.oci_user_ocid, settings.oci_fingerprint, settings.oci_private_key_path]
-            if all(required):
-                cfg = {
-                    "tenancy": settings.oci_tenancy_ocid,
-                    "user": settings.oci_user_ocid,
-                    "fingerprint": settings.oci_fingerprint,
-                    "key_file": settings.oci_private_key_path,
-                    "pass_phrase": settings.oci_private_key_passphrase,
-                    "region": settings.oci_region,
-                }
+        cfg, region = _build_oci_config()
         if not cfg:
             return None
         osc = oci.object_storage.ObjectStorageClient(cfg)
         # Discover namespace if not provided
         ns = osc.get_namespace().data
         osc.put_object(ns, bucket, object_name, data)
-        region = cfg.get("region") or settings.oci_region or ""
+        region = cfg.get("region") or region or ""
         url = f"https://objectstorage.{region}.oraclecloud.com/n/{urlquote(ns)}/b/{urlquote(bucket)}/o/{urlquote(object_name)}"
         logger.info("OCI upload complete: bucket=%s object=%s url=%s", bucket, object_name, url)
         return url
     except Exception as e:
         logger.exception("OCI upload failed: bucket=%s object=%s error=%s", bucket, object_name if 'object_name' in locals() else '?', e)
+        return None
+
+
+def create_par_for_object(object_name: str, expire_seconds: int = 8 * 60 * 60) -> Optional[str]:
+    """Create a Pre-Authenticated Request (PAR) URL for a single object for read access.
+    Returns the full HTTPS URL or None on failure.
+    """
+    try:
+        import oci  # type: ignore
+        if not (settings.oci_os_bucket_name and (settings.storage_backend in {"oci", "both"})):
+            return None
+        cfg, region = _build_oci_config()
+        if not cfg:
+            return None
+        osc = oci.object_storage.ObjectStorageClient(cfg)
+        ns = osc.get_namespace().data
+        # Build details; ensure we set object_name and expiry
+        details = oci.object_storage.models.CreatePreauthenticatedRequestDetails(
+            name=f"kb-{int(datetime.utcnow().timestamp())}",
+            access_type="ObjectRead",
+            time_expires=(datetime.utcnow() + timedelta(seconds=int(expire_seconds)))
+        )
+        # set attribute defensively
+        try:
+            setattr(details, "object_name", object_name)
+        except Exception:
+            pass
+        resp = osc.create_preauthenticated_request(
+            namespace_name=ns,
+            bucket_name=settings.oci_os_bucket_name,
+            create_preauthenticated_request_details=details,
+        )
+        par = resp.data
+        # access_uri typically like: /p/{PAR_ID}/n/{ns}/b/{bucket}/o/{object_name}
+        region = (cfg.get("region") or region or "").strip()
+        base = f"https://objectstorage.{region}.oraclecloud.com" if region else "https://objectstorage.oraclecloud.com"
+        return base + getattr(par, "access_uri", "")
+    except Exception as e:
+        logger.warning("Failed to create PAR for object %s: %s", object_name, e)
+        return None
+
+
+def delete_oci_object(object_name: str) -> bool:
+    """Delete an OCI Object Storage object in the configured uploads bucket."""
+    try:
+        import oci  # type: ignore
+        if not (settings.oci_os_bucket_name and (settings.storage_backend in {"oci", "both"})):
+            return False
+        cfg, _ = _build_oci_config()
+        if not cfg:
+            return False
+        osc = oci.object_storage.ObjectStorageClient(cfg)
+        ns = osc.get_namespace().data
+        osc.delete_object(ns, settings.oci_os_bucket_name, object_name)
+        logger.info("Deleted OCI object: bucket=%s object=%s", settings.oci_os_bucket_name, object_name)
+        return True
+    except Exception as e:
+        logger.warning("Failed to delete OCI object %s: %s", object_name, e)
+        return False
+    """Create a Pre-Authenticated Request (PAR) URL for a single object for read access.
+    Returns the full HTTPS URL or None on failure.
+    """
+    try:
+        import oci  # type: ignore
+        if not (settings.oci_os_bucket_name and (settings.storage_backend in {"oci", "both"})):
+            return None
+        cfg, region = _build_oci_config()
+        if not cfg:
+            return None
+        osc = oci.object_storage.ObjectStorageClient(cfg)
+        ns = osc.get_namespace().data
+        # Build details; ensure we set object_name and expiry
+        details = oci.object_storage.models.CreatePreauthenticatedRequestDetails(
+            name=f"kb-{int(datetime.utcnow().timestamp())}",
+            access_type="ObjectRead",
+            time_expires=(datetime.utcnow() + timedelta(seconds=int(expire_seconds)))
+        )
+        # set attribute defensively
+        try:
+            setattr(details, "object_name", object_name)
+        except Exception:
+            pass
+        resp = osc.create_preauthenticated_request(
+            namespace_name=ns,
+            bucket_name=settings.oci_os_bucket_name,
+            create_preauthenticated_request_details=details,
+        )
+        par = resp.data
+        # access_uri typically like: /p/{PAR_ID}/n/{ns}/b/{bucket}/o/{object_name}
+        region = (cfg.get("region") or region or "").strip()
+        base = f"https://objectstorage.{region}.oraclecloud.com" if region else "https://objectstorage.oraclecloud.com"
+        return base + getattr(par, "access_uri", "")
+    except Exception as e:
+        logger.warning("Failed to create PAR for object %s: %s", object_name, e)
         return None
 
 
@@ -143,22 +248,7 @@ def save_upload_stream(fileobj, filename: str, user_email: Optional[str] = None)
     if settings.storage_backend in {"oci", "both"} and settings.oci_os_bucket_name and settings.oci_os_upload_enabled:
         try:
             import oci  # type: ignore
-            cfg = None
-            if settings.oci_config_file:
-                cfg = oci.config.from_file(settings.oci_config_file, settings.oci_config_profile)
-                if settings.oci_region:
-                    cfg["region"] = settings.oci_region
-            else:
-                required = [settings.oci_tenancy_ocid, settings.oci_user_ocid, settings.oci_fingerprint, settings.oci_private_key_path]
-                if all(required):
-                    cfg = {
-                        "tenancy": settings.oci_tenancy_ocid,
-                        "user": settings.oci_user_ocid,
-                        "fingerprint": settings.oci_fingerprint,
-                        "key_file": settings.oci_private_key_path,
-                        "pass_phrase": settings.oci_private_key_passphrase,
-                        "region": settings.oci_region,
-                    }
+            cfg, region = _build_oci_config()
             if cfg:
                 osc = oci.object_storage.ObjectStorageClient(cfg)
                 ns = osc.get_namespace().data
@@ -170,8 +260,9 @@ def save_upload_stream(fileobj, filename: str, user_email: Optional[str] = None)
                     pass
                 object_name = str(dated_rel).replace("\\", "/")
                 upload_manager.upload_stream(ns, settings.oci_os_bucket_name, object_name, fileobj)
-                region = cfg.get("region") or settings.oci_region or ""
-                oci_url = f"https://objectstorage.{region}.oraclecloud.com/n/{urlquote(ns)}/b/{urlquote(settings.oci_os_bucket_name)}/o/{urlquote(object_name)}"
+                region = (cfg.get("region") or region or "").strip()
+                base = f"https://objectstorage.{region}.oraclecloud.com" if region else "https://objectstorage.oraclecloud.com"
+                oci_url = f"{base}/n/{urlquote(ns)}/b/{urlquote(settings.oci_os_bucket_name)}/o/{urlquote(object_name)}"
                 logger.info("OCI streaming upload complete: bucket=%s object=%s url=%s", settings.oci_os_bucket_name, object_name, oci_url)
             else:
                 logger.warning("OCI streaming upload skipped: missing OCI config")

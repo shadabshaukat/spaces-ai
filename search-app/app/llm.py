@@ -42,33 +42,111 @@ def chat(question: str, context: str, provider_override: Optional[str] = None, m
             return None
 
     if provider == "bedrock":
-        # AWS Bedrock (text generation/chat abstraction)
+        # AWS Bedrock (text generation/chat abstraction) with provider-aware payloads
         try:
             import boto3  # type: ignore
             import json
-            model_id = (getattr(settings, "aws_bedrock_model_id", None) or "").strip() or "anthropic.claude-3-sonnet-20240229-v1:0"
+
+            model_id = (getattr(settings, "aws_bedrock_model_id", None) or "").strip() or "anthropic.claude-3-haiku-20240307-v1:0"
             region = getattr(settings, "aws_region", None) or "us-east-1"
             runtime = boto3.client("bedrock-runtime", region_name=region)
-            # Use Messages API schema for Anthropic models
-            messages = [
-                {"role": "user", "content": [{"type": "text", "text": f"Question: {question}\n\nContext:\n{context[:12000]}"}]}
-            ]
-            req = {
-                "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": max_tokens,
-                "temperature": temperature,
-                "messages": messages,
-            }
-            body = json.dumps(req)
-            resp = runtime.invoke_model(modelId=model_id, body=body)
-            out = json.loads(resp["body"].read().decode("utf-8"))
-            # Extract as concatenated text blocks
-            try:
-                parts = out.get("output", {}).get("message", {}).get("content", [])
-                txt = "\n".join(p.get("text", "") for p in parts if isinstance(p, dict))
-                return txt or None
-            except Exception:
-                return out.get("content") or out.get("outputText") or None
+
+            def _provider(mid: str) -> str:
+                mid = (mid or "").lower()
+                if mid.startswith("anthropic."):
+                    return "anthropic"
+                if mid.startswith("meta."):
+                    return "meta"
+                if mid.startswith("mistral."):
+                    return "mistral"
+                if mid.startswith("cohere."):
+                    return "cohere"
+                if mid.startswith("amazon.") or "titan" in mid:
+                    return "titan"
+                return "unknown"
+
+            sys_prompt = "You are a helpful RAG assistant. Answer from the provided context and cite sources when possible."
+            prompt = (
+                f"{sys_prompt}\n\nQuestion: {question}\n\nContext:\n{context[:12000]}\n\nAnswer:"
+            )
+            provider_tag = _provider(model_id)
+
+            if provider_tag == "anthropic":
+                body_dict = {
+                    "anthropic_version": "bedrock-2023-05-31",
+                    "max_tokens": int(max_tokens),
+                    "temperature": float(temperature),
+                    "messages": [
+                        {"role": "user", "content": [{"type": "text", "text": prompt}]}
+                    ],
+                }
+            elif provider_tag == "meta":
+                # Llama Instruct style
+                inst = f"[INST] <<SYS>>{sys_prompt}<</SYS>>\n{context[:12000]}\n\n{question} [/INST]"
+                body_dict = {
+                    "prompt": inst,
+                    "max_gen_len": int(max_tokens),
+                    "temperature": float(temperature),
+                    "top_p": 0.95,
+                }
+            elif provider_tag == "mistral":
+                body_dict = {
+                    "prompt": prompt,
+                    "max_tokens": int(max_tokens),
+                    "temperature": float(temperature),
+                    "top_p": 0.95,
+                }
+            elif provider_tag == "cohere":
+                body_dict = {
+                    "prompt": prompt,
+                    "max_tokens": int(max_tokens),
+                    "temperature": float(temperature),
+                    "p": 0.95,
+                    "top_p": 0.95,
+                }
+            else:  # titan/default
+                body_dict = {
+                    "inputText": prompt,
+                    "textGenerationConfig": {
+                        "temperature": float(temperature),
+                        "topP": 0.95,
+                        "maxTokenCount": int(max_tokens),
+                    },
+                }
+
+            resp = runtime.invoke_model(
+                modelId=model_id,
+                body=json.dumps(body_dict),
+                contentType="application/json",
+                accept="application/json",
+            )
+            data = json.loads(resp["body"].read().decode("utf-8"))
+
+            # Parse provider-specific responses
+            answer = None
+            if provider_tag == "anthropic":
+                try:
+                    content = data.get("content") or []
+                    if content and isinstance(content, list):
+                        first = content[0]
+                        if isinstance(first, dict):
+                            answer = first.get("text")
+                except Exception:
+                    answer = None
+            if not answer and isinstance(data.get("generation"), str):
+                answer = data.get("generation")
+            if not answer and isinstance(data.get("outputText"), str):
+                answer = data.get("outputText")
+            if not answer and isinstance(data.get("outputs"), list) and data["outputs"]:
+                out0 = data["outputs"][0]
+                if isinstance(out0, dict):
+                    answer = out0.get("text") or out0.get("outputText")
+            if not answer and isinstance(data.get("generations"), list) and data["generations"]:
+                answer = data["generations"][0].get("text")
+
+            if not answer:
+                answer = str(data)
+            return answer
         except Exception as e:
             logger.exception("Bedrock LLM failed: %s", e)
             return None

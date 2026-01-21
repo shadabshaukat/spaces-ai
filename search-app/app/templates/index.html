@@ -20,16 +20,13 @@
   <main class="container">
     <!-- Hero and Auth -->
     <section class="card card--wide hero">
-      <div class="logo" aria-label="SPACES-AI">
+      <div class="logo" aria-label="SPACES" style="text-align:center">
         <span class="g g-blue">S</span>
         <span class="g g-red">P</span>
         <span class="g g-yellow">A</span>
         <span class="g g-blue">C</span>
         <span class="g g-green">E</span>
         <span class="g g-red">S</span>
-        <span class="g g-red">-</span>
-        <span class="g g-blue">A</span>
-        <span class="g g-green">I</span>
       </div>
 
       <div id="authPanel" class="auth" hidden>
@@ -63,6 +60,8 @@
           <span class="leftpad"></span>
           <input id="newSpaceName" placeholder="Create new space…" />
           <button id="createSpaceBtn">Create</button>
+          <span class="leftpad"></span>
+          <button id="kbBtn" class="ghost" title="Browse your knowledge base">My Knowledge Base</button>
         </div>
 
         <div class="searchbar">
@@ -144,6 +143,26 @@
           <label>Results</label>
           <div id="results" class="results"></div>
         </div>
+      </div>
+    </section>
+
+    <!-- Knowledge Base -->
+    <section id="kbSection" class="card card--wide" hidden>
+      <h2>Your Knowledge Base</h2>
+      <div class="row wrap">
+        <button id="kbRefreshBtn" class="ghost">Refresh</button>
+        <span class="leftpad"></span>
+        <button id="kbDeleteSelectedBtn" class="ghost" title="Delete selected">Delete selected</button>
+      </div>
+      <div class="row">
+        <label><input type="checkbox" id="kbSelectAll" /> Select all</label>
+      </div>
+      <div class="row">
+        <div id="kbList" class="results"></div>
+      </div>
+      </div>
+      <div class="row">
+        <div id="kbList" class="results"></div>
       </div>
     </section>
 
@@ -440,11 +459,12 @@
               const items = data.references.map((r, idx) => {
                 const fn = r.file_name || '';
                 const ft = r.file_type || '';
-                const label = r.url ? `<a href="${r.url}" target="_blank" rel="noopener">${escapeHtml(fn || r.url)}</a>` : escapeHtml(fn);
+                const docId = r.doc_id || null;
+                const link = docId ? `<a href="#" data-doc-id="${docId}">Open source</a>` : '';
                 const match = data.hits.find(h => h.chunk_id === r.chunk_id);
                 const txt = match ? escapeHtml(match.content) : '';
                 return `<details>
-                  <summary>[${idx+1}] Source: ${label}${ft ? ` (${escapeHtml(ft)})` : ''}</summary>
+                  <summary>[${idx+1}] Source: ${escapeHtml(fn)}${ft ? ` (${escapeHtml(ft)})` : ''} ${link}</summary>
                   <p>${txt}</p>
                 </details>`;
               }).join('');
@@ -567,6 +587,99 @@
     if (loadCfgBtn) loadCfgBtn.addEventListener('click', () => loadSearchConfig());
     const saveCfgBtn = document.getElementById('saveCfgBtn');
     if (saveCfgBtn) saveCfgBtn.addEventListener('click', () => saveSearchConfig());
+
+    // Knowledge Base logic
+    async function fetchDocUrl(docId) {
+      try {
+        const r = await api(`/api/doc-url?doc_id=${encodeURIComponent(docId)}`);
+        if (r && r.url) return r.url;
+      } catch (e) {}
+      return null;
+    }
+
+    async function loadKB() {
+      try {
+        const qs = (state.spaceId ? `?space_id=${encodeURIComponent(state.spaceId)}` : '');
+        const data = await api(`/api/kb${qs}`);
+        const list = document.getElementById('kbList');
+        const sec = document.getElementById('kbSection');
+        list.innerHTML = '';
+        if (Array.isArray(data.documents) && data.documents.length) {
+          for (const d of data.documents) {
+            const div = document.createElement('div');
+            div.className = 'hit';
+            const link = `<a href="#" data-doc-id="${d.id}">${escapeHtml(d.file_name || d.title || ('doc ' + d.id))}</a>`;
+            div.innerHTML = `
+              <div class="hit-head">
+                <div class="hit-title">${escapeHtml(d.title || d.file_name || '(untitled)')}</div>
+                <div class="hit-badges"><span class="badge">${escapeHtml(d.source_type || '')}</span></div>
+              </div>
+              <div class="hit-content">
+                <label><input type="checkbox" class="kbSel" data-doc-id="${d.id}" /> Select</label>
+                &nbsp; ${link} • ${d.chunk_count != null ? (d.chunk_count + ' chunks') : ''}
+                <button class="ghost" data-delete-doc-id="${d.id}" style="float:right">Delete</button>
+              </div>`;
+            list.appendChild(div);
+          }
+        } else {
+          list.textContent = 'No documents yet.';
+        }
+        sec.hidden = false;
+        window.scrollTo({ top: sec.offsetTop - 16, behavior: 'smooth' });
+      } catch (e) {
+        showToast('Failed to load knowledge base');
+      }
+    }
+
+    document.addEventListener('click', async (e) => {
+      const a = e.target.closest('a[data-doc-id]');
+      if (a) {
+        e.preventDefault();
+        const docId = a.getAttribute('data-doc-id');
+        const url = await fetchDocUrl(docId);
+        if (url) {
+          window.open(url, '_blank');
+        } else {
+          showToast('Unable to open document');
+        }
+      }
+    });
+
+    const kbBtn = document.getElementById('kbBtn');
+    if (kbBtn) kbBtn.addEventListener('click', () => loadKB());
+    const kbRefreshBtn = document.getElementById('kbRefreshBtn');
+    if (kbRefreshBtn) kbRefreshBtn.addEventListener('click', () => loadKB());
+
+    // KB delete single
+    document.addEventListener('click', async (e) => {
+      const btn = e.target.closest('button[data-delete-doc-id]');
+      if (btn) {
+        e.preventDefault();
+        const id = btn.getAttribute('data-delete-doc-id');
+        try {
+          const res = await fetch(`/api/admin/documents/${encodeURIComponent(id)}`, { method: 'DELETE' });
+          if (res.ok) { showToast('Deleted'); await loadKB(); } else { showToast('Delete failed'); }
+        } catch { showToast('Delete failed'); }
+      }
+    });
+
+    // KB bulk select/delete
+    const kbSelectAll = document.getElementById('kbSelectAll');
+    if (kbSelectAll) kbSelectAll.addEventListener('change', () => {
+      const boxes = document.querySelectorAll('input.kbSel');
+      boxes.forEach(b => { b.checked = kbSelectAll.checked; });
+    });
+    const kbDeleteSelectedBtn = document.getElementById('kbDeleteSelectedBtn');
+    if (kbDeleteSelectedBtn) kbDeleteSelectedBtn.addEventListener('click', async () => {
+      const boxes = Array.from(document.querySelectorAll('input.kbSel:checked'));
+      if (!boxes.length) { showToast('No selection'); return; }
+      for (const b of boxes) {
+        const id = b.getAttribute('data-doc-id');
+        try { await fetch(`/api/admin/documents/${encodeURIComponent(id)}`, { method: 'DELETE' }); } catch {}
+      }
+      showToast('Delete requested');
+      await loadKB();
+    });
 
     // Drag-and-drop support
     const dropzone = document.getElementById('dropzone');

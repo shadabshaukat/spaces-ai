@@ -8,7 +8,7 @@ from typing import Any, Dict, List
 
 from fastapi import FastAPI, File, UploadFile, Request, Form, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import uvicorn
@@ -16,7 +16,7 @@ import uvicorn
 from .auth import SessionOrBasicAuthMiddleware
 from .config import settings
 from .db import init_db, get_conn
-from .store import ensure_dirs, ingest_file_path, save_upload, save_upload_stream
+from .store import ensure_dirs, ingest_file_path, save_upload, save_upload_stream, create_par_for_object, delete_oci_object
 from .search import semantic_search, fulltext_search, hybrid_search, rag
 from .embeddings import get_model, embed_texts
 from .opensearch_adapter import OpenSearchAdapter
@@ -360,6 +360,7 @@ async def api_search(request: Request, payload: Dict[str, Any]):
                 "file_name": e.get("file_name") or e.get("title") or "",
                 "file_type": e.get("file_type") or "",
                 "chunk_id": e.get("chunk_id"),
+                "doc_id": e.get("document_id"),
                 "href": f"#chunk-{e.get('chunk_id')}",
                 "url": doc_info.get(e.get("document_id", -1), {}).get("object_url") if doc_info else None,
             })
@@ -662,13 +663,62 @@ async def api_admin_delete_document(request: Request, doc_id: int):
     if not user:
         return JSONResponse(status_code=401, content={"error": "unauthorized"})
     uid = int(user["user_id"]) if "user_id" in user else int(user.get("id"))
+
+    source_path = None
+    object_url = None
     with get_conn() as conn:
         with conn.cursor() as cur:
+            # Fetch storage info first
+            cur.execute("SELECT source_path, COALESCE(metadata,'{}'::jsonb) FROM documents WHERE id = %s AND user_id = %s", (int(doc_id), uid))
+            row = cur.fetchone()
+            if not row:
+                return JSONResponse(status_code=404, content={"error": "document not found"})
+            source_path = row[0] or None
+            meta = row[1] or {}
+            if isinstance(meta, dict):
+                object_url = meta.get("object_url")
+            # Delete DB row (cascades to chunks)
             cur.execute("DELETE FROM documents WHERE id = %s AND user_id = %s", (int(doc_id), uid))
             deleted = cur.rowcount
-    if deleted:
-        return {"ok": True, "deleted": int(deleted)}
-    return JSONResponse(status_code=404, content={"error": "document not found"})
+
+    if not deleted:
+        return JSONResponse(status_code=404, content={"error": "document not found"})
+
+    # Best-effort storage cleanup
+    try:
+        # Local file
+        if source_path and settings.storage_backend in {"local", "both"}:
+            p = Path(source_path)
+            try:
+                if p.exists():
+                    p.unlink()
+            except Exception:
+                pass
+        # OCI object
+        if object_url and settings.storage_backend in {"oci", "both"} and settings.oci_os_bucket_name:
+            from urllib.parse import urlparse, unquote
+            try:
+                u = urlparse(object_url)
+                parts = u.path.split("/o/")
+                if len(parts) == 2:
+                    object_name = unquote(parts[1])
+                    delete_oci_object(object_name)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO user_activity (user_id, activity_type, details) VALUES (%s, %s, %s)",
+                    (uid, "delete_doc", json.dumps({"doc_id": int(doc_id)})),
+                )
+    except Exception:
+        pass
+
+    return {"ok": True, "deleted": int(deleted)}
 
 
 @app.get("/api/me")
@@ -712,6 +762,152 @@ async def api_set_default_space(request: Request, payload: Dict[str, Any]):
     sid = int(payload.get("space_id"))
     set_default_space(uid, sid)
     return {"ok": True}
+
+
+@app.get("/api/kb")
+async def api_kb(request: Request, limit: int = 200, offset: int = 0, space_id: int | None = None):
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    uid = int(user.get("user_id") or user.get("id"))
+    items: List[Dict[str, Any]] = []
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            if space_id is not None:
+                cur.execute(
+                    """
+                    SELECT d.id, d.source_path, d.source_type, COALESCE(d.title,''),
+                           (SELECT count(*) FROM chunks c WHERE c.document_id = d.id) AS chunk_count
+                    FROM documents d
+                    WHERE d.user_id = %s AND d.space_id = %s
+                    ORDER BY d.created_at DESC
+                    LIMIT %s OFFSET %s
+                    """,
+                    (uid, int(space_id), int(limit), int(offset)),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT d.id, d.source_path, d.source_type, COALESCE(d.title,''),
+                           (SELECT count(*) FROM chunks c WHERE c.document_id = d.id) AS chunk_count
+                    FROM documents d
+                    WHERE d.user_id = %s
+                    ORDER BY d.created_at DESC
+                    LIMIT %s OFFSET %s
+                    """,
+                    (uid, int(limit), int(offset)),
+                )
+            rows = cur.fetchall()
+            for r in rows:
+                sp = r[1] or ""
+                fn = sp.rsplit("/", 1)[-1] if sp else ""
+                items.append({
+                    "id": int(r[0]),
+                    "file_name": fn,
+                    "source_path": sp,
+                    "source_type": r[2] or "",
+                    "title": r[3] or "",
+                    "chunk_count": int(r[4] or 0),
+                })
+    return {"documents": items, "limit": int(limit), "offset": int(offset), "space_id": (int(space_id) if space_id is not None else None)}
+
+
+@app.get("/api/doc-url")
+async def api_doc_url(request: Request, doc_id: int):
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    uid = int(user.get("user_id") or user.get("id"))
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT source_path, COALESCE(metadata,'{}'::jsonb) FROM documents WHERE id = %s AND user_id = %s", (int(doc_id), uid))
+                row = cur.fetchone()
+                if not row:
+                    return JSONResponse(status_code=404, content={"error": "document not found"})
+                source_path = row[0] or ""
+                meta = row[1] or {}
+        # If OCI backend and we have object_url metadata, create PAR
+        from urllib.parse import urlparse
+        if (settings.storage_backend in {"oci", "both"}) and settings.oci_os_bucket_name:
+            obj_url = None
+            if isinstance(meta, dict):
+                obj_url = meta.get("object_url")
+            if obj_url:
+                try:
+                    u = urlparse(obj_url)
+                    # object name is after '/o/' segment
+                    parts = u.path.split("/o/")
+                    if len(parts) == 2:
+                        object_name_enc = parts[1]
+                        # already percent-encoded, pass as-is to PAR helper (expects raw path component)
+                        from urllib.parse import unquote
+                        object_name = unquote(object_name_enc)
+                        par = create_par_for_object(object_name)
+                        if par:
+                            try:
+                                with get_conn() as conn:
+                                    with conn.cursor() as cur:
+                                        cur.execute(
+                                            "INSERT INTO user_activity (user_id, activity_type, details) VALUES (%s, %s, %s)",
+                                            (uid, "download_url", json.dumps({"doc_id": int(doc_id), "kind": "oci_par"})),
+                                        )
+                            except Exception:
+                                pass
+                            return {"url": par}
+                except Exception:
+                    pass
+            # Fallback to original object URL if PAR creation failed
+            if obj_url:
+                try:
+                    with get_conn() as conn:
+                        with conn.cursor() as cur:
+                            cur.execute(
+                                "INSERT INTO user_activity (user_id, activity_type, details) VALUES (%s, %s, %s)",
+                                (uid, "download_url", json.dumps({"doc_id": int(doc_id), "kind": "oci_object"})),
+                            )
+                except Exception:
+                    pass
+                return {"url": obj_url}
+        # Local storage fallback: provide download endpoint
+        try:
+            with get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "INSERT INTO user_activity (user_id, activity_type, details) VALUES (%s, %s, %s)",
+                        (uid, "download_url", json.dumps({"doc_id": int(doc_id), "kind": "local"})),
+                    )
+        except Exception:
+            pass
+        return {"url": f"/api/download/{int(doc_id)}"}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.get("/api/download/{doc_id}")
+async def api_download(request: Request, doc_id: int):
+    """Serve a local file for the authenticated user. Only when storage backend includes local."""
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    if settings.storage_backend not in {"local", "both"}:
+        return JSONResponse(status_code=400, content={"error": "local storage not enabled"})
+    uid = int(user.get("user_id") or user.get("id"))
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT source_path FROM documents WHERE id = %s AND user_id = %s", (int(doc_id), uid))
+            row = cur.fetchone()
+            if not row:
+                return JSONResponse(status_code=404, content={"error": "document not found"})
+            path = row[0] or ""
+    try:
+        p = Path(path)
+        if not p.exists():
+            return JSONResponse(status_code=404, content={"error": "file not found"})
+        filename = p.name
+        return FileResponse(str(p), media_type="application/octet-stream", filename=filename)
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 
 @app.post("/api/admin/reindex")

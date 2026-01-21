@@ -59,9 +59,9 @@
           <input id="query" class="search-input" type="text" placeholder="Ask or search your space…" autocomplete="off" />
         </div>
         <div class="search-actions-row">
+          <button id="spaceBtn" class="ghost" title="Space options" aria-expanded="false">🚀</button>
           <button id="searchBtn" class="primary">Search</button>
           <button id="settingsBtn" class="ghost" title="Settings" aria-expanded="false">⚙️</button>
-          <button id="spaceBtn" class="ghost" title="Space options" aria-expanded="false">🚀</button>
         </div>
 
         <div id="settingsPanel" class="settings" hidden>
@@ -397,26 +397,22 @@
       const wrap = document.getElementById('results');
       const row = document.getElementById('resultsRow');
       wrap.innerHTML = '';
-      if (!hits || !hits.length) {
+      const limited = Array.isArray(hits) ? hits.slice(0, 10) : [];
+      if (!limited.length) {
         row.hidden = false;
         wrap.textContent = 'No results';
         return;
       }
-      for (const h of hits) {
-        const div = document.createElement('div');
-        div.className = 'hit';
+      const items = limited.map((h, idx) => {
         const title = h.title ? escapeHtml(h.title) : '';
+        const fname = h.file_name ? escapeHtml(h.file_name) : '';
+        const label = title || fname || '(untitled)';
         const distance = (h.distance !== null && h.distance !== undefined) ? `distance: ${h.distance.toFixed ? h.distance.toFixed(4) : h.distance}` : '';
         const rank = (h.rank !== null && h.rank !== undefined) ? `rank: ${h.rank.toFixed ? h.rank.toFixed(4) : h.rank}` : '';
-        div.innerHTML = `
-          <div class="hit-head">
-            <div class="hit-title">${title || '(untitled)'}</div>
-            <div class="hit-badges">${distance ? `<span class="badge">${distance}</span>` : ''}${rank ? `<span class="badge">${rank}</span>` : ''}</div>
-          </div>
-          <div class="hit-content">${highlight(h.content || '', query)}</div>
-        `;
-        wrap.appendChild(div);
-      }
+        const badges = `${distance ? `<span class="badge">${distance}</span>` : ''}${rank ? `<span class="badge">${rank}</span>` : ''}`;
+        return `<div class="hit"><details><summary>[${idx + 1}] ${label} ${badges}</summary><div class="hit-content">${highlight(h.content || '', query)}</div></details></div>`;
+      }).join('');
+      wrap.innerHTML = items;
       row.hidden = false;
     }
 
@@ -529,20 +525,36 @@
     });
 
     document.getElementById('settingsBtn').addEventListener('click', () => {
-      const p = document.getElementById('settingsPanel');
-      const b = document.getElementById('settingsBtn');
-      const nowHidden = !p.hidden;
-      p.hidden = nowHidden;
-      b.setAttribute('aria-expanded', String(!nowHidden));
+      const settingsPanel = document.getElementById('settingsPanel');
+      const settingsBtn = document.getElementById('settingsBtn');
+      const willShow = settingsPanel.hidden;
+      settingsPanel.hidden = !settingsPanel.hidden;
+      settingsBtn.setAttribute('aria-expanded', String(willShow));
+      if (willShow) {
+        const spacePanel = document.getElementById('spacePanel');
+        const spaceBtn = document.getElementById('spaceBtn');
+        if (spacePanel && !spacePanel.hidden) {
+          spacePanel.hidden = true;
+          if (spaceBtn) spaceBtn.setAttribute('aria-expanded', 'false');
+        }
+      }
     });
     const spaceBtnEl = document.getElementById('spaceBtn');
     if (spaceBtnEl) {
       spaceBtnEl.addEventListener('click', () => {
-        const p = document.getElementById('spacePanel');
-        const b = document.getElementById('spaceBtn');
-        const nowHidden = !p.hidden;
-        p.hidden = nowHidden;
-        b.setAttribute('aria-expanded', String(!nowHidden));
+        const spacePanel = document.getElementById('spacePanel');
+        const spaceBtn = document.getElementById('spaceBtn');
+        const willShow = spacePanel.hidden;
+        spacePanel.hidden = !spacePanel.hidden;
+        spaceBtn.setAttribute('aria-expanded', String(willShow));
+        if (willShow) {
+          const settingsPanel = document.getElementById('settingsPanel');
+          const settingsBtn = document.getElementById('settingsBtn');
+          if (settingsPanel && !settingsPanel.hidden) {
+            settingsPanel.hidden = true;
+            if (settingsBtn) settingsBtn.setAttribute('aria-expanded', 'false');
+          }
+        }
       });
     }
 

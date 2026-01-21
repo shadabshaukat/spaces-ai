@@ -55,13 +55,15 @@
       <div id="appPanel" class="app-panel" hidden>
 
 
-        <div class="searchbar">
-          <input id="query" class="search-input" type="text" placeholder="Ask or search your space…" autocomplete="off" />
-        </div>
-        <div class="search-actions-row">
-          <button id="spaceBtn" class="ghost" title="Space options" aria-expanded="false">🚀</button>
-          <button id="searchBtn" class="primary">Search</button>
-          <button id="settingsBtn" class="ghost" title="Settings" aria-expanded="false">⚙️</button>
+        <div class="controls-wrap">
+          <div class="searchbar">
+            <input id="query" class="search-input" type="text" placeholder="Ask or search your space…" autocomplete="off" />
+          </div>
+          <div class="search-actions-row">
+            <button id="spaceBtn" class="ghost" title="Space options" aria-expanded="false">🚀</button>
+            <button id="searchBtn" class="primary">Search</button>
+            <button id="settingsBtn" class="ghost" title="Settings" aria-expanded="false">⚙️</button>
+          </div>
         </div>
 
         <div id="settingsPanel" class="settings" hidden>
@@ -129,7 +131,6 @@
             <button id="createSpaceBtn">Create</button>
           </div>
         </div>
-        </div>
 
         <div class="row middle">
           <div class="loader" id="searchLoading" hidden>
@@ -141,6 +142,7 @@
         <div class="row" id="answerRow" hidden>
           <label>Answer / Context <span id="llmBadge" class="badge" style="display:none"></span></label>
           <pre id="answer" class="panel"></pre>
+          <label id="refsLabel" style="display:none">References</label>
           <div id="refs" class="results" style="margin-top:8px; display:none"></div>
         </div>
         <div class="row" id="resultsRow" hidden>
@@ -457,10 +459,12 @@
             }
           }
           const refsEl = document.getElementById('refs');
+          const refsLabel = document.getElementById('refsLabel');
           if (refsEl) {
             if (Array.isArray(data.references) && data.references.length) {
               const limitedRefs = data.references.slice(0, 10);
               refsEl.style.display = 'grid';
+              if (refsLabel) refsLabel.style.display = 'block';
               const items = limitedRefs.map((r, idx) => {
                 const fn = r.file_name || '';
                 const ft = r.file_type || '';
@@ -473,6 +477,7 @@
               refsEl.innerHTML = items;
             } else {
               refsEl.style.display = 'none';
+              if (refsLabel) refsLabel.style.display = 'none';
               refsEl.innerHTML = '';
             }
           }

@@ -160,21 +160,20 @@
       <div class="row">
         <div id="kbList" class="results"></div>
       </div>
-      </div>
-      <div class="row">
-        <div id="kbList" class="results"></div>
-      </div>
     </section>
 
     <!-- Upload -->
     <section id="uploadSection" class="card card--wide" hidden>
       <h2>Upload to your space</h2>
-      <div class="row wrap">
-        <button id="uploadBtn">Upload</button>
-        <div class="loader" id="uploadLoading" hidden>
-          <div class="spinner small"></div>
-          <span>Processing…</span>
+      <div class="row wrap" style="width:100%; justify-content: space-between; align-items: center;">
+        <div>
+          <button id="uploadBtn" class="primary">Upload</button>
+          <div class="loader" id="uploadLoading" hidden style="display:inline-flex; margin-left:8px;">
+            <div class="spinner small"></div>
+            <span>Processing…</span>
+          </div>
         </div>
+        <button id="clearUploadBtn" class="ghost" title="Clear uploads">🔄</button>
       </div>
       <div class="row">
         <div id="dropzone" class="dropzone">Drag & drop files here (PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON, Images, Audio/Video)</div>
@@ -615,7 +614,7 @@
                 <div class="hit-badges"><span class="badge">${escapeHtml(d.source_type || '')}</span></div>
               </div>
               <div class="hit-content">
-                <label><input type="checkbox" class="kbSel" data-doc-id="${d.id}" /> Select</label>
+                <input type="checkbox" class="kbSel" data-doc-id="${d.id}" aria-label="Select document" />
                 &nbsp; ${link} • ${d.chunk_count != null ? (d.chunk_count + ' chunks') : ''}
                 <button class="ghost" data-delete-doc-id="${d.id}" style="float:right">Delete</button>
               </div>`;
@@ -750,6 +749,28 @@
     }
 
     // Upload with per-file progress and space_id
+    const clearBtn = document.getElementById('clearUploadBtn');
+    if (clearBtn) clearBtn.addEventListener('click', () => {
+      try {
+        const files = document.getElementById('files');
+        const status = document.getElementById('uploadStatus');
+        const list = document.getElementById('uploadList');
+        const listRow = document.getElementById('uploadListRow');
+        const statusRow = document.getElementById('uploadStatusRow');
+        const dz = document.getElementById('dropzone');
+        const badge = document.getElementById('fileSelectionText');
+        if (files) files.value = '';
+        if (status) status.textContent = '';
+        if (list) list.innerHTML = '';
+        if (listRow) listRow.hidden = true;
+        if (statusRow) statusRow.hidden = true;
+        droppedFiles = [];
+        if (dz) dz.textContent = 'Drag & drop files here (PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON, Images, Audio/Video)';
+        if (badge) badge.textContent = 'No files selected.';
+        showToast('Cleared');
+      } catch {}
+    });
+
     document.getElementById('uploadBtn').addEventListener('click', async () => {
       if (!state.user) { showToast('Login required'); return; }
       const filesInput = document.getElementById('files');
@@ -891,12 +912,14 @@
       const q = document.getElementById('query');
       const files = document.getElementById('files');
       const status = document.getElementById('uploadStatus');
+      const dz = document.getElementById('dropzone');
+      const badge = document.getElementById('fileSelectionText');
       if (q) q.value = '';
       if (files) files.value = '';
       if (status) status.textContent = '';
-      // Initialize file selection badge
-      const badge = document.getElementById('fileSelectionText');
+      if (dz) dz.textContent = 'Drag & drop files here (PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON, Images, Audio/Video)';
       if (badge) badge.textContent = 'No files selected.';
+      droppedFiles = [];
       await initUser();
       await loadProviders();
       await loadSearchConfig();

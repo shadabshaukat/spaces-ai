@@ -96,7 +96,7 @@ def _upload_to_oci(bucket: str, object_name: str, data: bytes) -> Optional[str]:
         return None
 
 
-def create_par_for_object(object_name: str, expire_seconds: int = 8 * 60 * 60) -> Optional[str]:
+def create_par_for_object(object_name: str, expire_seconds: int = 5 * 60) -> Optional[str]:
     """Create a Pre-Authenticated Request (PAR) URL for a single object for read access.
     Returns the full HTTPS URL or None on failure.
     """

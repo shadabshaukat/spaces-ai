@@ -37,7 +37,7 @@ textarea { width: 100%; padding: 10px 12px; border: 1px solid #e5e7eb; border-ra
 input[type="number"], select { padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 8px; background: #fafafa; }
 .leftpad { margin-left: 8px; }
 button { padding: 10px 16px; border-radius: 10px; border: 1px solid #d1d5db; background: #fff; cursor: pointer; }
-button.primary { background: #2f6db5; color: #fff; border-color: #2f6db5; }
+button.primary { background: #4285F4; color: #fff; border-color: #4285F4; }
 button:hover { filter: brightness(0.98); }
 
 
@@ -76,7 +76,7 @@ body.dark .card { background: #0b1220; box-shadow: none; border: 1px solid #1f29
 body.dark .settings, body.dark .panel { background: #0b1220; border-color: #1f2937; color: #e5e7eb; }
 body.dark .search-input { background: #0b1220; color: #e5e7eb; border-color: #1f2937; }
 body.dark button { background: #0b1220; color: #e5e7eb; border-color: #1f2937; }
-body.dark button.primary { background: #265fa3; border-color: #265fa3; }
+body.dark button.primary { background: #4285F4; border-color: #4285F4; }
 body.dark .dropzone { background: #0b1220; border-color: #1f2937; color: #94a3b8; }
 body.dark .dropzone.dragover { background: #0e1530; border-color: #265fa3; color: #e5e7eb; }
 body.dark .hit { background: #0e1530; border-color: #1f2937; }
@@ -85,7 +85,7 @@ body.dark .badge { background: #122255; color: #c7d2fe; }
 /* SpacesAI additions */
 .user-controls { display: flex; align-items: center; gap: 10px; }
 .user-email { font-weight: 600; }
-.auth { width: 100%; max-width: 900px; display: flex; justify-content: center; }
+.auth { width: 100%; max-width: 900px; display: grid; place-items: center; }
 .auth .row.cols { display: grid; grid-template-columns: 1fr; gap: 12px; width: 100%; justify-content: center; justify-items: center; }
 .auth-card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; background: #fff; width: 100%; max-width: 420px; }
 .auth-card h3 { margin-top: 0; }

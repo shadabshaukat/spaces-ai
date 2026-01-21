@@ -148,7 +148,7 @@
     <section id="kbSection" class="card card--wide" hidden>
       <h2>Your Knowledge Base</h2>
       <div class="row wrap">
-        <button id="kbRefreshBtn" class="ghost">Refresh</button>
+        <button id="kbRefreshBtn" class="primary">Refresh</button>
         <span class="leftpad"></span>
         <button id="kbDeleteSelectedBtn" class="ghost" title="Delete selected">Delete selected</button>
       </div>
@@ -172,7 +172,7 @@
             <span>Processing…</span>
           </div>
         </div>
-        <button id="clearUploadBtn" class="primary" title="Clear uploads">🔄</button>
+        <button id="clearUploadBtn" class="ghost" title="Clear uploads"><span class="refresh-icon">↻</span></button>
       </div>
       <div class="row">
         <div id="dropzone" class="dropzone">Drag & drop files here (PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON, Images, Audio/Video)</div>
@@ -612,16 +612,16 @@
             div.className = 'hit';
             const link = `<a href="#" data-doc-id="${d.id}">${escapeHtml(d.file_name || d.title || ('doc ' + d.id))}</a>`;
             div.innerHTML = `
-              <div class="hit-head">
-                <div class="hit-badges">
+              <div class="hit-row">
+                <div class="hit-left">
+                  <input type="checkbox" class="kbSel" data-doc-id="${d.id}" aria-label="Select document" />
+                  &nbsp; ${link}
+                </div>
+                <div class="hit-right">
                   <span class="badge">${escapeHtml(d.source_type || '')}</span>
                   <span class="badge">${(d.chunk_count != null ? (d.chunk_count + ' chunks') : '')}</span>
+                  <button class="ghost" data-delete-doc-id="${d.id}">Delete</button>
                 </div>
-              </div>
-              <div class="hit-content">
-                <input type="checkbox" class="kbSel" data-doc-id="${d.id}" aria-label="Select document" />
-                &nbsp; ${link}
-                <button class="ghost" data-delete-doc-id="${d.id}" style="float:right">Delete</button>
               </div>`;
             list.appendChild(div);
           }

@@ -708,6 +708,17 @@ async def api_admin_delete_document(request: Request, doc_id: int):
     except Exception:
         pass
 
+    # Best-effort OpenSearch cleanup (remove indexed chunks for this document)
+    try:
+        if settings.search_backend == "opensearch" and settings.opensearch_host:
+            adapter = OpenSearchAdapter()
+            try:
+                adapter.delete_document(doc_id=int(doc_id), user_id=uid)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:

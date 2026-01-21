@@ -963,7 +963,7 @@
       await initUser();
       await loadProviders();
       await loadSearchConfig();
-      // Do not load KB until authenticated
+      if (state && state.user) { try { await loadKB(); } catch (e) {} }
     });
   </script>
 </body>

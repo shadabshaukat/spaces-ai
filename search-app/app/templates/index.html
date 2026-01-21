@@ -60,8 +60,6 @@
           <span class="leftpad"></span>
           <input id="newSpaceName" placeholder="Create new space…" />
           <button id="createSpaceBtn">Create</button>
-          <span class="leftpad"></span>
-          <button id="kbBtn" class="ghost" title="Browse your knowledge base">My Knowledge Base</button>
         </div>
 
         <div class="searchbar">
@@ -147,7 +145,7 @@
     </section>
 
     <!-- Knowledge Base -->
-    <section id="kbSection" class="card card--wide" hidden>
+    <section id="kbSection" class="card card--wide">
       <h2>Your Knowledge Base</h2>
       <div class="row wrap">
         <button id="kbRefreshBtn" class="ghost">Refresh</button>
@@ -644,8 +642,6 @@
       }
     });
 
-    const kbBtn = document.getElementById('kbBtn');
-    if (kbBtn) kbBtn.addEventListener('click', () => loadKB());
     const kbRefreshBtn = document.getElementById('kbRefreshBtn');
     if (kbRefreshBtn) kbRefreshBtn.addEventListener('click', () => loadKB());
 
@@ -895,10 +891,16 @@
         if (!queue.length && !inFlight.size) {
           loading.hidden = true;
           try {
-            status.textContent = JSON.stringify(results.map(r => ({ file: r.file.webkitRelativePath || r.file.name, ok: r.ok, error: r.error || null })), null, 2);
+            const items = results.map(r => {
+              const name = r.file.webkitRelativePath || r.file.name;
+              const icon = r.ok ? '✅' : '❌';
+              const err = r.error ? ` — ${String(r.error)}` : '';
+              return `<div>${icon} ${escapeHtml(name)}${err}</div>`;
+            }).join('');
+            status.innerHTML = items || 'Upload finished';
             showToast('Upload finished');
           } catch (e) {
-            status.textContent = 'Upload finished (see progress list)';
+            status.textContent = 'Upload finished';
           }
           droppedFiles = [];
         }
@@ -923,6 +925,7 @@
       await initUser();
       await loadProviders();
       await loadSearchConfig();
+      await loadKB();
     });
   </script>
 </body>

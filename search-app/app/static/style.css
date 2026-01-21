@@ -20,7 +20,7 @@ html, body { margin: 0; padding: 0; font-family: system-ui, -apple-system, Segoe
 .searchbar { display: flex; gap: 10px; width: 100%; max-width: 680px; }
 .search-input { flex: 1; padding: 12px 16px; border: 1px solid #d1d5db; border-radius: 999px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
 .search-actions { display: flex; gap: 8px; align-items: center; }
-button.ghost { background: #fff; border: 1px solid #d1d5db; }
+button.ghost { background: #fff; border: 1px solid transparent; }
 /* Topbar ghost button styling over banner */
 .topbar button.ghost { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.4); color: #fff; }
 .topbar button.ghost:hover { filter: brightness(1.05); }
@@ -61,6 +61,7 @@ button:hover { filter: brightness(0.98); }
 .progress-item { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px 10px; }
 .progress-row { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #4b5563; margin-bottom: 6px; }
 .progress { width: 100%; height: 8px; background: #eef2ff; border-radius: 999px; overflow: hidden; }
+.refresh-icon { font-size: 18px; line-height: 1; }
 .progress-bar { height: 100%; width: 0%; background: #2f6db5; transition: width .2s ease; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -85,7 +86,7 @@ body.dark .badge { background: #122255; color: #c7d2fe; }
 /* SpacesAI additions */
 .user-controls { display: flex; align-items: center; gap: 10px; }
 .user-email { font-weight: 600; }
-.auth { width: 100%; max-width: 900px; display: grid; place-items: center; }
+.auth { width: 100%; max-width: 900px; display: flex; justify-content: flex-start; }
 .auth .row.cols { display: grid; grid-template-columns: 1fr; gap: 12px; width: 100%; justify-content: center; justify-items: center; }
 .auth-card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; background: #fff; width: 100%; max-width: 420px; }
 .auth-card h3 { margin-top: 0; }

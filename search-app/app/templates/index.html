@@ -64,10 +64,10 @@
 
         <div class="searchbar">
           <input id="query" class="search-input" type="text" placeholder="Ask or search your space…" autocomplete="off" />
-          <div class="search-actions">
-            <button id="searchBtn" class="primary">Search</button>
-            <button id="settingsBtn" class="ghost" title="Settings" aria-expanded="false">⚙️</button>
-          </div>
+        </div>
+        <div class="search-actions-row">
+          <button id="searchBtn" class="primary">Search</button>
+          <button id="settingsBtn" class="ghost" title="Settings" aria-expanded="false">⚙️</button>
         </div>
 
         <div id="settingsPanel" class="settings" hidden>
@@ -653,6 +653,8 @@
       if (btn) {
         e.preventDefault();
         const id = btn.getAttribute('data-delete-doc-id');
+        const ok = confirm('Are you sure you want to delete this file?');
+        if (!ok) return;
         try {
           const res = await fetch(`/api/admin/documents/${encodeURIComponent(id)}`, { method: 'DELETE' });
           if (res.ok) { showToast('Deleted'); await loadKB(); } else { showToast('Delete failed'); }
@@ -670,6 +672,8 @@
     if (kbDeleteSelectedBtn) kbDeleteSelectedBtn.addEventListener('click', async () => {
       const boxes = Array.from(document.querySelectorAll('input.kbSel:checked'));
       if (!boxes.length) { showToast('No selection'); return; }
+      const ok = confirm(`Are you sure you want to delete ${boxes.length} file(s)?`);
+      if (!ok) return;
       for (const b of boxes) {
         const id = b.getAttribute('data-doc-id');
         try { await fetch(`/api/admin/documents/${encodeURIComponent(id)}`, { method: 'DELETE' }); } catch {}

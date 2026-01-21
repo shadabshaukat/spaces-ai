@@ -145,7 +145,7 @@
     </section>
 
     <!-- Knowledge Base -->
-    <section id="kbSection" class="card card--wide">
+    <section id="kbSection" class="card card--wide" hidden>
       <h2>Your Knowledge Base</h2>
       <div class="row wrap">
         <button id="kbRefreshBtn" class="ghost">Refresh</button>
@@ -159,6 +159,7 @@
         <div id="kbList" class="results"></div>
       </div>
     </section>
+    </section>
 
     <!-- Upload -->
     <section id="uploadSection" class="card card--wide" hidden>
@@ -171,7 +172,7 @@
             <span>Processing…</span>
           </div>
         </div>
-        <button id="clearUploadBtn" class="ghost" title="Clear uploads">🔄</button>
+        <button id="clearUploadBtn" class="primary" title="Clear uploads">🔄</button>
       </div>
       <div class="row">
         <div id="dropzone" class="dropzone">Drag & drop files here (PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON, Images, Audio/Video)</div>
@@ -250,18 +251,21 @@
       const auth = document.getElementById('authPanel');
       const app = document.getElementById('appPanel');
       const up = document.getElementById('uploadSection');
+      const kb = document.getElementById('kbSection');
       const uc = document.getElementById('userControls');
       const emailEl = document.getElementById('userEmail');
       if (state.user) {
         auth.hidden = true;
         app.hidden = false;
         up.hidden = false;
+        if (kb) { kb.hidden = false; }
         uc.hidden = false;
         emailEl.textContent = state.user.email;
       } else {
         auth.hidden = false;
         app.hidden = true;
         up.hidden = true;
+        if (kb) { kb.hidden = true; }
         uc.hidden = true;
         emailEl.textContent = '';
       }
@@ -310,7 +314,7 @@
         state.user = resp.user; state.spaces = resp.spaces || [];
         const def = (state.spaces.find(s => s.is_default) || {}).id;
         state.spaceId = def || (state.spaces[0] ? state.spaces[0].id : null);
-        populateSpaces(); setLoggedInUI(); showToast('Logged in');
+        populateSpaces(); setLoggedInUI(); await loadKB(); showToast('Logged in');
       } catch (e) {
         let msg = 'Login failed';
         try { const js = JSON.parse(e.message || '{}'); if (js && js.error) msg = js.error; } catch {}
@@ -343,7 +347,8 @@
     document.getElementById('logoutBtn').addEventListener('click', async () => {
       try { await api('/api/logout', { method: 'POST' }); } catch {}
       state = { user: null, spaces: [], spaceId: null };
-      setLoggedInUI(); showToast('Logged out');
+      setLoggedInUI();
+      showToast('Logged out');
     });
 
     // Auth UI toggles
@@ -457,7 +462,7 @@
                 const fn = r.file_name || '';
                 const ft = r.file_type || '';
                 const docId = r.doc_id || null;
-                const link = docId ? `<a href="#" data-doc-id="${docId}">Open source</a>` : '';
+                const link = docId ? `<a href="/api/doc-download?doc_id=${docId}" target="_blank" rel="noopener" data-doc-id="${docId}">Download source</a>` : '';
                 const match = data.hits.find(h => h.chunk_id === r.chunk_id);
                 const txt = match ? escapeHtml(match.content) : '';
                 return `<details>
@@ -608,12 +613,14 @@
             const link = `<a href="#" data-doc-id="${d.id}">${escapeHtml(d.file_name || d.title || ('doc ' + d.id))}</a>`;
             div.innerHTML = `
               <div class="hit-head">
-                <div class="hit-title">${escapeHtml(d.title || d.file_name || '(untitled)')}</div>
-                <div class="hit-badges"><span class="badge">${escapeHtml(d.source_type || '')}</span></div>
+                <div class="hit-badges">
+                  <span class="badge">${escapeHtml(d.source_type || '')}</span>
+                  <span class="badge">${(d.chunk_count != null ? (d.chunk_count + ' chunks') : '')}</span>
+                </div>
               </div>
               <div class="hit-content">
                 <input type="checkbox" class="kbSel" data-doc-id="${d.id}" aria-label="Select document" />
-                &nbsp; ${link} • ${d.chunk_count != null ? (d.chunk_count + ' chunks') : ''}
+                &nbsp; ${link}
                 <button class="ghost" data-delete-doc-id="${d.id}" style="float:right">Delete</button>
               </div>`;
             list.appendChild(div);
@@ -633,12 +640,7 @@
       if (a) {
         e.preventDefault();
         const docId = a.getAttribute('data-doc-id');
-        const url = await fetchDocUrl(docId);
-        if (url) {
-          window.open(url, '_blank');
-        } else {
-          showToast('Unable to open document');
-        }
+        window.open(`/api/doc-download?doc_id=${encodeURIComponent(docId)}`, '_blank');
       }
     });
 
@@ -925,7 +927,7 @@
       await initUser();
       await loadProviders();
       await loadSearchConfig();
-      await loadKB();
+      // Do not load KB until authenticated
     });
   </script>
 </body>

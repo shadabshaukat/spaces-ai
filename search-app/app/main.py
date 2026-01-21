@@ -8,7 +8,7 @@ from typing import Any, Dict, List
 
 from fastapi import FastAPI, File, UploadFile, Request, Form, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
+from fastapi.responses import JSONResponse, HTMLResponse, FileResponse, StreamingResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import uvicorn
@@ -16,7 +16,7 @@ import uvicorn
 from .auth import SessionOrBasicAuthMiddleware
 from .config import settings
 from .db import init_db, get_conn
-from .store import ensure_dirs, ingest_file_path, save_upload, save_upload_stream, create_par_for_object, delete_oci_object
+from .store import ensure_dirs, ingest_file_path, save_upload, save_upload_stream, create_par_for_object, delete_oci_object, _build_oci_config
 from .search import semantic_search, fulltext_search, hybrid_search, rag
 from .embeddings import get_model, embed_texts
 from .opensearch_adapter import OpenSearchAdapter
@@ -814,6 +814,7 @@ async def api_kb(request: Request, limit: int = 200, offset: int = 0, space_id: 
 
 @app.get("/api/doc-url")
 async def api_doc_url(request: Request, doc_id: int):
+    # Kept for backward compatibility; returns a direct URL (PAR/local) but may render inline in browsers
     user = await get_current_user(request)
     if not user:
         return JSONResponse(status_code=401, content={"error": "unauthorized"})
@@ -827,59 +828,77 @@ async def api_doc_url(request: Request, doc_id: int):
                     return JSONResponse(status_code=404, content={"error": "document not found"})
                 source_path = row[0] or ""
                 meta = row[1] or {}
-        # If OCI backend and we have object_url metadata, create PAR
-        from urllib.parse import urlparse
+        from urllib.parse import urlparse, unquote
         if (settings.storage_backend in {"oci", "both"}) and settings.oci_os_bucket_name:
-            obj_url = None
-            if isinstance(meta, dict):
-                obj_url = meta.get("object_url")
+            obj_url = (meta.get("object_url") if isinstance(meta, dict) else None)
             if obj_url:
-                try:
-                    u = urlparse(obj_url)
-                    # object name is after '/o/' segment
-                    parts = u.path.split("/o/")
-                    if len(parts) == 2:
-                        object_name_enc = parts[1]
-                        # already percent-encoded, pass as-is to PAR helper (expects raw path component)
-                        from urllib.parse import unquote
-                        object_name = unquote(object_name_enc)
-                        par = create_par_for_object(object_name)
-                        if par:
-                            try:
-                                with get_conn() as conn:
-                                    with conn.cursor() as cur:
-                                        cur.execute(
-                                            "INSERT INTO user_activity (user_id, activity_type, details) VALUES (%s, %s, %s)",
-                                            (uid, "download_url", json.dumps({"doc_id": int(doc_id), "kind": "oci_par"})),
-                                        )
-                            except Exception:
-                                pass
-                            return {"url": par}
-                except Exception:
-                    pass
-            # Fallback to original object URL if PAR creation failed
-            if obj_url:
-                try:
-                    with get_conn() as conn:
-                        with conn.cursor() as cur:
-                            cur.execute(
-                                "INSERT INTO user_activity (user_id, activity_type, details) VALUES (%s, %s, %s)",
-                                (uid, "download_url", json.dumps({"doc_id": int(doc_id), "kind": "oci_object"})),
-                            )
-                except Exception:
-                    pass
+                u = urlparse(obj_url)
+                parts = u.path.split("/o/")
+                if len(parts) == 2:
+                    object_name = unquote(parts[1])
+                    par = create_par_for_object(object_name)
+                    if par:
+                        return {"url": par}
                 return {"url": obj_url}
-        # Local storage fallback: provide download endpoint
-        try:
-            with get_conn() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "INSERT INTO user_activity (user_id, activity_type, details) VALUES (%s, %s, %s)",
-                        (uid, "download_url", json.dumps({"doc_id": int(doc_id), "kind": "local"})),
-                    )
-        except Exception:
-            pass
         return {"url": f"/api/download/{int(doc_id)}"}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.get("/api/doc-download")
+async def api_doc_download(request: Request, doc_id: int):
+    """Force a download response for a document: streams local files or OCI objects with attachment disposition."""
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    uid = int(user.get("user_id") or user.get("id"))
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT source_path, COALESCE(metadata,'{}'::jsonb) FROM documents WHERE id = %s AND user_id = %s", (int(doc_id), uid))
+                row = cur.fetchone()
+                if not row:
+                    return JSONResponse(status_code=404, content={"error": "document not found"})
+                source_path = row[0] or ""
+                meta = row[1] or {}
+        # Local download
+        if settings.storage_backend in {"local", "both"} and source_path:
+            p = Path(source_path)
+            if not p.exists():
+                return JSONResponse(status_code=404, content={"error": "file not found"})
+            filename = p.name
+            headers = {"Content-Disposition": f"attachment; filename=\"{filename}\""}
+            return FileResponse(str(p), media_type="application/octet-stream", filename=filename, headers=headers)
+        # OCI object download (proxy through server for attachment)
+        if settings.storage_backend in {"oci", "both"} and settings.oci_os_bucket_name and isinstance(meta, dict):
+            obj_url = meta.get("object_url")
+            if obj_url:
+                from urllib.parse import urlparse, unquote
+                u = urlparse(obj_url)
+                parts = u.path.split("/o/")
+                if len(parts) == 2:
+                    object_name = unquote(parts[1])
+                    try:
+                        cfg, _region = _build_oci_config()
+                        if not cfg:
+                            return JSONResponse(status_code=500, content={"error": "OCI configuration missing"})
+                        import oci  # type: ignore
+                        osc = oci.object_storage.ObjectStorageClient(cfg)
+                        ns = osc.get_namespace().data
+                        resp = osc.get_object(ns, settings.oci_os_bucket_name, object_name)
+                        filename = object_name.rsplit("/", 1)[-1]
+                        media_type = resp.headers.get("content-type", "application/octet-stream") if hasattr(resp, "headers") else "application/octet-stream"
+                        def _iter():
+                            raw = resp.data.raw
+                            while True:
+                                chunk = raw.read(8192)
+                                if not chunk:
+                                    break
+                                yield chunk
+                        return StreamingResponse(_iter(), media_type=media_type, headers={"Content-Disposition": f"attachment; filename=\"{filename}\""})
+                    except Exception as e:
+                        return JSONResponse(status_code=500, content={"error": f"OCI download failed: {e}"})
+        return JSONResponse(status_code=404, content={"error": "download not available"})
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 

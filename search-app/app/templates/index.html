@@ -55,12 +55,9 @@
       <div id="appPanel" class="app-panel" hidden>
 
 
-        <div class="controls-wrap">
-          <div class="searchbar">
-            <input id="query" class="search-input" type="text" placeholder="Ask or search your space…" autocomplete="off" />
-          </div>
-          <div class="search-actions-row">
-            <button id="spaceBtn" class="ghost" title="Space options" aria-expanded="false">🚀</button>
+        <div class="searchbar">
+          <input id="query" class="search-input" type="text" placeholder="Search..." autocomplete="off" />
+          <div class="search-actions">
             <button id="searchBtn" class="primary">Search</button>
             <button id="settingsBtn" class="ghost" title="Settings" aria-expanded="false">⚙️</button>
           </div>
@@ -119,9 +116,6 @@
               <button id="saveCfgBtn" class="ghost">Save</button>
             </div>
           </div>
-        </div>
-
-        <div id="spacePanel" class="settings" hidden>
           <div class="row wrap">
             <label for="spacesSelect">Space</label>
             <select id="spacesSelect"></select>
@@ -131,6 +125,8 @@
             <button id="createSpaceBtn">Create</button>
           </div>
         </div>
+
+
 
         <div class="row middle">
           <div class="loader" id="searchLoading" hidden>
@@ -529,38 +525,12 @@
     });
 
     document.getElementById('settingsBtn').addEventListener('click', () => {
-      const settingsPanel = document.getElementById('settingsPanel');
-      const settingsBtn = document.getElementById('settingsBtn');
-      const willShow = settingsPanel.hidden;
-      settingsPanel.hidden = !settingsPanel.hidden;
-      settingsBtn.setAttribute('aria-expanded', String(willShow));
-      if (willShow) {
-        const spacePanel = document.getElementById('spacePanel');
-        const spaceBtn = document.getElementById('spaceBtn');
-        if (spacePanel && !spacePanel.hidden) {
-          spacePanel.hidden = true;
-          if (spaceBtn) spaceBtn.setAttribute('aria-expanded', 'false');
-        }
-      }
+      const p = document.getElementById('settingsPanel');
+      const b = document.getElementById('settingsBtn');
+      const nowHidden = !p.hidden;
+      p.hidden = nowHidden;
+      b.setAttribute('aria-expanded', String(!nowHidden));
     });
-    const spaceBtnEl = document.getElementById('spaceBtn');
-    if (spaceBtnEl) {
-      spaceBtnEl.addEventListener('click', () => {
-        const spacePanel = document.getElementById('spacePanel');
-        const spaceBtn = document.getElementById('spaceBtn');
-        const willShow = spacePanel.hidden;
-        spacePanel.hidden = !spacePanel.hidden;
-        spaceBtn.setAttribute('aria-expanded', String(willShow));
-        if (willShow) {
-          const settingsPanel = document.getElementById('settingsPanel');
-          const settingsBtn = document.getElementById('settingsBtn');
-          if (settingsPanel && !settingsPanel.hidden) {
-            settingsPanel.hidden = true;
-            if (settingsBtn) settingsBtn.setAttribute('aria-expanded', 'false');
-          }
-        }
-      });
-    }
 
     async function loadProviders() {
       try {

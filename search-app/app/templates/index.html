@@ -8,7 +8,7 @@
 </head>
 <body>
   <header class="topbar">
-    <h2>SpacesAI • Personal Knowledge Spaces with RAG (OCI PostgreSQL + pgvector)</h2>
+    <h2>SpacesAI • Personal Knowledge Spaces with RAG</h2>
     <div class="spacer"></div>
     <div id="userControls" class="user-controls" hidden>
       <span id="userEmail" class="user-email"></span>
@@ -150,46 +150,50 @@
 
     <!-- Knowledge Base -->
     <section id="kbSection" class="card card--wide" hidden>
-      <h2>Your Knowledge Base</h2>
-      <div class="row wrap">
-        <button id="kbRefreshBtn" class="primary">Refresh</button>
-        <span class="leftpad"></span>
-        <button id="kbDeleteSelectedBtn" class="ghost" title="Delete selected">Delete selected</button>
-      </div>
-      <div class="row">
-        <label><input type="checkbox" id="kbSelectAll" /> Select all</label>
-      </div>
-      <div class="row">
-        <div id="kbList" class="results"></div>
+      <button class="collapsible-toggle" id="kbToggle" aria-expanded="false"><span class="caret">▸</span> Your Knowledge Base</button>
+      <div id="kbContent" hidden>
+        <div class="row wrap">
+          <button id="kbRefreshBtn" class="primary">Refresh</button>
+          <span class="leftpad"></span>
+          <button id="kbDeleteSelectedBtn" class="ghost" title="Delete selected">Delete selected</button>
+        </div>
+        <div class="row">
+          <label><input type="checkbox" id="kbSelectAll" /> Select all</label>
+        </div>
+        <div class="row">
+          <div id="kbList" class="results"></div>
+        </div>
       </div>
     </section>
     </section>
 
     <!-- Upload -->
     <section id="uploadSection" class="card card--wide" hidden>
-      <h2>Upload to your space</h2>
-      <div class="row wrap" style="width:100%; justify-content: space-between; align-items: center;">
-        <div>
-          <button id="uploadBtn" class="primary">Upload</button>
-          <div class="loader" id="uploadLoading" hidden style="display:inline-flex; margin-left:8px;">
-            <div class="spinner small"></div>
-            <span>Processing…</span>
+      <button class="collapsible-toggle" id="uploadToggle" aria-expanded="false"><span class="caret">▸</span> Upload to your Space</button>
+      <div id="uploadContent" hidden>
+        <div class="row wrap" style="width:100%; justify-content: space-between; align-items: center;">
+          <div>
+            <button id="uploadBtn" class="primary">Upload</button>
+            <div class="loader" id="uploadLoading" hidden style="display:inline-flex; margin-left:8px;">
+              <div class="spinner small"></div>
+              <span>Processing…</span>
+            </div>
           </div>
+          <button id="clearUploadBtn" class="ghost" title="Clear uploads"><span class="refresh-icon">↻</span></button>
         </div>
-        <button id="clearUploadBtn" class="ghost" title="Clear uploads"><span class="refresh-icon">↻</span></button>
-      </div>
-      <div class="row">
-        <div id="dropzone" class="dropzone">Drag & drop files here (PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON, Images, Audio/Video)</div>
-      </div>
-      <div class="row">
-        <input id="files" type="file" multiple accept=".pdf,.txt,.csv,.md,.json,.html,.htm,.docx,.pptx,.xlsx,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.gif,.mp3,.wav,.m4a,.flac,.ogg,.mp4,.mov,.mkv,.webm,.avi" />
-        <span id="fileSelectionText" class="muted">No files selected.</span>
-      </div>
-      <div class="row" id="uploadListRow" hidden>
-        <div id="uploadList" class="progress-list"></div>
-      </div>
-      <div class="row" id="uploadStatusRow" hidden>
-        <pre id="uploadStatus" class="panel"></pre>
+        <div class="row">
+          <div id="dropzone" class="dropzone">Drag & drop files here (PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON, Images, Audio/Video)</div>
+        </div>
+        <div class="row">
+          <input id="files" type="file" multiple accept=".pdf,.txt,.csv,.md,.json,.html,.htm,.docx,.pptx,.xlsx,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.gif,.mp3,.wav,.m4a,.flac,.ogg,.mp4,.mov,.mkv,.webm,.avi" />
+          <span id="fileSelectionText" class="muted">No files selected.</span>
+        </div>
+        <div class="row" id="uploadListRow" hidden>
+          <div id="uploadList" class="progress-list"></div>
+        </div>
+        <div class="row" id="uploadStatusRow" hidden>
+          <pre id="uploadStatus" class="panel"></pre>
+        </div>
       </div>
     </section>
   </main>
@@ -918,6 +922,19 @@
     });
 
     // Initialize
+    function setupCollapsible(toggleId, contentId) {
+      const t = document.getElementById(toggleId);
+      const c = document.getElementById(contentId);
+      if (!t || !c) return;
+      const caret = t.querySelector('.caret');
+      t.addEventListener('click', () => {
+        const expanded = t.getAttribute('aria-expanded') === 'true';
+        t.setAttribute('aria-expanded', String(!expanded));
+        c.hidden = expanded;
+        if (caret) caret.style.transform = expanded ? 'rotate(0deg)' : 'rotate(90deg)';
+      });
+    }
+
     window.addEventListener('DOMContentLoaded', async () => {
       const q = document.getElementById('query');
       const files = document.getElementById('files');
@@ -934,6 +951,8 @@
       await loadProviders();
       await loadSearchConfig();
       if (state && state.user) { try { await loadKB(); } catch (e) {} }
+      setupCollapsible('kbToggle', 'kbContent');
+      setupCollapsible('uploadToggle', 'uploadContent');
     });
   </script>
 </body>

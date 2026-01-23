@@ -120,3 +120,20 @@ body.dark .badge { background: #122255; color: #c7d2fe; }
 
 body.dark .auth-card { background: #0b1220; border-color: #1f2937; }
 body.dark .auth-card input, body.dark .app-panel input { background: #0b1220; color: #e5e7eb; border-color: #1f2937; }
+
+/* Responsive widths for search bar, actions, and settings */
+@media (max-width: 1280px) {
+  .searchbar { width: 720px; }
+  .search-actions-row { width: 720px; }
+  .settings { max-width: 720px; }
+}
+@media (max-width: 1024px) {
+  .searchbar { width: 640px; }
+  .search-actions-row { width: 640px; }
+  .settings { max-width: 640px; }
+}
+@media (max-width: 768px) {
+  .searchbar { width: calc(100% - 32px); }
+  .search-actions-row { width: calc(100% - 32px); }
+  .settings { max-width: calc(100% - 32px); }
+}

@@ -212,7 +212,10 @@
   <div id="drModal" class="dr-modal" hidden aria-modal="true" role="dialog">
     <div class="dr-header">
       <strong>Deep Research</strong>
-      <button id="drClose" class="ghost" title="Close">✕</button>
+      <div style="display:flex; gap:6px; align-items:center">
+        <button id="drReset" class="ghost" title="Reset conversation">↺</button>
+        <button id="drClose" class="ghost" title="Close">✕</button>
+      </div>
     </div>
     <div id="drChat" class="dr-chat"></div>
     <div class="dr-input">
@@ -422,6 +425,8 @@
       try { await api('/api/logout', { method: 'POST' }); } catch {}
       state = { user: null, spaces: [], spaceId: null };
       setLoggedInUI();
+      // Clear stored Deep Research conversations on logout
+      try { Object.keys(localStorage).forEach(k => { if (k.startsWith('dr:space:')) localStorage.removeItem(k); }); } catch {}
       showToast('Logged out');
     });
 
@@ -459,6 +464,8 @@
     document.getElementById('spacesSelect').addEventListener('change', (e) => {
       const sid = parseInt(e.target.value || '0', 10);
       state.spaceId = sid || state.spaceId;
+      // Switch to a separate conversation per-space; resume from storage on next open
+      dr.conversationId = null;
     });
 
     // Search
@@ -580,6 +587,7 @@
 
     // Deep Research UI
     let dr = { open: false, conversationId: null };
+    function drStorageKey(spaceId) { return `dr:space:${spaceId || '_'}`; }
 
     function openDr() {
       const m = document.getElementById('drModal');
@@ -598,10 +606,32 @@
     }
     async function ensureDrConversation() {
       if (dr.conversationId) return dr.conversationId;
+      // Try to resume previous conversation per-space
+      const key = drStorageKey(state.spaceId);
+      try {
+        const saved = localStorage.getItem(key);
+        if (saved) { dr.conversationId = saved; return saved; }
+      } catch {}
       const payload = { space_id: state.spaceId };
       const r = await api('/api/deep-research/start', { method: 'POST', body: payload });
       dr.conversationId = r.conversation_id;
+      try { localStorage.setItem(key, dr.conversationId); } catch {}
       return dr.conversationId;
+    }
+    async function resetDr() {
+      try {
+        const key = drStorageKey(state.spaceId);
+        try { localStorage.removeItem(key); } catch {}
+        const payload = { space_id: state.spaceId };
+        const r = await api('/api/deep-research/start', { method: 'POST', body: payload });
+        dr.conversationId = r.conversation_id;
+        try { localStorage.setItem(key, dr.conversationId); } catch {}
+        const chat = document.getElementById('drChat');
+        if (chat) chat.innerHTML = '';
+        showToast('Started a new Deep Research conversation');
+      } catch (e) {
+        showToast('Failed to reset conversation');
+      }
     }
     function pushMsg(role, text) {
       const chat = document.getElementById('drChat');
@@ -632,6 +662,7 @@
 
     document.getElementById('drBtn')?.addEventListener('click', async () => { try { await ensureDrConversation(); } catch {} openDr(); });
     document.getElementById('drClose')?.addEventListener('click', () => closeDr());
+    document.getElementById('drReset')?.addEventListener('click', async () => { await resetDr(); });
     document.getElementById('drSend')?.addEventListener('click', () => sendDr());
     document.getElementById('drMessage')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendDr(); } });
     document.getElementById('drBackdrop')?.addEventListener('click', () => closeDr());

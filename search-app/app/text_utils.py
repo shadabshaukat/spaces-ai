@@ -470,10 +470,46 @@ def _apply_overlap(chunks: List[str], overlap: int) -> List[str]:
 
 
 def chunk_text(text: str, params: ChunkParams = ChunkParams()) -> List[str]:
+    """Split text into chunks with optional adaptive sizing.
+    When CHUNK_AUTO_TUNE=true, choose a chunk size based on paragraph statistics
+    clamped to [CHUNK_MIN_SIZE, CHUNK_MAX_SIZE], and set overlap proportionally
+    using CHUNK_OVERLAP_RATIO.
+    """
     # Normalize while preserving paragraph boundaries; add extra spacing around likely headings
     text = _normalize_whitespace_preserve_paragraphs(text)
     text = _insert_heading_boundaries(text)
-    base_chunks = _recursive_split(text, params.chunk_size, params.separators)
+
+    # Start with configured defaults
+    eff_chunk_size = int(params.chunk_size)
+    eff_overlap = int(params.chunk_overlap)
+
+    # Adaptive tuning based on paragraph distribution
+    try:
+        if getattr(settings, "chunk_auto_tune", False):
+            paras = [p for p in re.split(PARA_SPLIT_RE, text) if p and p.strip()]
+            if paras:
+                import statistics
+                lens = [len(p) for p in paras]
+                med = int(statistics.median(lens)) if lens else eff_chunk_size
+                avg = int(sum(lens) / max(1, len(lens))) if lens else eff_chunk_size
+                # Heuristic target: 2.5x median or 2x average, whichever larger, but within min/max
+                target = max(
+                    int(getattr(settings, "chunk_min_size", 800)),
+                    min(
+                        int(getattr(settings, "chunk_max_size", 3500)),
+                        int(max(med * 2.5, avg * 2.0, eff_chunk_size)),
+                    ),
+                )
+                eff_chunk_size = int(target)
+                # Overlap as a ratio of chosen size (bounded)
+                ratio = float(getattr(settings, "chunk_overlap_ratio", 0.1) or 0.0)
+                eff_overlap = int(min(max(0, ratio * eff_chunk_size), max(600, eff_chunk_size // 3)))
+    except Exception:
+        # Fall back to configured params on any issues
+        eff_chunk_size = int(params.chunk_size)
+        eff_overlap = int(params.chunk_overlap)
+
+    base_chunks = _recursive_split(text, eff_chunk_size, params.separators)
     if not base_chunks:
         return []
-    return _apply_overlap(base_chunks, params.chunk_overlap)
+    return _apply_overlap(base_chunks, eff_overlap)

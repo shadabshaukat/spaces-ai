@@ -124,6 +124,14 @@ def list_providers():
     }
 
 
+@app.get("/api/upload-config")
+def upload_config():
+    return {
+        "max_upload_size_mb": settings.max_upload_size_mb,
+        "max_upload_files": settings.max_upload_files,
+        "allowed_extensions": sorted(list(ALLOWED_EXTS)),
+    }
+
 
 @app.get("/api/ready")
 def ready():
@@ -245,8 +253,8 @@ async def upload(request: Request, files: List[UploadFile] = File(...), space_id
     else:
         sid = int(space_id)
     # Enforce max file count per request
-    if len(files) > 100:
-        return JSONResponse(status_code=400, content={"error": "too many files (max 100)"})
+    if len(files) > settings.max_upload_files:
+        return JSONResponse(status_code=400, content={"error": f"too many files (max {settings.max_upload_files})"})
 
     results: List[Dict[str, Any]] = []
     for f in files:
@@ -849,34 +857,35 @@ async def api_set_default_space(request: Request, payload: Dict[str, Any]):
 
 
 @app.get("/api/kb")
-async def api_kb(request: Request, limit: int = 200, offset: int = 0, space_id: int | None = None):
+async def api_kb(request: Request, limit: int = 200, offset: int = 0, space_id: int | None = None, order: str = "desc"):
     user = await get_current_user(request)
     if not user:
         return JSONResponse(status_code=401, content={"error": "unauthorized"})
     uid = int(user.get("user_id") or user.get("id"))
     items: List[Dict[str, Any]] = []
+    ord_dir = "ASC" if str(order).lower() == "asc" else "DESC"
     with get_conn() as conn:
         with conn.cursor() as cur:
             if space_id is not None:
                 cur.execute(
-                    """
-                    SELECT d.id, d.source_path, d.source_type, COALESCE(d.title,''),
+                    f"""
+                    SELECT d.id, d.source_path, d.source_type, COALESCE(d.title,''), d.created_at,
                            (SELECT count(*) FROM chunks c WHERE c.document_id = d.id) AS chunk_count
                     FROM documents d
                     WHERE d.user_id = %s AND d.space_id = %s
-                    ORDER BY d.created_at DESC
+                    ORDER BY d.created_at {ord_dir}
                     LIMIT %s OFFSET %s
                     """,
                     (uid, int(space_id), int(limit), int(offset)),
                 )
             else:
                 cur.execute(
-                    """
-                    SELECT d.id, d.source_path, d.source_type, COALESCE(d.title,''),
+                    f"""
+                    SELECT d.id, d.source_path, d.source_type, COALESCE(d.title,''), d.created_at,
                            (SELECT count(*) FROM chunks c WHERE c.document_id = d.id) AS chunk_count
                     FROM documents d
                     WHERE d.user_id = %s
-                    ORDER BY d.created_at DESC
+                    ORDER BY d.created_at {ord_dir}
                     LIMIT %s OFFSET %s
                     """,
                     (uid, int(limit), int(offset)),
@@ -891,9 +900,10 @@ async def api_kb(request: Request, limit: int = 200, offset: int = 0, space_id: 
                     "source_path": sp,
                     "source_type": r[2] or "",
                     "title": r[3] or "",
-                    "chunk_count": int(r[4] or 0),
+                    "created_at": (r[4].isoformat() if r[4] else None),
+                    "chunk_count": int(r[5] or 0),
                 })
-    return {"documents": items, "limit": int(limit), "offset": int(offset), "space_id": (int(space_id) if space_id is not None else None)}
+    return {"documents": items, "limit": int(limit), "offset": int(offset), "space_id": (int(space_id) if space_id is not None else None), "order": ord_dir.lower()}
 
 
 @app.get("/api/doc-url")

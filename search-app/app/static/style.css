@@ -49,13 +49,21 @@ button:hover { filter: brightness(0.98); }
 .panel { background: #ffffff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; width: 100%; min-height: 80px; overflow: auto; white-space: pre-wrap; }
 .results { display: grid; grid-template-columns: 1fr; gap: 12px; width: 100%; }
 .hit { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; background: #fafbff; }
-.dropzone { width: 100%; border: 2px dashed #d1d5db; border-radius: 10px; padding: 20px; text-align: center; color: #6b7280; background: #fff; }
+.dropzone { width: 100%; border: 2px dashed #d1d5db; border-radius: 10px; padding: 32px; text-align: center; color: #6b7280; background: #fff; min-height: 240px; display: flex; align-items: center; justify-content: center; }
 .dropzone.dragover { border-color: #2f6db5; color: #1f2937; background: #f5faff; }
+
+/* Dropzone inner layout */
+.dz-inner { display: flex; flex-direction: column; gap: 6px; align-items: center; justify-content: center; width: 100%; max-width: 800px; }
+.dz-header { font-weight: 700; font-size: 16px; color: #1f2937; }
+.dz-desc { font-size: 13px; color: #6b7280; }
+.dz-hint { font-size: 12px; color: #6b7280; }
+.dz-status { font-size: 12px; color: #374151; }
 .hit-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .hit-title { font-weight: 700; font-size: 14px; }
 .hit-meta { font-size: 12px; color: #6b7280; margin-bottom: 6px; }
 .hit-content { font-size: 14px; margin-bottom: 6px; }
 .badge { display: inline-block; background: #eef2ff; color: #1e3a8a; padding: 2px 6px; border-radius: 999px; font-size: 11px; margin-left: 6px; }
+.muted { color: #6b7280; font-size: 12px; }
 .toast { position: fixed; bottom: 16px; right: 16px; background: #111827; color: #fff; padding: 10px 14px; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,0.15); }
 .loader { display: flex; align-items: center; gap: 8px; color: #4b5563; }
 .spinner { width: 18px; height: 18px; border: 2px solid #d1d5db; border-top-color: #2f6db5; border-radius: 50%; animation: spin 1s linear infinite; }
@@ -75,6 +83,8 @@ button:hover { filter: brightness(0.98); }
 .dr-msg { margin: 6px 0; display: flex; }
 .dr-msg.me { justify-content: flex-end; }
 .dr-msg .bubble { max-width: 80%; padding: 8px 12px; border-radius: 12px; border: 1px solid #e5e7eb; background: #f5faff; }
+.dr-chat pre.code { background: #0f172a0d; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; overflow: auto; }
+.dr-chat code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; }
 .dr-msg.me .bubble { background: #e0efff; border-color: #dbeafe; }
 
 /* Dark mode for DR */
@@ -132,6 +142,8 @@ body.dark .search-input { background: #0b1220; color: #e5e7eb; border-color: #1f
 body.dark button { background: #0b1220; color: #e5e7eb; border-color: #1f2937; }
 body.dark button.primary { background: #4285F4; border-color: #4285F4; }
 body.dark .dropzone { background: #0b1220; border-color: #1f2937; color: #94a3b8; }
+body.dark .dz-header { color: #e5e7eb; }
+body.dark .dz-desc, body.dark .dz-hint, body.dark .dz-status, body.dark .muted { color: #94a3b8; }
 body.dark .dropzone.dragover { background: #0e1530; border-color: #265fa3; color: #e5e7eb; }
 body.dark .hit { background: #0e1530; border-color: #1f2937; }
 body.dark .badge { background: #122255; color: #c7d2fe; }

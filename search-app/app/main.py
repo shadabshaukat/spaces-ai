@@ -284,60 +284,6 @@ async def upload(request: Request, files: List[UploadFile] = File(...), space_id
     return {"results": results}
 
 
-@app.post("/api/deep-research-chat")
-async def api_deep_research_chat(request: Request, payload: Dict[str, Any]):
-    """Continue deep research conversation."""
-    user = await get_current_user(request)
-    if not user:
-        return JSONResponse(status_code=401, content={"error": "unauthorized"})
-    uid = int(user["user_id"]) if "user_id" in user else int(user.get("id"))
-    sid = payload.get("space_id")
-    sid = int(sid) if sid is not None else get_default_space_id(uid)
-
-    message = payload.get("message", "")
-    chat_history = payload.get("chat_history", [])
-    provider_override = payload.get("llm_provider")
-
-    if not message:
-        return JSONResponse(status_code=400, content={"error": "message required"})
-
-    try:
-        from .llm import chat as llm_chat
-
-        # Build context from chat history and knowledge base
-        context_parts = []
-        for entry in chat_history[-5:]:  # Last 5 messages for context
-            if entry.get("role") == "user":
-                context_parts.append(f"User: {entry.get('content', '')}")
-            elif entry.get("role") == "assistant":
-                context_parts.append(f"Assistant: {entry.get('content', '')}")
-
-        # Add current user message
-        context_parts.append(f"User: {message}")
-
-        # Search knowledge base for relevant information
-        from .search import hybrid_search
-        search_results = hybrid_search(message, top_k=5, user_id=uid, space_id=sid)
-        kb_context = "\n\n".join([h.content for h in search_results])
-
-        full_context = "\n".join(context_parts) + "\n\nKnowledge Base Context:\n" + kb_context
-
-        response_prompt = f"""
-You are an expert assistant engaged in deep research conversation. Continue the conversation based on the provided context and knowledge base information.
-
-Conversation history:
-{full_context}
-
-Provide a helpful, detailed response that builds on the conversation and uses the knowledge base context where relevant. If you need more information or want to ask clarifying questions, do so.
-"""
-
-        response = llm_chat("Continue deep research conversation", response_prompt, provider_override=provider_override)
-
-        return {"response": response, "search_results": len(search_results)}
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-
 @app.post("/api/search")
 async def api_search(request: Request, payload: Dict[str, Any]):
     user = await get_current_user(request)

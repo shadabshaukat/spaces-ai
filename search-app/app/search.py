@@ -188,88 +188,6 @@ def hybrid_search(query: str, top_k: int = 10, alpha: float = 0.5, *, user_id: O
     return out
 
 
-def deep_research(query: str, top_k: int = 10, max_passes: int = 3, *, user_id: Optional[int] = None, space_id: Optional[int] = None, provider_override: Optional[str] = None) -> Tuple[str, List[ChunkHit], bool]:
-    """
-    Agentic research mode: performs multiple passes of search and refinement using LLM to generate better queries.
-    """
-    logger.info("deep_research: initial_query=%r top_k=%s max_passes=%s provider=%s user_id=%s space_id=%s", query, top_k, max_passes, provider_override or settings.llm_provider, user_id, space_id)
-
-    current_query = query
-    all_hits: List[ChunkHit] = []
-    seen_chunks = set()
-
-    try:
-        from .llm import chat as llm_chat
-    except Exception as e:
-        logger.exception("LLM not available for deep research: %s", e)
-        # Fallback to regular hybrid search
-        return rag(query, mode="hybrid", top_k=top_k, user_id=user_id, space_id=space_id, provider_override=provider_override)
-
-    for pass_num in range(max_passes):
-        logger.info("deep_research: pass %d with query=%r", pass_num + 1, current_query)
-
-        # Perform hybrid search
-        hits = hybrid_search(current_query, top_k=top_k, user_id=user_id, space_id=space_id)
-
-        # Filter out already seen chunks
-        new_hits = [h for h in hits if h.chunk_id not in seen_chunks]
-        seen_chunks.update(h.chunk_id for h in new_hits)
-        all_hits.extend(new_hits)
-
-        if pass_num < max_passes - 1:  # Not the last pass
-            # Use LLM to refine query based on current results
-            context = "\n\n".join(h.content for h in new_hits[:5])  # Top 5 new hits
-            if context.strip():
-                refine_prompt = f"""
-Based on the following context from a knowledge base search, generate a more specific and targeted search query to find deeper or more relevant information about the original question.
-
-Original question: {query}
-Current search query used: {current_query}
-
-Context from search results:
-{context}
-
-Generate a new, improved search query that would help find additional relevant information. Make it more specific, use different keywords, or focus on aspects not well covered yet. Respond with just the new query, no explanation.
-"""
-                try:
-                    refined_query = llm_chat("Generate a better search query", refine_prompt, provider_override=provider_override).strip()
-                    if refined_query and len(refined_query) > 10:  # Basic validation
-                        current_query = refined_query
-                        logger.info("deep_research: refined query to %r", current_query)
-                    else:
-                        logger.warning("deep_research: invalid refined query, keeping current")
-                except Exception as e:
-                    logger.exception("deep_research: failed to refine query: %s", e)
-
-    # Final synthesis
-    if all_hits:
-        # Sort by relevance (assuming hybrid search already ranks well)
-        unique_hits = list(dict.fromkeys(all_hits))  # Preserve order, remove duplicates
-        context = "\n\n".join(h.content for h in unique_hits[:min(len(unique_hits), 10)])  # Top 10 for synthesis
-
-        synthesis_prompt = f"""
-Based on the following comprehensive context from multiple knowledge base searches, provide a detailed and accurate answer to the question.
-
-Question: {query}
-
-Context:
-{context}
-
-Provide a thorough answer grounded in the provided context. If the context doesn't fully answer the question, acknowledge the limitations but still provide the best possible answer based on what's available.
-"""
-
-        try:
-            answer = llm_chat("Synthesize comprehensive answer", synthesis_prompt, provider_override=provider_override)
-        except Exception as e:
-            logger.exception("deep_research: synthesis failed: %s", e)
-            answer = "\n\n".join(h.content for h in unique_hits[:5])  # Fallback to top context
-    else:
-        answer = "No relevant information found in the knowledge base."
-
-    logger.info("deep_research: final answer_chars=%d total_hits=%d", len(answer or ''), len(all_hits))
-    return answer, all_hits[:top_k], True  # Always used LLM
-
-
 def rag(query: str, mode: str = "hybrid", top_k: int = 6, *, user_id: Optional[int] = None, space_id: Optional[int] = None, provider_override: Optional[str] = None) -> Tuple[str, List[ChunkHit], bool]:
     logger.info("rag: query=%r mode=%s top_k=%s provider=%s user_id=%s space_id=%s", query, mode, top_k, provider_override or settings.llm_provider, user_id, space_id)
     mode = mode.lower()
@@ -277,8 +195,6 @@ def rag(query: str, mode: str = "hybrid", top_k: int = 6, *, user_id: Optional[i
         hits = semantic_search(query, top_k=top_k, user_id=user_id, space_id=space_id)
     elif mode == "fulltext":
         hits = fulltext_search(query, top_k=top_k, user_id=user_id, space_id=space_id)
-    elif mode == "deep_research":
-        return deep_research(query, top_k=top_k, user_id=user_id, space_id=space_id, provider_override=provider_override)
     else:
         hits = hybrid_search(query, top_k=top_k, user_id=user_id, space_id=space_id)
 

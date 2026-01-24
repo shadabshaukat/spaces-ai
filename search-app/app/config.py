@@ -42,7 +42,7 @@ class Settings:
     oci_os_bucket_name: Optional[str] = os.getenv("OCI_OS_BUCKET_NAME")
     oci_os_upload_enabled: bool = _get_bool("OCI_OS_UPLOAD", True)
     # Upload & parsing
-    max_upload_size_mb: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", "200"))
+    max_upload_size_mb: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", "50"))
     use_pymupdf: bool = _get_bool("USE_PYMUPDF", False)
     # Upload lifecycle
     delete_uploaded_after_ingest: bool = _get_bool("DELETE_UPLOADED_FILES", False)

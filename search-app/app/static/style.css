@@ -19,8 +19,8 @@ html { scrollbar-gutter: stable both-edges; }
 .g-red { color: #DB4437; }
 .g-yellow { color: #F4B400; }
 .g-green { color: #0F9D58; }
-.searchbar { display: block; width: 584px; margin: 0 auto; }
-.search-input { width: 100%; height: 52px; padding: 0 24px; font-size: 16px; border: 1px solid #dfe1e5; border-radius: 9999px; background: #fff; box-shadow: none; }
+.searchbar { position: relative; display: block; width: 584px; margin: 0 auto; }
+.search-input { width: 100%; height: 52px; padding: 0 52px 0 24px; font-size: 16px; border: 1px solid #dfe1e5; border-radius: 9999px; background: #fff; box-shadow: none; }
 .search-input:hover { border-color: #dfe1e5; box-shadow: 0 1px 6px rgba(32,33,36,0.28); }
 .search-input:focus { outline: none; border-color: #1a73e8; box-shadow: 0 0 0 2px rgba(26,115,232,0.20), 0 1px 6px rgba(32,33,36,0.20); }
 body.dark .search-input:focus { outline: none; border-color: #8ab4f8; box-shadow: 0 0 0 2px rgba(138,180,248,0.20), 0 1px 6px rgba(0,0,0,0.30); }
@@ -60,6 +60,31 @@ button:hover { filter: brightness(0.98); }
 .loader { display: flex; align-items: center; gap: 8px; color: #4b5563; }
 .spinner { width: 18px; height: 18px; border: 2px solid #d1d5db; border-top-color: #2f6db5; border-radius: 50%; animation: spin 1s linear infinite; }
 .spinner.small { width: 14px; height: 14px; }
+
+/* Deep Research icon/button */
+.dr-icon { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); border-radius: 9999px; background: #fff; color: #1f2937; border: 1px solid #d1d5db; height: 36px; width: 36px; display: inline-flex; align-items: center; justify-content: center; }
+.dr-icon:hover { background: #f0f7ff; border-color: #2f6db5; color: #1e40af; box-shadow: 0 0 0 2px rgba(26,115,232,0.15); }
+
+/* Deep Research modal */
+.dr-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.25); backdrop-filter: blur(2px); }
+.dr-modal { position: fixed; right: 24px; bottom: 24px; width: min(640px, calc(100% - 48px)); max-height: 70vh; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.18); display: flex; flex-direction: column; }
+.dr-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid #e5e7eb; }
+.dr-chat { padding: 12px; overflow: auto; flex: 1; }
+.dr-input { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid #e5e7eb; }
+.dr-input input { flex: 1; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 10px; background: #fafafa; }
+.dr-msg { margin: 6px 0; display: flex; }
+.dr-msg.me { justify-content: flex-end; }
+.dr-msg .bubble { max-width: 80%; padding: 8px 12px; border-radius: 12px; border: 1px solid #e5e7eb; background: #f5faff; }
+.dr-msg.me .bubble { background: #e0efff; border-color: #dbeafe; }
+
+/* Dark mode for DR */
+body.dark .dr-modal { background: #0b1220; border-color: #1f2937; }
+body.dark .dr-header { border-bottom-color: #1f2937; }
+body.dark .dr-input { border-top-color: #1f2937; }
+body.dark .dr-input input { background: #0b1220; color: #e5e7eb; border-color: #1f2937; }
+body.dark .dr-msg .bubble { background: #0e1530; border-color: #1f2937; }
+body.dark .dr-msg.me .bubble { background: #122255; border-color: #1f2937; }
+
 
 /* Collapsible toggles */
 .collapsible-toggle { display: flex; align-items: center; gap: 6px; width: 100%; justify-content: flex-start; font-size: var(--btn-font-size); font-weight: 600; }
@@ -144,3 +169,7 @@ body.dark .auth-card input, body.dark .app-panel input { background: #0b1220; co
   .settings { max-width: calc(100% - 32px); }
   .logo { font-size: 56px; }
 }
+
+/* Dark mode tweaks */
+body.dark .dr-icon { background: #0b1220; border-color: #1f2937; color: #e5e7eb; }
+body.dark .dr-icon:hover { background: #0e1530; border-color: #265fa3; color: #8ab4f8; }

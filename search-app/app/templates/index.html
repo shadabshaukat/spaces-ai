@@ -57,6 +57,7 @@
 
         <div class="searchbar">
           <input id="query" class="search-input" type="text" placeholder="Search..." autocomplete="off" />
+          <button id="drBtn" class="dr-icon" title="Deep Research">🔬</button>
         </div>
         <div class="search-actions-row">
           <button id="searchBtn" class="primary">Search</button>
@@ -182,10 +183,10 @@
           <button id="clearUploadBtn" class="ghost" title="Clear uploads"><span class="refresh-icon">↻</span></button>
         </div>
         <div class="row">
-          <div id="dropzone" class="dropzone">Drag & drop files here (PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON, Images, Audio/Video)</div>
+          <div id="dropzone" class="dropzone">Drag & drop files here (Documents: PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON; Images: PNG, JPG, JPEG, TIFF, BMP, GIF)</div>
         </div>
         <div class="row">
-          <input id="files" type="file" multiple accept=".pdf,.txt,.csv,.md,.json,.html,.htm,.docx,.pptx,.xlsx,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.gif,.mp3,.wav,.m4a,.flac,.ogg,.mp4,.mov,.mkv,.webm,.avi" />
+          <input id="files" type="file" multiple accept=".pdf,.txt,.csv,.md,.json,.html,.htm,.docx,.pptx,.xlsx,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.gif" />
           <span id="fileSelectionText" class="muted">No files selected.</span>
         </div>
         <div class="row" id="uploadListRow" hidden>
@@ -199,6 +200,19 @@
   </main>
 
   <div id="toast" class="toast" hidden></div>
+
+  <div id="drBackdrop" class="dr-backdrop" hidden></div>
+  <div id="drModal" class="dr-modal" hidden aria-modal="true" role="dialog">
+    <div class="dr-header">
+      <strong>Deep Research</strong>
+      <button id="drClose" class="ghost" title="Close">✕</button>
+    </div>
+    <div id="drChat" class="dr-chat"></div>
+    <div class="dr-input">
+      <input id="drMessage" type="text" placeholder="Ask a deep question…" />
+      <button id="drSend" class="primary">Send</button>
+    </div>
+  </div>
 
   <script>
     // Theme toggle
@@ -512,6 +526,63 @@
 
     document.getElementById('searchBtn').addEventListener('click', () => doSearch());
 
+    // Deep Research UI
+    let dr = { open: false, conversationId: null };
+
+    function openDr() {
+      const m = document.getElementById('drModal');
+      const b = document.getElementById('drBackdrop');
+      if (b) b.hidden = false;
+      if (m) m.hidden = false;
+      dr.open = true;
+      document.getElementById('drMessage')?.focus();
+    }
+    function closeDr() {
+      const m = document.getElementById('drModal');
+      const b = document.getElementById('drBackdrop');
+      if (b) b.hidden = true;
+      if (m) m.hidden = true;
+      dr.open = false;
+    }
+    async function ensureDrConversation() {
+      if (dr.conversationId) return dr.conversationId;
+      const payload = { space_id: state.spaceId };
+      const r = await api('/api/deep-research/start', { method: 'POST', body: payload });
+      dr.conversationId = r.conversation_id;
+      return dr.conversationId;
+    }
+    function pushMsg(role, text) {
+      const chat = document.getElementById('drChat');
+      const div = document.createElement('div');
+      div.className = 'dr-msg ' + (role === 'user' ? 'me' : 'ai');
+      div.innerHTML = `<div class="bubble">${escapeHtml(text)}</div>`;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+    async function sendDr() {
+      const inp = document.getElementById('drMessage');
+      const txt = (inp.value || '').trim();
+      if (!txt) return;
+      inp.value = '';
+      pushMsg('user', txt);
+      try {
+        const cid = await ensureDrConversation();
+        const provider = document.getElementById('provider')?.value || undefined;
+        const body = { conversation_id: cid, message: txt, space_id: state.spaceId, llm_provider: provider };
+        const r = await api('/api/deep-research/ask', { method: 'POST', body });
+        const ans = (r && r.answer) ? String(r.answer) : '(no answer)';
+        pushMsg('assistant', ans);
+      } catch (e) {
+        pushMsg('assistant', 'Sorry, something went wrong.');
+      }
+    }
+
+    document.getElementById('drBtn')?.addEventListener('click', async () => { try { await ensureDrConversation(); } catch {} openDr(); });
+    document.getElementById('drClose')?.addEventListener('click', () => closeDr());
+    document.getElementById('drSend')?.addEventListener('click', () => sendDr());
+    document.getElementById('drMessage')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendDr(); } });
+    document.getElementById('drBackdrop')?.addEventListener('click', () => closeDr());
+
     document.getElementById('query').addEventListener('input', () => {
       const auto = document.getElementById('autoSearch')?.checked ?? false;
       const delay = parseInt(document.getElementById('debounceMs')?.value || '400', 10);
@@ -692,11 +763,25 @@
     const dropzone = document.getElementById('dropzone');
     let droppedFiles = [];
 
+    const ALLOWED_EXTS = new Set([".pdf",".txt",".csv",".md",".json",".html",".htm",".docx",".pptx",".xlsx",".png",".jpg",".jpeg",".tif",".tiff",".bmp",".gif"]);
+    const MAX_FILES = 100;
+    const MAX_BYTES = 50 * 1024 * 1024; // 50MB
+
     function addFilesToList(fileList) {
-      for (const f of fileList) droppedFiles.push(f);
+      const added = [];
+      const skipped = [];
+      for (const f of fileList) {
+        if (droppedFiles.length + added.length >= MAX_FILES) { skipped.push(`${f.name} (limit reached)`); continue; }
+        const ext = ('.' + (f.name.split('.').pop() || '')).toLowerCase();
+        if (!ALLOWED_EXTS.has(ext)) { skipped.push(`${f.name} (type)`); continue; }
+        if (f.size > MAX_BYTES) { skipped.push(`${f.name} (size)`); continue; }
+        added.push(f);
+      }
+      droppedFiles.push(...added);
       const dz = document.getElementById('dropzone');
       if (dz) dz.textContent = `${droppedFiles.length} file(s) ready`;
-      showToast(`${droppedFiles.length} file(s) ready`);
+      if (skipped.length) showToast(`Some files skipped: ${skipped.slice(0,3).join(', ')}${skipped.length>3?'…':''}`);
+      else showToast(`${droppedFiles.length} file(s) ready`);
     }
 
     async function traverseEntry(entry) {
@@ -773,7 +858,7 @@
         if (listRow) listRow.hidden = true;
         if (statusRow) statusRow.hidden = true;
         droppedFiles = [];
-        if (dz) dz.textContent = 'Drag & drop files here (PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON, Images, Audio/Video)';
+        if (dz) dz.textContent = 'Drag & drop files here (Documents: PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON; Images: PNG, JPG, JPEG, TIFF, BMP, GIF)';
         if (badge) badge.textContent = 'No files selected.';
         showToast('Cleared');
       } catch {}
@@ -790,8 +875,19 @@
       status.textContent = '';
 
       const selA = filesInput?.files ? Array.from(filesInput.files) : [];
-      const allFiles = [...selA, ...droppedFiles];
+      let allFiles = [...selA, ...droppedFiles];
       if (!allFiles.length) { showToast('No files selected'); return; }
+      // Filter client-side as well
+      const filtered = [];
+      for (const f of allFiles) {
+        const ext = ('.' + (f.name.split('.').pop() || '')).toLowerCase();
+        if (!ALLOWED_EXTS.has(ext)) continue;
+        if (f.size > MAX_BYTES) continue;
+        filtered.push(f);
+        if (filtered.length >= MAX_FILES) break;
+      }
+      allFiles = filtered;
+      if (!allFiles.length) { showToast('No valid files to upload'); return; }
 
       list.innerHTML = '';
       listRow.hidden = false;
@@ -915,6 +1011,7 @@
             status.textContent = 'Upload finished';
           }
           droppedFiles = [];
+          try { await loadKB(); } catch {}
         }
       }
 
@@ -944,7 +1041,7 @@
       if (q) q.value = '';
       if (files) files.value = '';
       if (status) status.textContent = '';
-      if (dz) dz.textContent = 'Drag & drop files here (PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON, Images, Audio/Video)';
+      if (dz) dz.textContent = 'Drag & drop files here (Documents: PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON; Images: PNG, JPG, JPEG, TIFF, BMP, GIF)';
       if (badge) badge.textContent = 'No files selected.';
       droppedFiles = [];
       await initUser();

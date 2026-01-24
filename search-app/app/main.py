@@ -4,7 +4,7 @@ import logging
 import os
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, File, UploadFile, Request, Form, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -30,6 +30,7 @@ from .runtime_config import (
     set_os_num_candidates,
 )
 from .users import create_user, authenticate_user, list_spaces, ensure_default_space, get_default_space_id, create_space, set_default_space
+from .deep_research import start_conversation as dr_start, ask as dr_ask
 
 logger = logging.getLogger("searchapp")
 logging.basicConfig(level=os.getenv("LOGLEVEL", "INFO"))
@@ -41,7 +42,14 @@ STATIC_DIR = BASE_DIR / "static"
 TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title=f"{settings.app_name}", version="0.4.0")
+app = FastAPI(title=f"{settings.app_name}", version="0.5.0")
+
+# Allowed upload types (documents + images only)
+ALLOWED_EXTS = {
+    ".pdf", ".txt", ".csv", ".md", ".json", ".html", ".htm",
+    ".docx", ".pptx", ".xlsx",
+    ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif",
+}
 
 # Protect API with session or basic auth; root UI is public (it will render login if unauthenticated)
 app.add_middleware(SessionOrBasicAuthMiddleware, protect_paths=("/api", "/docs", "/openapi.json", "/redoc"))
@@ -236,12 +244,36 @@ async def upload(request: Request, files: List[UploadFile] = File(...), space_id
         sid = get_default_space_id(uid)
     else:
         sid = int(space_id)
+    # Enforce max file count per request
+    if len(files) > 100:
+        return JSONResponse(status_code=400, content={"error": "too many files (max 100)"})
+
     results: List[Dict[str, Any]] = []
     for f in files:
+        # Enforce allowed extensions and max size
+        name = Path(f.filename).name
+        ext = (Path(name).suffix or "").lower()
+        if ext not in ALLOWED_EXTS:
+            results.append({
+                "filename": name,
+                "title": Path(name).stem,
+                "status": "error",
+                "error": "unsupported file type",
+            })
+            continue
         # Save upload without OCI streaming to avoid auth/complexity; read bytes and save
         data = await f.read()
-        local_path, oci_url = save_upload(data, Path(f.filename).name, user_email=uemail)
-        title = Path(f.filename).name
+        max_bytes = settings.max_upload_size_mb * 1024 * 1024
+        if len(data) > max_bytes:
+            results.append({
+                "filename": name,
+                "title": Path(name).stem,
+                "status": "error",
+                "error": f"file too large (> {settings.max_upload_size_mb} MB)",
+            })
+            continue
+        local_path, oci_url = save_upload(data, name, user_email=uemail)
+        title = name
         title_no_ext = Path(title).stem
         logger.info("Upload stored: backend=%s local=%s oci=%s", settings.storage_backend, local_path, "yes" if oci_url else "no")
         try:
@@ -398,6 +430,47 @@ async def llm_test(payload: Dict[str, Any] | None = None):
         return {"provider": provider or settings.llm_provider, "ok": bool(ans), "answer": ans, "question": q, "context_chars": len(ctx or "")}
     except Exception as e:
         return {"provider": provider or settings.llm_provider, "ok": False, "error": str(e)}
+
+
+@app.post("/api/deep-research/start")
+async def api_dr_start(request: Request, payload: Dict[str, Any] | None = None):
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    uid = int(user.get("user_id") or user.get("id"))
+    sid = None
+    if payload and payload.get("space_id") is not None:
+        try:
+            sid = int(payload.get("space_id"))
+        except Exception:
+            sid = None
+    if sid is None:
+        sid = get_default_space_id(uid)
+    cid = dr_start(uid, sid)
+    return {"conversation_id": cid}
+
+
+@app.post("/api/deep-research/ask")
+async def api_dr_ask(request: Request, payload: Dict[str, Any]):
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    uid = int(user.get("user_id") or user.get("id"))
+    message = (payload or {}).get("message") or ""
+    conversation_id = (payload or {}).get("conversation_id") or ""
+    provider = (payload or {}).get("llm_provider") or None
+    sid = payload.get("space_id")
+    sid = int(sid) if sid is not None else get_default_space_id(uid)
+    if not conversation_id:
+        return JSONResponse(status_code=400, content={"error": "conversation_id required"})
+    if not message:
+        return JSONResponse(status_code=400, content={"error": "message required"})
+    try:
+        out = dr_ask(uid, sid, conversation_id, message, provider_override=provider)
+        return out
+    except Exception as e:
+        logger.exception("DR ask failed: %s", e)
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 
 @app.post("/api/llm-debug")

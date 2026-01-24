@@ -43,6 +43,7 @@ class Settings:
     oci_os_upload_enabled: bool = _get_bool("OCI_OS_UPLOAD", True)
     # Upload & parsing
     max_upload_size_mb: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", "50"))
+    max_upload_files: int = int(os.getenv("MAX_UPLOAD_FILES", "100"))
     use_pymupdf: bool = _get_bool("USE_PYMUPDF", False)
     # Upload lifecycle
     delete_uploaded_after_ingest: bool = _get_bool("DELETE_UPLOADED_FILES", False)
@@ -50,6 +51,11 @@ class Settings:
     # Chunking
     chunk_size: int = int(os.getenv("CHUNK_SIZE", "2500"))
     chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", "250"))
+    # Adaptive chunk tuning
+    chunk_auto_tune: bool = _get_bool("CHUNK_AUTO_TUNE", True)
+    chunk_min_size: int = int(os.getenv("CHUNK_MIN_SIZE", "800"))
+    chunk_max_size: int = int(os.getenv("CHUNK_MAX_SIZE", "3500"))
+    chunk_overlap_ratio: float = float(os.getenv("CHUNK_OVERLAP_RATIO", "0.1"))
 
     # Database (OCI PostgreSQL)
     database_url: Optional[str] = os.getenv("DATABASE_URL")

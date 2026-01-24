@@ -31,7 +31,7 @@
 
       <div id="authPanel" class="auth" hidden>
         <div class="row cols">
-          <div class="auth-card">
+          <div class="auth-card" id="loginCard">
             <h3>Sign in</h3>
             <label class="block">Email</label>
             <input id="loginEmail" type="email" placeholder="you@example.com" />
@@ -155,6 +155,7 @@
       <div id="kbContent" hidden>
         <div class="row wrap">
           <button id="kbRefreshBtn" class="primary">Refresh</button>
+          <button id="kbSortBtn" class="ghost" title="Toggle sort order" style="margin-left:8px">Latest first</button>
           <span class="leftpad"></span>
           <button id="kbDeleteSelectedBtn" class="ghost" title="Delete selected">Delete selected</button>
         </div>
@@ -183,11 +184,17 @@
           <button id="clearUploadBtn" class="ghost" title="Clear uploads"><span class="refresh-icon">↻</span></button>
         </div>
         <div class="row">
-          <div id="dropzone" class="dropzone">Drag & drop files here (Documents: PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON; Images: PNG, JPG, JPEG, TIFF, BMP, GIF)</div>
+          <div id="dropzone" class="dropzone">
+            <div class="dz-inner">
+              <div class="dz-header">Drag & drop files</div>
+              <div class="dz-desc">Documents: PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON • Images: PNG, JPG, JPEG, TIFF, BMP, GIF</div>
+              <div class="dz-hint" id="dzHint">Maximum 50MB per file • Maximum 100 files per batch</div>
+              <div class="dz-status" id="dzStatus">Drop files here or use the file chooser below</div>
+            </div>
+          </div>
         </div>
         <div class="row">
           <input id="files" type="file" multiple accept=".pdf,.txt,.csv,.md,.json,.html,.htm,.docx,.pptx,.xlsx,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.gif" />
-          <span id="fileSelectionText" class="muted">No files selected.</span>
         </div>
         <div class="row" id="uploadListRow" hidden>
           <div id="uploadList" class="progress-list"></div>
@@ -251,11 +258,56 @@
         return escapeHtml(text);
       }
     }
+    function renderLLMText(s) {
+      // Minimal markdown-ish renderer: code fences, lists, paragraphs
+      const text = s || '';
+      // Split code blocks
+      const parts = text.split(/```/g);
+      let html = '';
+      for (let i = 0; i < parts.length; i++) {
+        if (i % 2 === 1) {
+          // code block
+          html += `<pre class="code"><code>${escapeHtml(parts[i])}</code></pre>`;
+        } else {
+          // normal text -> handle lists and paragraphs
+          const block = parts[i];
+          const lines = block.split(/\r?\n/);
+          let inUl = false, inOl = false;
+          const out = [];
+          const flushList = () => {
+            if (inUl) { out.push('</ul>'); inUl = false; }
+            if (inOl) { out.push('</ol>'); inOl = false; }
+          };
+          for (const raw of lines) {
+            const ln = raw.trimEnd();
+            if (/^\s*[-*]\s+/.test(ln)) {
+              if (!inUl) { flushList(); out.push('<ul>'); inUl = true; }
+              out.push(`<li>${escapeHtml(ln.replace(/^\s*[-*]\s+/, ''))}</li>`);
+            } else if (/^\s*\d+\.\s+/.test(ln)) {
+              if (!inOl) { flushList(); out.push('<ol>'); inOl = true; }
+              out.push(`<li>${escapeHtml(ln.replace(/^\s*\d+\.\s+/, ''))}</li>`);
+            } else if (ln.trim() === '') {
+              flushList();
+              out.push('<p></p>');
+            } else {
+              flushList();
+              out.push(`<p>${escapeHtml(ln)}</p>`);
+            }
+          }
+          flushList();
+          html += out.join('');
+        }
+      }
+      // Compact empty paragraphs
+      html = html.replace(/(<p><\/p>\s*)+/g, '<p></p>');
+      return html;
+    }
     async function api(path, opts={}) {
       const res = await fetch(path, {
         method: opts.method || 'GET',
         headers: opts.body instanceof FormData ? undefined : { 'Content-Type': 'application/json' },
         body: opts.body ? (opts.body instanceof FormData ? opts.body : JSON.stringify(opts.body)) : undefined,
+        signal: opts.signal,
       });
       if (!res.ok) throw new Error(await res.text());
       const ct = res.headers.get('content-type') || '';
@@ -555,7 +607,8 @@
       const chat = document.getElementById('drChat');
       const div = document.createElement('div');
       div.className = 'dr-msg ' + (role === 'user' ? 'me' : 'ai');
-      div.innerHTML = `<div class="bubble">${escapeHtml(text)}</div>`;
+      const content = role === 'assistant' ? renderLLMText(text) : `<p>${escapeHtml(text)}</p>`;
+      div.innerHTML = `<div class="bubble">${content}</div>`;
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
     }
@@ -676,9 +729,14 @@
       return null;
     }
 
+    let kbOrder = 'desc';
+
     async function loadKB() {
       try {
-        const qs = (state.spaceId ? `?space_id=${encodeURIComponent(state.spaceId)}` : '');
+        const qsParts = [];
+        if (state.spaceId) qsParts.push(`space_id=${encodeURIComponent(state.spaceId)}`);
+        if (kbOrder) qsParts.push(`order=${encodeURIComponent(kbOrder)}`);
+        const qs = qsParts.length ? `?${qsParts.join('&')}` : '';
         const data = await api(`/api/kb${qs}`);
         const list = document.getElementById('kbList');
         const sec = document.getElementById('kbSection');
@@ -697,6 +755,7 @@
                 <div class="hit-right">
                   <span class="badge">${escapeHtml(d.source_type || '')}</span>
                   <span class="badge">${(d.chunk_count != null ? (d.chunk_count + ' chunks') : '')}</span>
+                  ${d.created_at ? `<span class="badge">${escapeHtml(new Date(d.created_at).toLocaleString())}</span>` : ''}
                   <button class="ghost" data-delete-doc-id="${d.id}">Delete</button>
                 </div>
               </div>`;
@@ -723,6 +782,13 @@
 
     const kbRefreshBtn = document.getElementById('kbRefreshBtn');
     if (kbRefreshBtn) kbRefreshBtn.addEventListener('click', () => loadKB());
+
+    const kbSortBtn = document.getElementById('kbSortBtn');
+    if (kbSortBtn) kbSortBtn.addEventListener('click', () => {
+      kbOrder = (kbOrder === 'desc') ? 'asc' : 'desc';
+      kbSortBtn.textContent = kbOrder === 'desc' ? 'Latest first' : 'Oldest first';
+      loadKB();
+    });
 
     // KB delete single
     document.addEventListener('click', async (e) => {
@@ -761,27 +827,58 @@
 
     // Drag-and-drop support
     const dropzone = document.getElementById('dropzone');
+    const dzStatus = document.getElementById('dzStatus');
     let droppedFiles = [];
 
-    const ALLOWED_EXTS = new Set([".pdf",".txt",".csv",".md",".json",".html",".htm",".docx",".pptx",".xlsx",".png",".jpg",".jpeg",".tif",".tiff",".bmp",".gif"]);
-    const MAX_FILES = 100;
-    const MAX_BYTES = 50 * 1024 * 1024; // 50MB
+    let ALLOWED_EXTS = new Set([".pdf",".txt",".csv",".md",".json",".html",".htm",".docx",".pptx",".xlsx",".png",".jpg",".jpeg",".tif",".tiff",".bmp",".gif"]);
+    let SUPPORTED_TYPES_TXT = 'PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON, PNG, JPG, JPEG, TIFF, BMP, GIF';
+    let MAX_FILES = 100;
+    let MAX_BYTES = 50 * 1024 * 1024; // 50MB
 
-    function addFilesToList(fileList) {
+    async function loadUploadConfig() {
+      try {
+        const cfg = await api('/api/upload-config');
+        if (cfg && typeof cfg === 'object') {
+          if (Array.isArray(cfg.allowed_extensions) && cfg.allowed_extensions.length) {
+            ALLOWED_EXTS = new Set(cfg.allowed_extensions.map(e => String(e).toLowerCase()));
+            const list = Array.from(ALLOWED_EXTS).map(e => e.replace(/^\./, '').toUpperCase());
+            SUPPORTED_TYPES_TXT = list.join(', ');
+          }
+          if (cfg.max_upload_files != null) {
+            MAX_FILES = parseInt(cfg.max_upload_files, 10) || MAX_FILES;
+          }
+          if (cfg.max_upload_size_mb != null) {
+            MAX_BYTES = (parseInt(cfg.max_upload_size_mb, 10) || 50) * 1024 * 1024;
+          }
+          const hint = document.getElementById('dzHint');
+          if (hint) hint.textContent = `Maximum ${Math.round(MAX_BYTES/1024/1024)}MB per file • Maximum ${MAX_FILES} files per batch`;
+        }
+      } catch (e) {
+        // ignore, keep defaults
+      }
+    }
+
+    function addFilesToList(fileList, opts = { isFolder: false }) {
       const added = [];
       const skipped = [];
+      let skippedType = 0;
+      let skippedSize = 0;
       for (const f of fileList) {
         if (droppedFiles.length + added.length >= MAX_FILES) { skipped.push(`${f.name} (limit reached)`); continue; }
         const ext = ('.' + (f.name.split('.').pop() || '')).toLowerCase();
-        if (!ALLOWED_EXTS.has(ext)) { skipped.push(`${f.name} (type)`); continue; }
-        if (f.size > MAX_BYTES) { skipped.push(`${f.name} (size)`); continue; }
+        if (!ALLOWED_EXTS.has(ext)) { skipped.push(`${f.name} (type)`); skippedType++; continue; }
+        if (f.size > MAX_BYTES) { skipped.push(`${f.name} (size)`); skippedSize++; continue; }
         added.push(f);
       }
       droppedFiles.push(...added);
-      const dz = document.getElementById('dropzone');
-      if (dz) dz.textContent = `${droppedFiles.length} file(s) ready`;
-      if (skipped.length) showToast(`Some files skipped: ${skipped.slice(0,3).join(', ')}${skipped.length>3?'…':''}`);
-      else showToast(`${droppedFiles.length} file(s) ready`);
+      if (dzStatus) dzStatus.textContent = droppedFiles.length ? `${droppedFiles.length} file(s) ready` : 'Drop files here or use the file chooser below';
+      if (opts.isFolder && (skippedType > 0 || (fileList.length + (droppedFiles.length - added.length)) > MAX_FILES)) {
+        showToast(`Folder contains unsupported types or too many files. Please upload a folder with 100 files or less and only supported types: ${SUPPORTED_TYPES_TXT}.`);
+      } else if (skipped.length) {
+        showToast(`Some files skipped: ${skipped.slice(0,3).join(', ')}${skipped.length>3?'…':''}`);
+      } else {
+        showToast(`${droppedFiles.length} file(s) ready`);
+      }
     }
 
     async function traverseEntry(entry) {
@@ -815,18 +912,20 @@
       e.preventDefault();
       dropzone.classList.remove('dragover');
       const items = e.dataTransfer.items;
+      let isFolder = false;
       if (items && items.length && items[0].webkitGetAsEntry) {
         let all = [];
         for (const it of items) {
           const entry = it.webkitGetAsEntry();
           if (entry) {
+            if (entry.isDirectory) isFolder = true;
             const files = await traverseEntry(entry);
             all.push(...files);
           }
         }
-        addFilesToList(all);
+        addFilesToList(all, { isFolder });
       } else {
-        addFilesToList(e.dataTransfer.files);
+        addFilesToList(e.dataTransfer.files, { isFolder: false });
       }
     });
 
@@ -834,10 +933,9 @@
     if (filesInputEl) {
       filesInputEl.addEventListener('change', () => {
         const count = filesInputEl.files ? filesInputEl.files.length : 0;
-        const dz = document.getElementById('dropzone');
         const badge = document.getElementById('fileSelectionText');
-        if (dz) dz.textContent = count ? `${count} file(s) selected` : 'Drag & drop files here';
         if (badge) badge.textContent = count ? `${count} file(s) selected.` : 'No files selected.';
+        if (dzStatus) dzStatus.textContent = count ? `${count} file(s) selected` : 'Drop files here or use the file chooser below';
       });
     }
 
@@ -850,7 +948,6 @@
         const list = document.getElementById('uploadList');
         const listRow = document.getElementById('uploadListRow');
         const statusRow = document.getElementById('uploadStatusRow');
-        const dz = document.getElementById('dropzone');
         const badge = document.getElementById('fileSelectionText');
         if (files) files.value = '';
         if (status) status.textContent = '';
@@ -858,7 +955,7 @@
         if (listRow) listRow.hidden = true;
         if (statusRow) statusRow.hidden = true;
         droppedFiles = [];
-        if (dz) dz.textContent = 'Drag & drop files here (Documents: PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON; Images: PNG, JPG, JPEG, TIFF, BMP, GIF)';
+        if (dzStatus) dzStatus.textContent = 'Drop files here or use the file chooser below';
         if (badge) badge.textContent = 'No files selected.';
         showToast('Cleared');
       } catch {}
@@ -1036,17 +1133,17 @@
       const q = document.getElementById('query');
       const files = document.getElementById('files');
       const status = document.getElementById('uploadStatus');
-      const dz = document.getElementById('dropzone');
       const badge = document.getElementById('fileSelectionText');
       if (q) q.value = '';
       if (files) files.value = '';
       if (status) status.textContent = '';
-      if (dz) dz.textContent = 'Drag & drop files here (Documents: PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON; Images: PNG, JPG, JPEG, TIFF, BMP, GIF)';
+      if (dzStatus) dzStatus.textContent = 'Drop files here or use the file chooser below';
       if (badge) badge.textContent = 'No files selected.';
       droppedFiles = [];
       await initUser();
       await loadProviders();
       await loadSearchConfig();
+      await loadUploadConfig();
       if (state && state.user) { try { await loadKB(); } catch (e) {} }
       setupCollapsible('kbToggle', 'kbContent');
       setupCollapsible('uploadToggle', 'uploadContent');

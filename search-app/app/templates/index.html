@@ -8,7 +8,7 @@
 </head>
 <body>
   <header class="topbar">
-    <h2>SpacesAI • Personal Knowledge Spaces with RAG (OCI PostgreSQL + pgvector)</h2>
+    <h4>SpacesAI • Personal Knowledge Spaces with RAG</h4>
     <div class="spacer"></div>
     <div id="userControls" class="user-controls" hidden>
       <span id="userEmail" class="user-email"></span>
@@ -53,14 +53,7 @@
       </div>
 
       <div id="appPanel" class="app-panel" hidden>
-        <div class="row wrap">
-          <label for="spacesSelect">Space</label>
-          <select id="spacesSelect"></select>
-          <button id="setDefaultSpaceBtn" class="ghost">Set default</button>
-          <span class="leftpad"></span>
-          <input id="newSpaceName" placeholder="Create new space…" />
-          <button id="createSpaceBtn">Create</button>
-        </div>
+
 
         <div class="searchbar">
           <input id="query" class="search-input" type="text" placeholder="Ask or search your space…" autocomplete="off" />
@@ -124,7 +117,17 @@
               <button id="saveCfgBtn" class="ghost">Save</button>
             </div>
           </div>
+          <div class="row wrap">
+            <label for="spacesSelect">Space</label>
+            <select id="spacesSelect"></select>
+            <button id="setDefaultSpaceBtn" class="ghost">Set default</button>
+            <span class="leftpad"></span>
+            <input id="newSpaceName" placeholder="Create new space…" />
+            <button id="createSpaceBtn">Create</button>
+          </div>
         </div>
+
+
 
         <div class="row middle">
           <div class="loader" id="searchLoading" hidden>
@@ -136,7 +139,8 @@
         <div class="row" id="answerRow" hidden>
           <label>Answer / Context <span id="llmBadge" class="badge" style="display:none"></span></label>
           <pre id="answer" class="panel"></pre>
-          <div id="refs" class="panel" style="margin-top:8px; display:none"></div>
+          <label id="refsLabel" style="display:none">References</label>
+          <div id="refs" class="results" style="margin-top:8px; display:none"></div>
         </div>
 
         <!-- Deep Research Chat Interface -->
@@ -160,31 +164,49 @@
 
     <!-- Knowledge Base -->
     <section id="kbSection" class="card card--wide" hidden>
-      <h2>Your Knowledge Base</h2>
-      <div class="row wrap">
-        <button id="kbRefreshBtn" class="primary">Refresh</button>
-        <span class="leftpad"></span>
-        <button id="kbDeleteSelectedBtn" class="ghost" title="Delete selected">Delete selected</button>
-      </div>
-      <div class="row">
-        <label><input type="checkbox" id="kbSelectAll" /> Select all</label>
-      </div>
-      <div class="row">
-        <div id="kbList" class="results"></div>
+      <button class="collapsible-toggle" id="kbToggle" aria-expanded="false"><span class="caret">▸</span> Your Knowledge Base</button>
+      <div id="kbContent" hidden>
+        <div class="row wrap">
+          <button id="kbRefreshBtn" class="primary">Refresh</button>
+          <span class="leftpad"></span>
+          <button id="kbDeleteSelectedBtn" class="ghost" title="Delete selected">Delete selected</button>
+        </div>
+        <div class="row">
+          <label><input type="checkbox" id="kbSelectAll" /> Select all</label>
+        </div>
+        <div class="row">
+          <div id="kbList" class="results"></div>
+        </div>
       </div>
     </section>
     </section>
 
     <!-- Upload -->
     <section id="uploadSection" class="card card--wide" hidden>
-      <h2>Upload to your space</h2>
-      <div class="row wrap" style="width:100%; justify-content: space-between; align-items: center;">
-        <div>
-          <button id="uploadBtn" class="primary">Upload</button>
-          <div class="loader" id="uploadLoading" hidden style="display:inline-flex; margin-left:8px;">
-            <div class="spinner small"></div>
-            <span>Processing…</span>
+      <button class="collapsible-toggle" id="uploadToggle" aria-expanded="false"><span class="caret">▸</span> Upload to your Space</button>
+      <div id="uploadContent" hidden>
+        <div class="row wrap" style="width:100%; justify-content: space-between; align-items: center;">
+          <div>
+            <button id="uploadBtn" class="primary">Upload</button>
+            <div class="loader" id="uploadLoading" hidden style="display:inline-flex; margin-left:8px;">
+              <div class="spinner small"></div>
+              <span>Processing…</span>
+            </div>
           </div>
+          <button id="clearUploadBtn" class="ghost" title="Clear uploads"><span class="refresh-icon">↻</span></button>
+        </div>
+        <div class="row">
+          <div id="dropzone" class="dropzone">Drag & drop files here (PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON, Images, Audio/Video)</div>
+        </div>
+        <div class="row">
+          <input id="files" type="file" multiple accept=".pdf,.txt,.csv,.md,.json,.html,.htm,.docx,.pptx,.xlsx,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.gif,.mp3,.wav,.m4a,.flac,.ogg,.mp4,.mov,.mkv,.webm,.avi" />
+          <span id="fileSelectionText" class="muted">No files selected.</span>
+        </div>
+        <div class="row" id="uploadListRow" hidden>
+          <div id="uploadList" class="progress-list"></div>
+        </div>
+        <div class="row" id="uploadStatusRow" hidden>
+          <pre id="uploadStatus" class="panel"></pre>
         </div>
         <button id="clearUploadBtn" class="ghost" title="Clear uploads"><span class="refresh-icon">↻</span></button>
       </div>
@@ -408,26 +430,22 @@
       const wrap = document.getElementById('results');
       const row = document.getElementById('resultsRow');
       wrap.innerHTML = '';
-      if (!hits || !hits.length) {
+      const limited = Array.isArray(hits) ? hits.slice(0, 10) : [];
+      if (!limited.length) {
         row.hidden = false;
         wrap.textContent = 'No results';
         return;
       }
-      for (const h of hits) {
-        const div = document.createElement('div');
-        div.className = 'hit';
+      const items = limited.map((h, idx) => {
         const title = h.title ? escapeHtml(h.title) : '';
+        const fname = h.file_name ? escapeHtml(h.file_name) : '';
+        const label = title || fname || '(untitled)';
         const distance = (h.distance !== null && h.distance !== undefined) ? `distance: ${h.distance.toFixed ? h.distance.toFixed(4) : h.distance}` : '';
         const rank = (h.rank !== null && h.rank !== undefined) ? `rank: ${h.rank.toFixed ? h.rank.toFixed(4) : h.rank}` : '';
-        div.innerHTML = `
-          <div class="hit-head">
-            <div class="hit-title">${title || '(untitled)'}</div>
-            <div class="hit-badges">${distance ? `<span class="badge">${distance}</span>` : ''}${rank ? `<span class="badge">${rank}</span>` : ''}</div>
-          </div>
-          <div class="hit-content">${highlight(h.content || '', query)}</div>
-        `;
-        wrap.appendChild(div);
-      }
+        const badges = `${distance ? `<span class="badge">${distance}</span>` : ''}${rank ? `<span class="badge">${rank}</span>` : ''}`;
+        return `<div class="hit"><details><summary>[${idx + 1}] ${label} ${badges}</summary><div class="hit-content">${highlight(h.content || '', query)}</div></details></div>`;
+      }).join('');
+      wrap.innerHTML = items;
       row.hidden = false;
     }
 
@@ -476,24 +494,25 @@
             }
           }
           const refsEl = document.getElementById('refs');
+          const refsLabel = document.getElementById('refsLabel');
           if (refsEl) {
             if (Array.isArray(data.references) && data.references.length) {
-              refsEl.style.display = 'block';
-              const items = data.references.map((r, idx) => {
+              const limitedRefs = data.references.slice(0, 10);
+              refsEl.style.display = 'grid';
+              if (refsLabel) refsLabel.style.display = 'block';
+              const items = limitedRefs.map((r, idx) => {
                 const fn = r.file_name || '';
                 const ft = r.file_type || '';
                 const docId = r.doc_id || null;
                 const link = docId ? `<a href="/api/doc-download?doc_id=${docId}" target="_blank" rel="noopener" data-doc-id="${docId}">Download source</a>` : '';
                 const match = data.hits.find(h => h.chunk_id === r.chunk_id);
-                const txt = match ? escapeHtml(match.content) : '';
-                return `<details>
-                  <summary>[${idx+1}] Source: ${escapeHtml(fn)}${ft ? ` (${escapeHtml(ft)})` : ''} ${link}</summary>
-                  <p>${txt}</p>
-                </details>`;
+                const txt = match ? highlight(match.content || '', query) : '';
+                return `<div class="hit"><details><summary>[${idx+1}] ${escapeHtml(fn)}${ft ? ` (${escapeHtml(ft)})` : ''} ${link}</summary><div class="hit-content">${txt}</div></details></div>`;
               }).join('');
-              refsEl.innerHTML = `<strong>References</strong>\n${items}`;
+              refsEl.innerHTML = items;
             } else {
               refsEl.style.display = 'none';
+              if (refsLabel) refsLabel.style.display = 'none';
               refsEl.innerHTML = '';
             }
           }
@@ -629,7 +648,8 @@
           sel.innerHTML = '';
           const opt0 = document.createElement('option'); opt0.value = ''; opt0.textContent = 'Default'; sel.appendChild(opt0);
           for (const v of p.supported) { const o = document.createElement('option'); o.value = v; o.textContent = v.toUpperCase(); sel.appendChild(o); }
-          sel.value = keep || '';
+          const preferred = 'bedrock';
+          sel.value = keep || (p.supported.includes(preferred) ? preferred : '');
         }
       } catch {}
     }
@@ -1005,6 +1025,19 @@
     });
 
     // Initialize
+    function setupCollapsible(toggleId, contentId) {
+      const t = document.getElementById(toggleId);
+      const c = document.getElementById(contentId);
+      if (!t || !c) return;
+      const caret = t.querySelector('.caret');
+      t.addEventListener('click', () => {
+        const expanded = t.getAttribute('aria-expanded') === 'true';
+        t.setAttribute('aria-expanded', String(!expanded));
+        c.hidden = expanded;
+        if (caret) caret.style.transform = expanded ? 'rotate(0deg)' : 'rotate(90deg)';
+      });
+    }
+
     window.addEventListener('DOMContentLoaded', async () => {
       const q = document.getElementById('query');
       const files = document.getElementById('files');
@@ -1020,7 +1053,9 @@
       await initUser();
       await loadProviders();
       await loadSearchConfig();
-      // Do not load KB until authenticated
+      if (state && state.user) { try { await loadKB(); } catch (e) {} }
+      setupCollapsible('kbToggle', 'kbContent');
+      setupCollapsible('uploadToggle', 'uploadContent');
     });
   </script>
 </body>

@@ -27,6 +27,7 @@ class ChunkParams:
     chunk_overlap: int = 250
     # Optional custom separator order for recursive splitting
     separators: tuple[str, ...] = ("\n\n", "\n", ". ", " ", "")
+    file_type: str = ""
 
 
 def _normalize_whitespace_preserve_paragraphs(text: str) -> str:
@@ -137,11 +138,6 @@ def read_text_from_file(path: str) -> Tuple[str, str]:
     # Images (OCR)
     if ext in {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif"}:
         return extract_text_from_image(path), "image"
-    # Audio/Video (transcription)
-    if ext in {".mp3", ".wav", ".m4a", ".flac", ".ogg"}:
-        return extract_text_from_av(path, kind="audio"), "audio"
-    if ext in {".mp4", ".mov", ".mkv", ".webm", ".avi"}:
-        return extract_text_from_av(path, kind="video"), "video"
     # Fallback: read as text if possible
     try:
         return extract_text_from_txt(path), ext.lstrip('.') or 'txt'
@@ -473,7 +469,22 @@ def chunk_text(text: str, params: ChunkParams = ChunkParams()) -> List[str]:
     # Normalize while preserving paragraph boundaries; add extra spacing around likely headings
     text = _normalize_whitespace_preserve_paragraphs(text)
     text = _insert_heading_boundaries(text)
-    base_chunks = _recursive_split(text, params.chunk_size, params.separators)
+
+    # File-type specific separators for better chunking
+    separators = params.separators
+    if params.file_type == "md":
+        separators = ("## ", "# ", "\n\n", "\n", ". ", " ", "")
+    elif params.file_type in {"json", "xml", "csv"}:
+        separators = ("\n", ". ", " ", "")
+    elif params.file_type == "xlsx":
+        separators = ("\n# Sheet:", "\n", ". ", " ", "")
+    elif params.file_type == "pdf":
+        separators = ("\n\n", "\n", ". ", " ", "")
+    elif params.file_type == "docx":
+        separators = ("\n\n", "\n", ". ", " ", "")
+    # Default separators otherwise
+
+    base_chunks = _recursive_split(text, params.chunk_size, separators)
     if not base_chunks:
         return []
     return _apply_overlap(base_chunks, params.chunk_overlap)

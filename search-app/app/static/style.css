@@ -75,9 +75,9 @@ button:hover { filter: brightness(0.98); }
 
 /* Deep Research modal */
 .dr-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.25); backdrop-filter: blur(2px); }
-.dr-modal { position: fixed; right: 24px; bottom: 24px; width: min(640px, calc(100% - 48px)); max-height: 70vh; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.18); display: flex; flex-direction: column; }
-.dr-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid #e5e7eb; }
-.dr-chat { padding: 12px; overflow: auto; flex: 1; }
+.dr-modal { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(900px, calc(100% - 80px)); max-height: 80vh; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.18); display: flex; flex-direction: column; }
+.dr-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #e5e7eb; font-size: 16px; }
+.dr-chat { padding: 14px; overflow: auto; flex: 1; }
 .dr-input { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid #e5e7eb; }
 .dr-input input { flex: 1; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 10px; background: #fafafa; }
 .dr-msg { margin: 6px 0; display: flex; }
@@ -86,6 +86,17 @@ button:hover { filter: brightness(0.98); }
 .dr-chat pre.code { background: #0f172a0d; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; overflow: auto; }
 .dr-chat code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; }
 .dr-msg.me .bubble { background: #e0efff; border-color: #dbeafe; }
+
+/* Brain icon next to title */
+.brain-icon { margin-left: 8px; filter: grayscale(100%); }
+
+/* Thinking animation */
+.dr-thinking { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 12px; border: 1px solid #e5e7eb; background: #fafafa; color: #4b5563; font-size: 13px; }
+.dr-thinking .dots { display: inline-flex; gap: 2px; }
+.dr-thinking .dot { width: 4px; height: 4px; border-radius: 50%; background: currentColor; opacity: 0.3; animation: blink 1.2s infinite; }
+.dr-thinking .dot:nth-child(2) { animation-delay: .2s; }
+.dr-thinking .dot:nth-child(3) { animation-delay: .4s; }
+@keyframes blink { 0%, 80%, 100% { opacity: 0.3; } 40% { opacity: 1; } }
 
 /* Dark mode for DR */
 body.dark .dr-modal { background: #0b1220; border-color: #1f2937; }

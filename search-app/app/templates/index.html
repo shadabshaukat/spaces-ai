@@ -211,7 +211,7 @@
   <div id="drBackdrop" class="dr-backdrop" hidden></div>
   <div id="drModal" class="dr-modal" hidden aria-modal="true" role="dialog">
     <div class="dr-header">
-      <strong>Deep Research</strong>
+      <div style="display:flex; align-items:center; gap:8px"><strong>Deep Research</strong><span class="brain-icon">🧠</span></div>
       <div style="display:flex; gap:6px; align-items:center">
         <button id="drReset" class="ghost" title="Reset conversation">↺</button>
         <button id="drClose" class="ghost" title="Close">✕</button>
@@ -648,14 +648,24 @@
       if (!txt) return;
       inp.value = '';
       pushMsg('user', txt);
+      // Show thinking indicator
+      const chat = document.getElementById('drChat');
+      const th = document.createElement('div');
+      th.className = 'dr-msg ai';
+      th.innerHTML = `<div class="bubble"><span class="dr-thinking">Thinking <span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></span></div>`;
+      chat.appendChild(th);
+      chat.scrollTop = chat.scrollHeight;
       try {
         const cid = await ensureDrConversation();
         const provider = document.getElementById('provider')?.value || undefined;
         const body = { conversation_id: cid, message: txt, space_id: state.spaceId, llm_provider: provider };
         const r = await api('/api/deep-research/ask', { method: 'POST', body });
         const ans = (r && r.answer) ? String(r.answer) : '(no answer)';
+        // Replace thinking bubble with answer
+        if (th && th.parentElement) th.parentElement.removeChild(th);
         pushMsg('assistant', ans);
       } catch (e) {
+        if (th && th.parentElement) th.parentElement.removeChild(th);
         pushMsg('assistant', 'Sorry, something went wrong.');
       }
     }

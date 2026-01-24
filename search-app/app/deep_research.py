@@ -83,13 +83,16 @@ def _extract_subqueries(question: str) -> List[str]:
     return [q]
 
 
-def _synthesize(question: str, contexts: List[str], provider_override: Optional[str]) -> Optional[str]:
+def _synthesize(question: str, contexts: List[str], provider_override: Optional[str], conv_context: Optional[str] = None) -> Optional[str]:
     try:
         from .llm import chat as llm_chat
         aggregated = "\n\n".join(contexts)[:16000]
+        cc = (conv_context or "").strip()
+        # Prepend recent conversation context to retrieval context so LLM continues the same topic
+        full_ctx = (("Conversation so far:\n" + cc + "\n\n") if cc else "") + aggregated
         return llm_chat(
             question,
-            aggregated,
+            full_ctx,
             provider_override=provider_override,
             max_tokens=800,
             temperature=0.2,
@@ -99,13 +102,16 @@ def _synthesize(question: str, contexts: List[str], provider_override: Optional[
         return None
 
 
-def _refine(question: str, draft: str, contexts: List[str], provider_override: Optional[str]) -> Optional[str]:
+def _refine(question: str, draft: str, contexts: List[str], provider_override: Optional[str], conv_context: Optional[str] = None) -> Optional[str]:
     try:
         from .llm import chat as llm_chat
+        cc = (conv_context or "").strip()[:1200]
         prompt = (
-            f"Please refine and improve the following draft answer using the provided context.\n\n"
-            f"Question: {question}\n\nDraft Answer:\n{draft}\n\nContext:\n{('\n\n'.join(contexts))[:15000]}\n\n"
-            "Return a concise, well-structured answer grounded in the context."
+            f"Please refine and improve the following draft answer using the provided context and conversation so far.\n\n"
+            f"Question: {question}\n\n"
+            + (f"Conversation so far (truncated):\n{cc}\n\n" if cc else "")+
+            f"Draft Answer:\n{draft}\n\nContext:\n{('\n\n'.join(contexts))[:15000]}\n\n"
+            "Return a concise, well-structured answer grounded in the context and consistent with the conversation."
         )
         return llm_chat(prompt, "", provider_override=provider_override, max_tokens=900, temperature=0.2)
     except Exception:
@@ -117,8 +123,13 @@ def ask(user_id: int, space_id: Optional[int], conversation_id: str, message: st
     st = _load_state(user_id, space_id, conversation_id)
     st.messages.append(Message("user", message))
 
-    # PLAN
-    subqs = _extract_subqueries(message)
+    # Build recent conversation snippet to keep topic continuity in retrieval and synthesis
+    recent = "\n".join(m.content for m in st.messages[-8:] if m.role in ("user", "assistant"))
+    recent_snippet = recent[-1000:] if recent else ""
+
+    # PLAN (use current message + recent context to disambiguate short follow-ups)
+    retrieval_seed = f"{message}\n\nConversation so far:\n{recent_snippet}" if recent_snippet else message
+    subqs = _extract_subqueries(retrieval_seed)
 
     # RETRIEVE for each subq
     contexts: List[str] = []
@@ -137,12 +148,12 @@ def ask(user_id: int, space_id: Optional[int], conversation_id: str, message: st
         contexts.append("(No relevant context found in your knowledge base.)")
 
     # SYNTHESIZE
-    draft = _synthesize(message, contexts, provider_override)
+    draft = _synthesize(message, contexts, provider_override, conv_context=recent_snippet)
     answer = draft or "".join(contexts)[:1200]
 
     # LIGHT REFINE
     if draft and len(hits_all) > 0:
-        refined = _refine(message, draft, contexts[:3], provider_override)
+        refined = _refine(message, draft, contexts[:3], provider_override, conv_context=recent_snippet)
         if refined:
             answer = refined
 

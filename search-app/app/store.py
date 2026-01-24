@@ -324,6 +324,7 @@ def ingest_file_path(file_path: str, user_id: int, space_id: Optional[int] = Non
     text, source_type = read_text_from_file(file_path)
     # Use provided chunk params, else build from environment defaults
     cp = chunk_params or ChunkParams(settings.chunk_size, settings.chunk_overlap)
+    cp.file_type = source_type
     chunks = chunk_text(text, cp)
     if not chunks:
         raise ValueError("No textual content extracted from file")

@@ -56,7 +56,8 @@
 
 
         <div class="searchbar">
-          <input id="query" class="search-input" type="text" placeholder="Search..." autocomplete="off" />
+          <input id="query" class="search-input" type="text" placeholder="Ask or search your space…" autocomplete="off" />
+          <button id="deepResearchBtn" class="brain-icon" title="Deep Research Mode" aria-label="Toggle Deep Research">🧠</button>
         </div>
         <div class="search-actions-row">
           <button id="searchBtn" class="primary">Search</button>
@@ -141,6 +142,19 @@
           <label id="refsLabel" style="display:none">References</label>
           <div id="refs" class="results" style="margin-top:8px; display:none"></div>
         </div>
+
+        <!-- Deep Research Chat Interface -->
+        <div id="deepResearchChat" class="card" hidden>
+          <h3>Deep Research Conversation</h3>
+          <div id="chatHistory" class="panel" style="max-height: 400px; overflow-y: auto; margin-bottom: 12px;"></div>
+          <div class="row">
+            <input id="chatInput" class="search-input" type="text" placeholder="Continue the conversation…" />
+            <button id="sendChatBtn" class="primary" style="margin-left: 8px;">Send</button>
+          </div>
+          <div class="row" style="margin-top: 8px;">
+            <button id="endDeepResearchBtn" class="ghost">End Deep Research</button>
+          </div>
+        </div>
         <div class="row" id="resultsRow" hidden>
           <label>Results</label>
           <div id="results" class="results"></div>
@@ -194,6 +208,20 @@
         <div class="row" id="uploadStatusRow" hidden>
           <pre id="uploadStatus" class="panel"></pre>
         </div>
+        <button id="clearUploadBtn" class="ghost" title="Clear uploads"><span class="refresh-icon">↻</span></button>
+      </div>
+      <div class="row">
+        <div id="dropzone" class="dropzone">Drag & drop files here (PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON, Images)</div>
+      </div>
+      <div class="row">
+        <input id="files" type="file" multiple accept=".pdf,.txt,.csv,.md,.json,.html,.htm,.docx,.pptx,.xlsx,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.gif" />
+        <span id="fileSelectionText" class="muted">No files selected.</span>
+      </div>
+      <div class="row" id="uploadListRow" hidden>
+        <div id="uploadList" class="progress-list"></div>
+      </div>
+      <div class="row" id="uploadStatusRow" hidden>
+        <pre id="uploadStatus" class="panel"></pre>
       </div>
     </section>
   </main>
@@ -253,6 +281,8 @@
       user: null,
       spaces: [],
       spaceId: null,
+      deepResearch: false,
+      chatHistory: [],
     };
 
     function setLoggedInUI() {
@@ -424,7 +454,7 @@
 
     async function doSearch() {
       const query = document.getElementById('query').value.trim();
-      const mode = document.getElementById('mode').value;
+      let mode = document.getElementById('mode').value;
       const topk = parseInt(document.getElementById('topk').value || '25', 10);
       const ans = document.getElementById('answer');
       const answerRow = document.getElementById('answerRow');
@@ -432,6 +462,11 @@
       const btn = document.getElementById('searchBtn');
 
       if (!query) { ans.textContent = ''; renderResults([], ''); return; }
+
+      // If deep research is active, override mode
+      if (state.deepResearch) {
+        mode = 'deep_research';
+      }
 
       if (currentSearchController) currentSearchController.abort();
       const ctrl = new AbortController();
@@ -534,6 +569,74 @@
       const nowHidden = !p.hidden;
       p.hidden = nowHidden;
       b.setAttribute('aria-expanded', String(!nowHidden));
+    });
+
+    // Deep Research toggle
+    document.getElementById('deepResearchBtn').addEventListener('click', () => {
+      const btn = document.getElementById('deepResearchBtn');
+      const chatDiv = document.getElementById('deepResearchChat');
+      state.deepResearch = !state.deepResearch;
+      if (state.deepResearch) {
+        btn.classList.add('active');
+        chatDiv.hidden = false;
+        // Initialize chat with current query if present
+        const query = document.getElementById('query').value.trim();
+        if (query) {
+          state.chatHistory = [{ role: 'user', content: query }];
+          updateChatHistory();
+        }
+        showToast('Deep Research Mode Activated');
+      } else {
+        btn.classList.remove('active');
+        chatDiv.hidden = true;
+        state.chatHistory = [];
+        document.getElementById('chatHistory').innerHTML = '';
+        showToast('Deep Research Mode Deactivated');
+      }
+    });
+
+    // Chat functionality
+    function updateChatHistory() {
+      const historyDiv = document.getElementById('chatHistory');
+      historyDiv.innerHTML = '';
+      for (const msg of state.chatHistory) {
+        const div = document.createElement('div');
+        div.className = `chat-message ${msg.role}`;
+        div.innerHTML = `<strong>${msg.role === 'user' ? 'You' : 'Assistant'}:</strong> ${escapeHtml(msg.content)}`;
+        historyDiv.appendChild(div);
+      }
+      historyDiv.scrollTop = historyDiv.scrollHeight;
+    }
+
+    document.getElementById('sendChatBtn').addEventListener('click', async () => {
+      const input = document.getElementById('chatInput');
+      const message = input.value.trim();
+      if (!message) return;
+
+      input.value = '';
+      state.chatHistory.push({ role: 'user', content: message });
+      updateChatHistory();
+
+      try {
+        const provider = document.getElementById('provider')?.value || undefined;
+        const data = await api('/api/deep-research-chat', { method: 'POST', body: { message, chat_history: state.chatHistory, space_id: state.spaceId, llm_provider: provider } });
+        state.chatHistory.push({ role: 'assistant', content: data.response });
+        updateChatHistory();
+      } catch (e) {
+        showToast('Chat failed');
+        console.error(e);
+      }
+    });
+
+    document.getElementById('chatInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        document.getElementById('sendChatBtn').click();
+      }
+    });
+
+    document.getElementById('endDeepResearchBtn').addEventListener('click', () => {
+      document.getElementById('deepResearchBtn').click();
     });
 
     async function loadProviders() {
@@ -773,7 +876,7 @@
         if (listRow) listRow.hidden = true;
         if (statusRow) statusRow.hidden = true;
         droppedFiles = [];
-        if (dz) dz.textContent = 'Drag & drop files here (PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON, Images, Audio/Video)';
+        if (dz) dz.textContent = 'Drag & drop files here (PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON, Images)';
         if (badge) badge.textContent = 'No files selected.';
         showToast('Cleared');
       } catch {}

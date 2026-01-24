@@ -57,7 +57,7 @@
 
         <div class="searchbar">
           <input id="query" class="search-input" type="text" placeholder="Search..." autocomplete="off" />
-          <button id="drBtn" class="dr-icon" title="Deep Research">🔬</button>
+          <button id="drBtn" class="dr-icon" title="Deep Research">🔭</button>
         </div>
         <div class="search-actions-row">
           <button id="searchBtn" class="primary">Search</button>
@@ -211,7 +211,7 @@
   <div id="drBackdrop" class="dr-backdrop" hidden></div>
   <div id="drModal" class="dr-modal" hidden aria-modal="true" role="dialog">
     <div class="dr-header">
-      <div style="display:flex; align-items:center; gap:8px"><strong>Deep Research</strong><span class="brain-icon">🧠</span></div>
+      <div style="display:flex; align-items:center; gap:10px" class="dr-title"><strong>Deep Research</strong><span class="telescope-icon">🔭</span></div>
       <div style="display:flex; gap:6px; align-items:center">
         <button id="drReset" class="ghost" title="Reset conversation">↺</button>
         <button id="drClose" class="ghost" title="Close">✕</button>
@@ -648,11 +648,11 @@
       if (!txt) return;
       inp.value = '';
       pushMsg('user', txt);
-      // Show thinking indicator
+      // Show thinking indicator (animated dots only, no bubble)
       const chat = document.getElementById('drChat');
       const th = document.createElement('div');
-      th.className = 'dr-msg ai';
-      th.innerHTML = `<div class="bubble"><span class="dr-thinking">Thinking <span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></span></div>`;
+      th.className = 'dr-thinking-inline';
+      th.innerHTML = `<span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span>`;
       chat.appendChild(th);
       chat.scrollTop = chat.scrollHeight;
       try {

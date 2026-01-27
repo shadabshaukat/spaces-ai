@@ -127,6 +127,10 @@ class Settings:
     cookie_samesite: str = os.getenv("COOKIE_SAMESITE", "Lax")
     allow_registration: bool = _get_bool("ALLOW_REGISTRATION", True)
 
+    # Deep Research feature flags
+    dr_rerank_enable: bool = _get_bool("DR_RERANK_ENABLE", True)
+    dr_topic_lock_default: bool = _get_bool("DR_TOPIC_LOCK_DEFAULT", False)
+
     # Back-compat basic auth (unused in SpacesAI but kept for compatibility in some tools)
     basic_auth_user: str = os.getenv("BASIC_AUTH_USER", "admin")
     basic_auth_password: str = os.getenv("BASIC_AUTH_PASSWORD", "changeme")

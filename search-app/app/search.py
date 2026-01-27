@@ -10,6 +10,14 @@ from .embeddings import embed_texts
 from .opensearch_adapter import OpenSearchAdapter
 from .valkey_cache import get_json as cache_get, set_json as cache_set
 from .runtime_config import get_pgvector_probes
+import json
+import os
+
+# Mutable flags for Deep Research features (overrides Settings defaults at runtime)
+DR_FLAGS = {
+    "rerank_enable": getattr(settings, "dr_rerank_enable", True),
+    "topic_lock": getattr(settings, "dr_topic_lock_default", False),
+}
 
 logger = logging.getLogger(__name__)
 

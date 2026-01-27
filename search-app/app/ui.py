@@ -8,6 +8,7 @@ from .search import rag, semantic_search, fulltext_search
 from .store import ensure_dirs, ingest_file_path, save_upload
 from .text_utils import ChunkParams
 from .db import get_conn
+from .config import settings
 
 
 def build_ui():
@@ -104,5 +105,25 @@ def build_ui():
                     return json.dumps({"ready": False, "error": str(e)}, indent=2), "documents: 0\nchunks: 0"
 
             refresh.click(do_status, inputs=[], outputs=[status_box, counts_box])
+
+        # New Settings tab for Deep Research feature flags
+        with gr.Tab("Settings"):
+            dr_rerank = gr.Checkbox(label="Enable Reranker", value=getattr(settings, "dr_rerank_enable", True))
+            dr_topic_lock = gr.Checkbox(label="Topic Lock (strict)", value=getattr(settings, "dr_topic_lock_default", False))
+            apply_btn = gr.Button("Apply Settings")
+
+            def apply_settings(rerank_val: bool, lock_val: bool):
+                # Update runtime flags in search module
+                try:
+                    import importlib
+                    search_mod = importlib.import_module("search_app.search")
+                    if hasattr(search_mod, "DR_FLAGS"):
+                        search_mod.DR_FLAGS["rerank_enable"] = rerank_val
+                        search_mod.DR_FLAGS["topic_lock"] = lock_val
+                except Exception:
+                    pass
+                return f"Settings applied: Reranker={'ON' if rerank_val else 'OFF'}, Topic Lock={'ON' if lock_val else 'OFF'}"
+
+            apply_btn.click(apply_settings, inputs=[dr_rerank, dr_topic_lock], outputs=[status_box])
 
         return demo

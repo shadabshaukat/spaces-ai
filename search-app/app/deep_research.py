@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 import uuid
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional
 
 from .config import settings
 from .search import hybrid_search, ChunkHit
+from .agentic_research import decide_web_and_contexts
 from .valkey_cache import get_json as cache_get, set_json as cache_set
 
 logger = logging.getLogger(__name__)
@@ -106,11 +108,13 @@ def _refine(question: str, draft: str, contexts: List[str], provider_override: O
     try:
         from .llm import chat as llm_chat
         cc = (conv_context or "").strip()[:1200]
+        ctx_blob = "\n\n".join(contexts)[:15000]
+        conversation_block = f"Conversation so far (truncated):\n{cc}\n\n" if cc else ""
         prompt = (
-            f"Please refine and improve the following draft answer using the provided context and conversation so far.\n\n"
+            "Please refine and improve the following draft answer using the provided context and conversation so far.\n\n"
             f"Question: {question}\n\n"
-            + (f"Conversation so far (truncated):\n{cc}\n\n" if cc else "")+
-            f"Draft Answer:\n{draft}\n\nContext:\n{('\n\n'.join(contexts))[:15000]}\n\n"
+            f"{conversation_block}"
+            f"Draft Answer:\n{draft}\n\nContext:\n{ctx_blob}\n\n"
             "Return a concise, well-structured answer grounded in the context and consistent with the conversation."
         )
         return llm_chat(prompt, "", provider_override=provider_override, max_tokens=900, temperature=0.2)
@@ -119,6 +123,14 @@ def _refine(question: str, draft: str, contexts: List[str], provider_override: O
 
 
 def ask(user_id: int, space_id: Optional[int], conversation_id: str, message: str, provider_override: Optional[str] = None) -> Dict[str, object]:
+    start_ts = time.monotonic()
+    max_budget = max(float(settings.deep_research_timeout_seconds or 0), 15.0)
+
+    def _remaining_budget() -> float:
+        elapsed = time.monotonic() - start_ts
+        remaining = max_budget - elapsed
+        return max(0.0, remaining)
+
     # Load state
     st = _load_state(user_id, space_id, conversation_id)
     st.messages.append(Message("user", message))
@@ -147,6 +159,13 @@ def ask(user_id: int, space_id: Optional[int], conversation_id: str, message: st
     if not contexts:
         contexts.append("(No relevant context found in your knowledge base.)")
 
+    contexts, web_hits, confidence, web_attempted = decide_web_and_contexts(
+        message,
+        hits_all,
+        contexts,
+        max_seconds=_remaining_budget(),
+    )
+
     # SYNTHESIZE
     draft = _synthesize(message, contexts, provider_override, conv_context=recent_snippet)
     answer = draft or "".join(contexts)[:1200]
@@ -164,12 +183,19 @@ def ask(user_id: int, space_id: Optional[int], conversation_id: str, message: st
     # Prepare references (top few)
     refs: List[Dict[str, object]] = []
     try:
-        # Map to the top first 5 chunks for quick refs
         for h in hits_all[:5]:
             refs.append({
                 "document_id": h.document_id,
                 "chunk_id": h.chunk_id,
                 "chunk_index": h.chunk_index,
+                "source": "local",
+            })
+        for hit in web_hits[:5]:
+            refs.append({
+                "source": "web",
+                "title": hit.title,
+                "url": hit.url,
+                "snippet": hit.snippet,
             })
     except Exception:
         pass
@@ -179,4 +205,7 @@ def ask(user_id: int, space_id: Optional[int], conversation_id: str, message: st
         "answer": answer,
         "message_count": len(st.messages),
         "references": refs,
+        "confidence": confidence,
+        "web_attempted": web_attempted,
+        "elapsed_seconds": round(time.monotonic() - start_ts, 2),
     }

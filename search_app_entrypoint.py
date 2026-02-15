@@ -14,5 +14,12 @@ if str(search_app_dir) not in sys.path:
 from app.main import app  # type: ignore
 
 
+def patch_path() -> None:
+    """Ensure repo root (parent of search-app) is on sys.path for tests."""
+    repo_parent = repo_root
+    if str(repo_parent) not in sys.path:
+        sys.path.insert(0, str(repo_parent))
+
+
 def get_app():
     return app

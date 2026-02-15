@@ -62,3 +62,47 @@ def test_health_endpoint_reports_cache_state(monkeypatch):
     body = resp.json()
     assert body["status"] == "degraded"
     assert body["cache"]["state"] == "cooldown"
+
+
+def test_image_search_cache_invalidation(monkeypatch):
+    from app import search
+
+    cache_store: dict[str, list] = {}
+    monkeypatch.setattr(search, "cache_get", lambda key: cache_store.get(key))
+    monkeypatch.setattr(search, "cache_set", lambda key, value: cache_store.setdefault(key, value))
+
+    revision = {"value": 1}
+    monkeypatch.setattr(search, "get_revision", lambda *_args, **_kwargs: revision["value"])
+
+    calls = {"count": 0}
+
+    class DummyAdapter:
+        def search_images(self, **kwargs):  # type: ignore[override]
+            calls["count"] += 1
+            return [
+                {
+                    "_source": {
+                        "doc_id": 9,
+                        "image_id": 99,
+                        "thumbnail_path": "/thumb.png",
+                        "file_path": "/file.png",
+                        "caption": "diagram",
+                        "tags": ["policy"],
+                    },
+                    "_score": 1.0,
+                }
+            ]
+
+    monkeypatch.setattr(search, "OpenSearchAdapter", lambda: DummyAdapter())
+
+    args = dict(query="diagram", vector=None, top_k=5, user_id=1, space_id=2, tags=["policy"])
+
+    res1 = search.image_search(**args)
+    res2 = search.image_search(**args)
+    assert res1 == res2
+    assert calls["count"] == 1  # second call served from cache
+
+    revision["value"] = 2  # simulate bump_revision after new upload/delete
+    res3 = search.image_search(**args)
+    assert res3 == res1
+    assert calls["count"] == 2  # cache miss due to revision change

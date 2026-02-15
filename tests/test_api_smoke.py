@@ -38,6 +38,11 @@ def test_providers_list(client: TestClient):
     assert "supported" in js and isinstance(js["supported"], list)
 
 
+def test_image_search_requires_auth(client: TestClient):
+    r = client.post("/api/image-search", json={"query": "policy diagram"})
+    assert r.status_code == 401
+
+
 @pytest.mark.skipif(not _db_config_present(), reason="DB not configured for integration test")
 def test_register_login_me_flow(client: TestClient):
     # Register
@@ -64,3 +69,19 @@ def test_llm_test_default(client: TestClient):
     assert r.status_code == 200
     js = r.json()
     assert "ok" in js
+
+
+@pytest.mark.skipif(not _db_config_present(), reason="DB not configured for integration test")
+def test_image_search_happy_path(client: TestClient):
+    email = "image_user@example.com"
+    password = "Secure123!"
+    client.post("/api/register", json={"email": email, "password": password})
+    client.post("/api/login", json={"email": email, "password": password})
+
+    payload = {"query": "diagram", "top_k": 1}
+    r = client.post("/api/image-search", json=payload)
+    # When backend isn’t fully wired (no images ingested), expect either 200 (empty results) or 400 if query missing.
+    assert r.status_code in (200, 400, 404)
+    if r.status_code == 200:
+        body = r.json()
+        assert "results" in body

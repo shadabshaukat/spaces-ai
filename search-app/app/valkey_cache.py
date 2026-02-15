@@ -169,3 +169,33 @@ def reset_cache_state_for_tests() -> None:  # pragma: no cover - only used in te
     _state.last_ping_ok = False
     _state.last_ping_at = None
     _state.disabled_until = None
+
+
+def _revision_scope(kind: str, user_id: Optional[int], space_id: Optional[int]) -> str:
+    u = f"u{int(user_id) if user_id is not None else 'anon'}"
+    s = f"s{int(space_id) if space_id is not None else 'all'}"
+    return f"rev:{kind}:{u}:{s}"
+
+
+def bump_revision(kind: str, user_id: Optional[int], space_id: Optional[int]) -> None:
+    cli = _get_client()
+    if not cli:
+        return
+    key = _namespaced(_revision_scope(kind, user_id, space_id))
+    try:
+        cli.incr(key)
+    except Exception as e:
+        _record_failure(e)
+
+
+def get_revision(kind: str, user_id: Optional[int], space_id: Optional[int]) -> int:
+    cli = _get_client()
+    if not cli:
+        return 0
+    key = _namespaced(_revision_scope(kind, user_id, space_id))
+    try:
+        val = cli.get(key)
+        return int(val) if val is not None else 0
+    except Exception as e:
+        _record_failure(e)
+        return 0

@@ -4,9 +4,7 @@ import argparse
 import os
 import sys
 from pathlib import Path
-from typing import List, Tuple
-
-from .config import settings
+from typing import List
 from .db import init_db
 from .store import ensure_dirs, save_upload, ingest_file_path
 from .users import get_user_by_email, create_user, ensure_default_space

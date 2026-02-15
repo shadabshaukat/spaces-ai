@@ -4,11 +4,11 @@ import logging
 import os
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-from fastapi import FastAPI, File, UploadFile, Request, Form, Depends
+from fastapi import FastAPI, File, UploadFile, Request, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse, FileResponse, StreamingResponse, RedirectResponse
+from fastapi.responses import JSONResponse, HTMLResponse, FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import uvicorn
@@ -16,12 +16,12 @@ import uvicorn
 from .auth import SessionOrBasicAuthMiddleware
 from .config import settings
 from .db import init_db, get_conn
-from .store import ensure_dirs, ingest_file_path, save_upload, save_upload_stream, create_par_for_object, delete_oci_object, _build_oci_config
-from .search import semantic_search, fulltext_search, hybrid_search, rag
+from .store import ensure_dirs, ingest_file_path, save_upload, create_par_for_object, delete_oci_object, _build_oci_config
+from .search import semantic_search, fulltext_search, hybrid_search, rag, image_search
 from .embeddings import get_model, embed_texts
 from .opensearch_adapter import OpenSearchAdapter
 from .session import get_current_user, sign_session, set_session_cookie_headers, clear_session_cookie_headers
-from .valkey_cache import cache_status
+from .valkey_cache import cache_status, bump_revision
 from .runtime_config import (
     get_default_top_k,
     set_default_top_k,
@@ -30,8 +30,9 @@ from .runtime_config import (
     get_os_num_candidates,
     set_os_num_candidates,
 )
-from .users import create_user, authenticate_user, list_spaces, ensure_default_space, get_default_space_id, create_space, set_default_space
+from .users import create_user, authenticate_user, list_spaces, get_default_space_id, create_space, set_default_space
 from .deep_research import start_conversation as dr_start, ask as dr_ask
+from .vision_embeddings import embed_image_texts
 
 logger = logging.getLogger("searchapp")
 logging.basicConfig(level=os.getenv("LOGLEVEL", "INFO"))
@@ -51,6 +52,28 @@ ALLOWED_EXTS = {
     ".docx", ".pptx", ".xlsx",
     ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif",
 }
+IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif"}
+
+
+def _normalize_tags(raw: Any) -> List[str]:
+    tags: List[str] = []
+    if raw is None:
+        return tags
+    if isinstance(raw, str):
+        parts = raw.split(",")
+        tags = [p.strip() for p in parts if p.strip()]
+    elif isinstance(raw, (list, tuple, set)):
+        for item in raw:
+            if item is None:
+                continue
+            sval = str(item).strip()
+            if sval:
+                tags.append(sval)
+    else:
+        sval = str(raw).strip()
+        if sval:
+            tags.append(sval)
+    return tags
 
 # Protect API with session or basic auth; root UI is public (it will render login if unauthenticated)
 app.add_middleware(SessionOrBasicAuthMiddleware, protect_paths=("/api", "/docs", "/openapi.json", "/redoc"))
@@ -300,13 +323,17 @@ async def upload(request: Request, files: List[UploadFile] = File(...), space_id
                 "object_url": oci_url,
                 "status": "ok",
             })
+            is_image = ext in IMAGE_EXTS
+            if is_image:
+                bump_revision("image", uid, sid)
+            bump_revision("text", uid, sid)
             # Log activity
             try:
                 with get_conn() as conn:
                     with conn.cursor() as cur:
                         cur.execute(
                             "INSERT INTO user_activity (user_id, activity_type, details) VALUES (%s, %s, %s)",
-                            (uid, "upload", json.dumps({"filename": title, "document_id": ing.document_id, "chunks": ing.num_chunks, "space_id": sid})),
+                            (uid, "upload", json.dumps({"filename": title, "document_id": ing.document_id, "chunks": ing.num_chunks, "space_id": sid, "image": is_image})),
                         )
             except Exception:
                 pass
@@ -421,6 +448,80 @@ async def api_search(request: Request, payload: Dict[str, Any]):
         pass
 
     return out
+
+
+@app.post("/api/image-search")
+async def api_image_search(request: Request, payload: Dict[str, Any]):
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    uid = int(user["user_id"]) if "user_id" in user else int(user.get("id"))
+    sid = payload.get("space_id")
+    sid = int(sid) if sid is not None else get_default_space_id(uid)
+
+    query = (payload.get("query") or "").strip()
+    tag_filter = _normalize_tags(payload.get("tags"))
+    top_k_raw = payload.get("top_k")
+    try:
+        top_k = int(top_k_raw) if top_k_raw is not None else min(24, int(get_default_top_k()))
+    except Exception:
+        top_k = min(24, int(get_default_top_k()))
+    top_k = max(1, min(top_k, 100))
+
+    vector_input = payload.get("vector")
+    vector = None
+    if isinstance(vector_input, list) and all(isinstance(v, (int, float)) for v in vector_input):
+        vector = [float(v) for v in vector_input]
+    elif query:
+        try:
+            vecs = embed_image_texts([query])
+            vector = vecs[0] if vecs else None
+        except Exception as e:
+            logger.warning("Image text embedding failed: %s", e)
+            vector = None
+
+    if vector is None and not query and not tag_filter:
+        return JSONResponse(status_code=400, content={"error": "provide query, tags, or vector"})
+
+    hits = image_search(query=query, vector=vector, top_k=top_k, user_id=uid, space_id=sid, tags=tag_filter)
+
+    results: List[Dict[str, Any]] = []
+    for idx, h in enumerate(hits, start=1):
+        src = h.get("_source", h)
+        results.append(
+            {
+                "rank": idx,
+                "doc_id": src.get("doc_id"),
+                "image_id": src.get("image_id"),
+                "thumbnail_path": src.get("thumbnail_path"),
+                "file_path": src.get("file_path"),
+                "caption": src.get("caption"),
+                "tags": src.get("tags", []),
+                "score": h.get("_score"),
+            }
+        )
+
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO user_activity (user_id, activity_type, details) VALUES (%s, %s, %s)",
+                    (
+                        uid,
+                        "image_search",
+                        json.dumps({
+                            "query": query,
+                            "top_k": top_k,
+                            "space_id": sid,
+                            "tags": tag_filter,
+                            "vector": bool(vector_input),
+                        }),
+                    ),
+                )
+    except Exception:
+        pass
+
+    return {"results": results, "count": len(results)}
 
 
 @app.post("/api/llm-test")
@@ -750,15 +851,17 @@ async def api_admin_delete_document(request: Request, doc_id: int):
 
     source_path = None
     object_url = None
+    destroyed_doc = None
     with get_conn() as conn:
         with conn.cursor() as cur:
             # Fetch storage info first
-            cur.execute("SELECT source_path, COALESCE(metadata,'{}'::jsonb) FROM documents WHERE id = %s AND user_id = %s", (int(doc_id), uid))
+            cur.execute("SELECT id, user_id, space_id, source_path, COALESCE(metadata,'{}'::jsonb) FROM documents WHERE id = %s AND user_id = %s", (int(doc_id), uid))
             row = cur.fetchone()
             if not row:
                 return JSONResponse(status_code=404, content={"error": "document not found"})
-            source_path = row[0] or None
-            meta = row[1] or {}
+            destroyed_doc = {"id": int(row[0]), "space_id": row[2]}
+            source_path = row[3] or None
+            meta = row[4] or {}
             if isinstance(meta, dict):
                 object_url = meta.get("object_url")
             # Delete DB row (cascades to chunks)
@@ -802,6 +905,10 @@ async def api_admin_delete_document(request: Request, doc_id: int):
                 pass
     except Exception:
         pass
+
+    if destroyed_doc:
+        bump_revision("text", uid, destroyed_doc.get("space_id"))
+        bump_revision("image", uid, destroyed_doc.get("space_id"))
 
     try:
         with get_conn() as conn:
@@ -923,7 +1030,6 @@ async def api_doc_url(request: Request, doc_id: int):
                 row = cur.fetchone()
                 if not row:
                     return JSONResponse(status_code=404, content={"error": "document not found"})
-                source_path = row[0] or ""
                 meta = row[1] or {}
         from urllib.parse import urlparse, unquote
         if (settings.storage_backend in {"oci", "both"}) and settings.oci_os_bucket_name:
@@ -1077,7 +1183,8 @@ async def api_admin_reindex(request: Request, payload: Dict[str, Any]):
                     cur.execute("SELECT id, space_id, source_path FROM documents WHERE user_id = %s", (uid,))
                     docs = cur.fetchall()
                     for d in docs:
-                        did = int(d[0]); sid = d[1]
+                        did = int(d[0])
+                        sid = d[1]
                         cur.execute("SELECT chunk_index, content FROM chunks WHERE document_id = %s ORDER BY chunk_index ASC", (did,))
                         ch = cur.fetchall()
                         texts = [r[1] for r in ch]

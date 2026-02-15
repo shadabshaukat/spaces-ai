@@ -3,7 +3,10 @@ from __future__ import annotations
 import logging
 import os
 from functools import lru_cache
-from typing import Iterable, List
+from typing import TYPE_CHECKING, Iterable, List
+
+if TYPE_CHECKING:
+    from sentence_transformers import SentenceTransformer
 
 # Lazy import in get_model to avoid import-time dependency requirement
 

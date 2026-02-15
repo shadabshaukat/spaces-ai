@@ -90,22 +90,32 @@ def embed_image_texts(texts: Iterable[str]) -> List[List[float]]:
             if "Unexpected type" not in msg:
                 raise
             logger.debug("Tokenizer does not support batched input; tokenizing %d texts individually", len(texts))
+            def _coerce(obj):
+                if isinstance(obj, torch.Tensor):
+                    return obj.unsqueeze(0) if obj.dim() == 1 else obj
+                if hasattr(obj, "unsqueeze"):
+                    return obj.unsqueeze(0)
+                if isinstance(obj, (list, tuple)):
+                    return torch.tensor(obj).unsqueeze(0)
+                if isinstance(obj, dict):
+                    inner = obj.get("input_ids") or obj.get("ids")
+                    if isinstance(inner, torch.Tensor):
+                        return inner.unsqueeze(0) if inner.dim() == 1 else inner
+                    if isinstance(inner, (list, tuple)):
+                        return torch.tensor(inner).unsqueeze(0)
+                return None
+
             single_tokens = []
             for text in texts:
                 tok = tokenizer(text)
-                if hasattr(tok, "unsqueeze"):
-                    single_tokens.append(tok.unsqueeze(0))
-                    continue
-                if isinstance(tok, (list, tuple)):
-                    tok = torch.tensor(tok)
-                    single_tokens.append(tok.unsqueeze(0))
-                    continue
-                if isinstance(tok, dict) and tok.get("input_ids") is not None:
-                    tensor = tok["input_ids"]
-                    if hasattr(tensor, "unsqueeze"):
-                        single_tokens.append(tensor.unsqueeze(0))
-                        continue
-                raise TypeError("Tokenizer output unsupported for batching") from exc
+                tensor = _coerce(tok)
+                if tensor is None and isinstance(tok, str):
+                    # Some tokenizers expect batched input; retry with list form
+                    tok = tokenizer([text])
+                    tensor = _coerce(tok)
+                if tensor is None:
+                    raise TypeError("Tokenizer output unsupported for batching") from exc
+                single_tokens.append(tensor)
             tokens = torch.cat(single_tokens, dim=0)
         tokens = tokens.to(device)
         vecs = model.encode_text(tokens)

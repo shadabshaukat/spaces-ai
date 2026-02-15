@@ -67,6 +67,7 @@ button:hover { filter: brightness(0.98); }
 .badge-web { background: #fef3c7; color: #92400e; }
 .badge-local { background: #dcfce7; color: #065f46; }
 .badge-remote { background: #e0f2fe; color: #075985; }
+.badge-inline { margin-left: 0; margin-right: 6px; }
 .muted { color: #6b7280; font-size: 12px; }
 .toast { position: fixed; bottom: 16px; right: 16px; background: #111827; color: #fff; padding: 10px 14px; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,0.15); }
 .loader { display: flex; align-items: center; gap: 8px; color: #4b5563; }
@@ -180,15 +181,23 @@ body.dark .dr-refs a { color: #60a5fa; }
 .hit-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 
 /* Knowledge Base document cards */
-.kb-doc-item { border: 1px solid #e5e7eb; border-radius: 14px; padding: 16px; background: #fff; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 1px 3px rgba(15,23,42,0.08); }
-.kb-doc-head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
-.kb-doc-title { margin: 0; font-size: 16px; font-weight: 600; color: #111827; }
-.kb-doc-meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; color: #6b7280; }
-.kb-doc-body { display: flex; flex-direction: column; gap: 10px; }
-.kb-meta-line { font-size: 13px; color: #4b5563; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-.kb-meta-line strong { color: #1f2937; font-weight: 600; }
-.kb-inline-thumb { width: 48px; height: 48px; border-radius: 8px; overflow: hidden; border: 1px solid #e5e7eb; display: inline-flex; align-items: center; justify-content: center; background: #f3f4f6; }
-.kb-inline-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.kb-doc-item { border: 1px solid #e5e7eb; border-radius: 16px; padding: 18px; background: #fff; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 6px 20px rgba(15,23,42,0.05); }
+.kb-doc-card { display: flex; flex-direction: column; gap: 12px; }
+.kb-doc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.kb-doc-select { display: flex; align-items: center; gap: 8px; font-weight: 600; color: #111827; }
+.kb-doc-select input { margin: 0; }
+.kb-doc-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.kb-doc-meta { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; color: #6b7280; }
+.kb-doc-body { display: flex; gap: 16px; flex-wrap: wrap; }
+.kb-doc-preview { flex: 0 0 220px; border-radius: 12px; overflow: hidden; border: 1px solid #e5e7eb; background: #f8fafc; min-height: 150px; display: flex; align-items: center; justify-content: center; }
+.kb-doc-preview img { width: 100%; height: 100%; object-fit: cover; }
+.kb-doc-details { flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 12px; }
+.kb-meta-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #4b5563; }
+.kb-meta-list strong { color: #1f2937; }
+.kb-attachments summary { cursor: pointer; font-weight: 600; color: #374151; }
+.kb-attachments summary::marker { display: none; }
+.kb-attachments { border-top: 1px solid #e5e7eb; padding-top: 10px; }
+.kb-attachments[open] summary { color: #111827; }
 
 /* KB image gallery */
 .kb-image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
@@ -206,9 +215,9 @@ body.dark .dr-refs a { color: #60a5fa; }
 body.dark .kb-doc-item { background: #0b1220; border-color: #1f2937; box-shadow: none; }
 body.dark .kb-doc-title { color: #e5e7eb; }
 body.dark .kb-doc-meta { color: #94a3b8; }
-body.dark .kb-meta-line { color: #cbd5f5; }
-body.dark .kb-meta-line strong { color: #f1f5f9; }
-body.dark .kb-inline-thumb { border-color: #1f2937; background: #111827; }
+body.dark .kb-doc-preview { border-color: #1f2937; background: #111827; }
+body.dark .kb-meta-list { color: #cbd5f5; }
+body.dark .kb-meta-list strong { color: #f1f5f9; }
 body.dark .kb-image-card { background: #0b1220; border-color: #1f2937; box-shadow: none; }
 body.dark .kb-image-thumb { background: #111827; }
 body.dark .kb-image-body { color: #cbd5f5; }

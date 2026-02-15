@@ -907,37 +907,33 @@
       const docRefs = refs.filter(r => r.source === 'local');
       const webRefs = refs.filter(r => r.source === 'web');
 
-      const renderDocCard = (ref, idx) => {
+      const buildDocPill = (ref, idx) => {
         const title = escapeHtml(ref.title || basename(ref.source_path || '') || `Document ${ref.document_id ?? idx + 1}`);
         const chunkLabel = typeof ref.chunk_index === 'number' ? `Chunk #${ref.chunk_index}` : '';
-        const excerpt = escapeHtml(ref.excerpt || 'No excerpt available.');
+        const subtitle = [chunkLabel, ref.source_path ? basename(ref.source_path) : '' ].filter(Boolean).join(' • ');
+        const excerptRaw = (ref.excerpt || '').trim();
+        const excerpt = excerptRaw ? escapeHtml(excerptRaw.length > 320 ? `${excerptRaw.slice(0, 320)}…` : excerptRaw) : '';
         const downloadHref = ref.document_id ? `/api/doc-download?doc_id=${encodeURIComponent(ref.document_id)}` : '';
-        const subtitle = [chunkLabel, ref.source_path ? basename(ref.source_path) : ''].filter(Boolean).join(' • ');
         return `
-          <details class="dr-ref-card" data-source="local">
-            <summary>
-              <div class="dr-ref-card-title"><span class="badge badge-local">KB</span> ${title}</div>
-              ${subtitle ? `<div class="dr-ref-card-sub">${escapeHtml(subtitle)}</div>` : ''}
-            </summary>
-            <div class="dr-ref-body">
-              <p>${excerpt}</p>
+          <details class="dr-ref-pill" data-source="local">
+            <summary><span class="pill-badge">KB</span><span class="pill-title">${title}</span>${subtitle ? `<span class="pill-sub">${escapeHtml(subtitle)}</span>` : ''}</summary>
+            <div class="dr-ref-pill-body">
+              ${excerpt ? `<p>${excerpt}</p>` : '<p class="muted">No excerpt available.</p>'}
               ${downloadHref ? `<a class="ghost" href="${escapeHtml(downloadHref)}" target="_blank" rel="noopener">Open document</a>` : ''}
             </div>
           </details>`;
       };
 
-      const renderWebCard = (ref, idx) => {
+      const buildWebPill = (ref, idx) => {
         const title = escapeHtml(ref.title || `Web result ${idx + 1}`);
         const url = escapeHtml(ref.url || '#');
-        const snippet = escapeHtml(ref.snippet || '');
+        const snippetRaw = (ref.snippet || '').trim();
+        const snippet = snippetRaw ? escapeHtml(snippetRaw.length > 260 ? `${snippetRaw.slice(0, 260)}…` : snippetRaw) : '';
         return `
-          <details class="dr-ref-card" data-source="web">
-            <summary>
-              <div class="dr-ref-card-title"><span class="badge badge-web">Web</span> ${title}</div>
-              <div class="dr-ref-card-sub">${url}</div>
-            </summary>
-            <div class="dr-ref-body">
-              <p>${snippet || 'No snippet available.'}</p>
+          <details class="dr-ref-pill" data-source="web">
+            <summary><span class="pill-badge pill-web">Web</span><span class="pill-title">${title}</span></summary>
+            <div class="dr-ref-pill-body">
+              ${snippet ? `<p>${snippet}</p>` : '<p class="muted">No snippet available.</p>'}
               <a class="ghost" href="${url}" target="_blank" rel="noopener">Open link</a>
             </div>
           </details>`;
@@ -945,12 +941,12 @@
 
       const sections = [];
       if (docRefs.length) {
-        sections.push(`<div class="dr-refs-group"><div class="dr-refs-title">Knowledge Base</div>${docRefs.map(renderDocCard).join('')}</div>`);
+        sections.push(`<div class="dr-refs-section"><div class="dr-refs-title">Knowledge Base</div><div class="dr-pill-row">${docRefs.map(buildDocPill).join('')}</div></div>`);
       }
       if (webRefs.length) {
-        sections.push(`<div class="dr-refs-group"><div class="dr-refs-title">Web</div>${webRefs.map(renderWebCard).join('')}</div>`);
+        sections.push(`<div class="dr-refs-section"><div class="dr-refs-title">Web</div><div class="dr-pill-row">${webRefs.map(buildWebPill).join('')}</div></div>`);
       }
-      return `<div class="dr-refs">${sections.join('')}</div>`;
+      return `<div class="dr-refs dr-refs-condensed">${sections.join('')}</div>`;
     }
 
     function pushMsg(role, text, meta) {
@@ -1109,7 +1105,7 @@
         if (Array.isArray(data.documents) && data.documents.length) {
           data.documents.forEach((doc) => {
             const div = document.createElement('div');
-            div.className = 'hit kb-doc-item';
+            div.className = 'kb-doc-item';
             const docTitle = formatDocTitle(doc);
             const link = `<a href="#" data-doc-id="${doc.id}">${escapeHtml(docTitle)}</a>`;
             const metaChips = [];
@@ -1118,20 +1114,25 @@
             const created = formatDateLabel(doc.created_at);
             if (created) metaChips.push(`<span class="badge badge-soft">${escapeHtml(created)}</span>`);
             if (doc.metadata && doc.metadata.object_url) metaChips.push('<span class="badge badge-remote">Remote</span>');
-            const metaHtml = metaChips.join('');
-
-            const docDetails = [];
-            if (doc.metadata && doc.metadata.summary) {
-              docDetails.push(`<div class="kb-meta-line"><strong>Summary:</strong> ${escapeHtml(doc.metadata.summary)}</div>`);
-            }
-            if (doc.thumbnail_preview_url && !(doc.images && doc.images.length)) {
-              docDetails.push(`<div class="kb-meta-line"><img class="kb-inline-thumb" src="${escapeHtml(doc.thumbnail_preview_url)}" alt="thumbnail" /></div>`);
-            }
-            if (doc.metadata && doc.metadata.image_caption && !(doc.images && doc.images.length)) {
-              docDetails.push(`<div class="kb-meta-line"><strong>Caption:</strong> ${escapeHtml(doc.metadata.image_caption)}</div>`);
-            }
+            const metaHtml = metaChips.length ? `<div class="kb-doc-meta">${metaChips.join('')}</div>` : '';
 
             const docImages = Array.isArray(doc.images) ? doc.images : [];
+            const downloadHref = doc.id ? `/api/doc-download?doc_id=${doc.id}` : '';
+            const previewSrc = docImages.length ? (docImages[0].thumbnail_url || docImages[0].thumbnail_object_url || docImages[0].thumbnail_path || docImages[0].file_path || '') : (doc.thumbnail_preview_url || '');
+            const previewBlock = previewSrc ? `<div class="kb-doc-preview"><img src="${escapeHtml(previewSrc)}" alt="Preview for ${escapeHtml(docTitle)}" loading="lazy" /></div>` : '';
+
+            const infoLines = [];
+            if (created) infoLines.push(`<li><strong>Created:</strong> ${escapeHtml(created)}</li>`);
+            if (typeof doc.chunk_count === 'number') infoLines.push(`<li><strong>Chunks:</strong> ${doc.chunk_count}</li>`);
+            if (doc.metadata && doc.metadata.summary) infoLines.push(`<li><strong>Summary:</strong> ${escapeHtml(doc.metadata.summary)}</li>`);
+            if (Array.isArray(doc.metadata?.image_tags) && doc.metadata.image_tags.length) {
+              infoLines.push(`<li><strong>Tags:</strong> ${doc.metadata.image_tags.map(t => escapeHtml(String(t))).join(', ')}</li>`);
+            }
+            if (doc.metadata && doc.metadata.image_caption && !doc.metadata?.summary) {
+              infoLines.push(`<li><strong>Caption:</strong> ${escapeHtml(doc.metadata.image_caption)}</li>`);
+            }
+            const infoHtml = infoLines.length ? `<ul class="kb-meta-list">${infoLines.join('')}</ul>` : '<p class="muted">No additional metadata yet.</p>';
+
             const gallery = docImages.map((img) => {
               const thumbSrc = img.thumbnail_url || img.thumbnail_object_url || img.thumbnail_path || img.file_path || '';
               const thumb = thumbSrc ? escapeHtml(thumbSrc) : '';
@@ -1152,19 +1153,31 @@
                 </div>`;
             }).join('');
 
+            const attachments = docImages.length ? `<details class="kb-attachments"><summary>Images (${docImages.length})</summary><div class="kb-image-grid">${gallery}</div></details>` : '';
+
+            const downloadAction = downloadHref ? `<a class="ghost" href="${escapeHtml(downloadHref)}" target="_blank" rel="noopener">Download</a>` : '';
+
             div.innerHTML = `
-              <div class="kb-doc-head">
-                <div class="kb-doc-title">
-                  <input type="checkbox" class="kbSel" data-doc-id="${doc.id}" aria-label="Select document" />
-                  &nbsp; ${link}
+              <div class="kb-doc-card">
+                <div class="kb-doc-head">
+                  <label class="kb-doc-select">
+                    <input type="checkbox" class="kbSel" data-doc-id="${doc.id}" aria-label="Select document" />
+                    <span>${link}</span>
+                  </label>
+                  <div class="kb-doc-actions">
+                    ${downloadAction}
+                    <button class="ghost" data-delete-doc-id="${doc.id}">Delete</button>
+                  </div>
                 </div>
-                <div class="kb-doc-actions">
-                  ${metaHtml}
-                  <button class="ghost" data-delete-doc-id="${doc.id}">Delete</button>
+                ${metaHtml}
+                <div class="kb-doc-body">
+                  ${previewBlock}
+                  <div class="kb-doc-details">
+                    ${infoHtml}
+                    ${attachments}
+                  </div>
                 </div>
               </div>
-              ${docDetails.length ? `<div class="kb-doc-meta">${docDetails.join('')}</div>` : ''}
-              ${docImages.length ? `<div class="kb-image-grid">${gallery}</div>` : ''}
             `;
             list.appendChild(div);
           });
@@ -1174,6 +1187,7 @@
         sec.hidden = false;
         window.scrollTo({ top: sec.offsetTop - 16, behavior: 'smooth' });
       } catch (e) {
+        console.error(e);
         showToast('Failed to load knowledge base');
       }
     }

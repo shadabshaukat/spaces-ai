@@ -58,7 +58,7 @@
         <section id="unifiedSearchPanel" class="search-panel" role="region" aria-label="Search workspace">
           <div class="search-tabs" role="tablist" aria-label="Search mode">
             <button id="searchModeText" class="search-tab active" role="tab" aria-selected="true">Text Search</button>
-            <button id="searchModeImage" class="search-tab" role="tab" aria-selected="false">Image Search</button>
+            <button id="searchModeImage" class="search-tab" role="tab" aria-selected="false">Image Search <span class="beta-tag">Beta</span></button>
           </div>
           <div class="searchbar">
             <input id="searchInput" class="search-input" type="text" placeholder="Search documents…" autocomplete="off" />
@@ -161,7 +161,7 @@
                   <button id="imageClearBtn" class="ghost" type="button">Clear image inputs</button>
                 </div>
               </div>
-              <div class="muted">Tip: combine descriptive text, tags, or a reference upload to improve similarity results.</div>
+          <div class="muted"><strong>Beta:</strong> Image search is experimental—combine descriptive text, tags, or a reference upload to improve similarity results.</div>
             </div>
           </div>
         </section>
@@ -902,6 +902,15 @@
       return parts.join('');
     }
 
+    function normalizeUrl(raw) {
+      if (!raw || typeof raw !== 'string') return '#';
+      const trimmed = raw.trim();
+      if (!trimmed) return '#';
+      if (/^https?:\/\//i.test(trimmed)) return trimmed;
+      if (/^[a-z]+:\/\//i.test(trimmed)) return trimmed;
+      return `https://${trimmed.replace(/^\/+/, '')}`;
+    }
+
     function renderDrReferences(refs) {
       if (!Array.isArray(refs) || !refs.length) return '';
       const localRefs = refs.filter(r => r.source === 'local');
@@ -923,7 +932,7 @@
         const badge = type === 'local' ? '<span class="pill-badge">Local</span>' : '<span class="pill-badge pill-web">Web</span>';
         const action = type === 'local'
           ? (downloadHref ? `<a class="ghost" href="${escapeHtml(downloadHref)}" target="_blank" rel="noopener">Open document</a>` : '')
-          : `<a class="ghost" href="${escapeHtml(ref.url || '#')}" target="_blank" rel="noopener">Open link</a>`;
+          : `<a class="ghost" href="${escapeHtml(normalizeUrl(ref.url))}" target="_blank" rel="noopener">Open link</a>`;
         return `
           <details class="dr-source-card" data-source="${type}">
             <summary>

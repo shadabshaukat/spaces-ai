@@ -217,6 +217,7 @@ body.dark .dr-sources .muted { color: #94a3b8; }
 .search-tabs { display: inline-flex; border: 1px solid #e5e7eb; border-radius: 999px; margin-bottom: 16px; padding: 4px; background: #fff; }
 .search-tab { border: none; background: transparent; padding: 10px 20px; border-radius: 999px; font-weight: 600; color: #6b7280; }
 .search-tab.active { background: #4285F4; color: #fff; box-shadow: 0 2px 8px rgba(66,133,244,0.35); }
+.search-tab .beta-tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; margin-left: 6px; padding: 2px 6px; border-radius: 999px; background: #fde68a; color: #92400e; }
 .search-panel { width: 100%; max-width: 700px; margin: 0 auto; }
 .image-search-form input[type="text"], .image-search-form input[type="number"], .image-search-form select { width: 100%; }
 .image-results-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; margin-top: 16px; }
@@ -321,6 +322,7 @@ body.dark .badge { background: #122255; color: #c7d2fe; }
 body.dark .search-tabs { border-color: #1f2937; background: #0b1220; }
 body.dark .search-tab { color: #94a3b8; }
 body.dark .search-tab.active { background: #2563eb; color: #fff; }
+body.dark .search-tab .beta-tag { background: #78350f; color: #fde68a; }
 body.dark .image-card { background: #0b1220; border-color: #1f2937; box-shadow: none; }
 body.dark .image-card:hover { box-shadow: 0 6px 18px rgba(0,0,0,0.4); }
 body.dark .image-card-thumb { background: #111827; }

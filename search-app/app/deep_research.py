@@ -148,9 +148,10 @@ def ask(user_id: int, space_id: Optional[int], conversation_id: str, message: st
     # RETRIEVE for each subq
     contexts: List[str] = []
     hits_all: List[ChunkHit] = []
+    local_top_k = max(15, int(settings.deep_research_local_top_k or 15))
     for sq in subqs:
         try:
-            hits = hybrid_search(sq, top_k=12, user_id=user_id, space_id=space_id)
+            hits = hybrid_search(sq, top_k=local_top_k, user_id=user_id, space_id=space_id)
             hits_all.extend(hits)
             if hits:
                 contexts.append("\n\n".join(h.content for h in hits))
@@ -166,6 +167,7 @@ def ask(user_id: int, space_id: Optional[int], conversation_id: str, message: st
         hits_all,
         contexts,
         max_seconds=_remaining_budget(),
+        web_top_k=max(15, int(settings.deep_research_web_top_k or 15)),
     )
 
     # SYNTHESIZE
@@ -184,7 +186,7 @@ def ask(user_id: int, space_id: Optional[int], conversation_id: str, message: st
 
     # Prepare references (top few)
     refs: List[Dict[str, object]] = []
-    local_hits = hits_all[:5]
+    local_hits = hits_all[:min(len(hits_all), max(5, int(settings.deep_research_local_top_k or 15)))]
     doc_meta: Dict[int, Dict[str, object]] = {}
     if local_hits:
         doc_ids = sorted({int(h.document_id) for h in local_hits})
@@ -200,7 +202,7 @@ def ask(user_id: int, space_id: Optional[int], conversation_id: str, message: st
                         "source_path": row[2] or "",
                     }
     try:
-        for h in local_hits:
+        for idx, h in enumerate(local_hits, start=1):
             info = doc_meta.get(int(h.document_id), {})
             refs.append({
                 "document_id": h.document_id,
@@ -210,13 +212,16 @@ def ask(user_id: int, space_id: Optional[int], conversation_id: str, message: st
                 "title": info.get("title") or "",
                 "source_path": info.get("source_path") or "",
                 "excerpt": h.content,
+                "rank": idx,
             })
-        for hit in web_hits[:5]:
+        web_limit = max(5, int(settings.deep_research_web_top_k or 15))
+        for idx, hit in enumerate(web_hits[:web_limit], start=1):
             refs.append({
                 "source": "web",
                 "title": hit.title,
                 "url": hit.url,
                 "snippet": hit.snippet,
+                "rank": idx,
             })
     except Exception:
         pass

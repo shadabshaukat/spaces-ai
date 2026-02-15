@@ -238,6 +238,7 @@
               <div class="dz-desc">Documents: PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON • Images: PNG, JPG, JPEG, TIFF, BMP, GIF</div>
               <div class="dz-hint" id="dzHint">Maximum 50MB per file • Maximum 100 files per batch</div>
               <div class="dz-status" id="dzStatus">Drop files here or use the file chooser below</div>
+              <div class="dz-meta" id="uploadStorageInfo"></div>
             </div>
           </div>
         </div>
@@ -1049,21 +1050,58 @@
         if (Array.isArray(data.documents) && data.documents.length) {
           for (const d of data.documents) {
             const div = document.createElement('div');
-            div.className = 'hit';
+            div.className = 'hit kb-doc-item';
             const link = `<a href="#" data-doc-id="${d.id}">${escapeHtml(d.file_name || d.title || ('doc ' + d.id))}</a>`;
+            const kbMeta = [];
+            if (d.source_type) kbMeta.push(`<span class="badge">${escapeHtml(d.source_type)}</span>`);
+            if (typeof d.chunk_count === 'number') kbMeta.push(`<span class="badge">${d.chunk_count} chunks</span>`);
+            if (d.created_at) kbMeta.push(`<span class="badge">${escapeHtml(new Date(d.created_at).toLocaleString())}</span>`);
+            const metaHtml = kbMeta.join('');
+
+            const thumbnails = Array.isArray(d.images) ? d.images : [];
+            const docImages = thumbnails.map((img) => {
+              const thumb = escapeHtml(img.thumbnail_path || img.file_path || '');
+              const caption = escapeHtml(img.caption || '');
+              const tags = Array.isArray(img.tags) ? img.tags.map(t => `<span class="badge">${escapeHtml(t)}</span>`).join('') : '';
+              const downloadLink = d.id ? `<a class="ghost" href="/api/doc-download?doc_id=${d.id}" target="_blank" rel="noopener">Download</a>` : '';
+              return `
+                <div class="kb-image-card">
+                  <div class="kb-image-thumb">${thumb ? `<img src="${thumb}" alt="thumbnail for doc ${d.id}" loading="lazy" />` : '<div class="thumb-placeholder">No preview</div>'}</div>
+                  <div class="kb-image-body">
+                    <div class="kb-image-caption">${caption || '(no caption)'}</div>
+                    <div class="kb-image-tags">${tags}</div>
+                    ${downloadLink}
+                  </div>
+                </div>`;
+            }).join('');
+
+            const docMeta = d.metadata || {};
+            const docDetails = [];
+            if (docMeta.image_caption && thumbnails.length === 0) {
+              docDetails.push(`<div class="kb-meta-line"><strong>Caption:</strong> ${escapeHtml(docMeta.image_caption)}</div>`);
+            }
+            if (docMeta.image_tags && docMeta.image_tags.length && thumbnails.length === 0) {
+              const tags = docMeta.image_tags.map(t => `<span class="badge">${escapeHtml(t)}</span>`).join('');
+              docDetails.push(`<div class="kb-meta-line"><strong>Tags:</strong> ${tags}</div>`);
+            }
+            if (docMeta.thumbnail_path && thumbnails.length === 0) {
+              docDetails.push(`<div class="kb-meta-line"><img class="kb-inline-thumb" src="${escapeHtml(docMeta.thumbnail_path)}" alt="thumbnail" /></div>`);
+            }
+
             div.innerHTML = `
-              <div class="hit-row">
-                <div class="hit-left">
+              <div class="kb-doc-head">
+                <div class="kb-doc-title">
                   <input type="checkbox" class="kbSel" data-doc-id="${d.id}" aria-label="Select document" />
                   &nbsp; ${link}
                 </div>
-                <div class="hit-right">
-                  <span class="badge">${escapeHtml(d.source_type || '')}</span>
-                  <span class="badge">${(d.chunk_count != null ? (d.chunk_count + ' chunks') : '')}</span>
-                  ${d.created_at ? `<span class="badge">${escapeHtml(new Date(d.created_at).toLocaleString())}</span>` : ''}
+                <div class="kb-doc-actions">
+                  ${metaHtml}
                   <button class="ghost" data-delete-doc-id="${d.id}">Delete</button>
                 </div>
-              </div>`;
+              </div>
+              ${docDetails.length ? `<div class="kb-doc-meta">${docDetails.join('')}</div>` : ''}
+              ${thumbnails.length ? `<div class="kb-image-grid">${docImages}</div>` : ''}
+            `;
             list.appendChild(div);
           }
         } else {
@@ -1157,6 +1195,32 @@
           }
           const hint = document.getElementById('dzHint');
           if (hint) hint.textContent = `Maximum ${Math.round(MAX_BYTES/1024/1024)}MB per file • Maximum ${MAX_FILES} files per batch`;
+
+          const info = document.getElementById('uploadStorageInfo');
+          if (info) {
+            const lines = [];
+            const backend = (cfg.storage_backend || 'local').toString().toUpperCase();
+            lines.push(`Storage backend: ${backend}`);
+            if (cfg.enable_image_storage === false) {
+              lines.push('Image ingestion disabled (vision embeddings off).');
+            }
+            if (cfg.oci) {
+              const oci = cfg.oci;
+              if (oci.upload_enabled) {
+                if (oci.ready === false) {
+                  lines.push(`⚠️ OCI uploads blocked: ${oci.detail || 'missing bucket or credentials'}`);
+                } else if (oci.ready === true) {
+                  lines.push(`OCI bucket ${(oci.bucket || '').toString()} ready for mirroring.`);
+                } else {
+                  lines.push('Validating OCI configuration…');
+                }
+              } else {
+                lines.push('OCI mirroring disabled.');
+              }
+            }
+            info.innerHTML = lines.map(line => `<div>${escapeHtml(line)}</div>`).join('');
+            info.hidden = lines.length === 0;
+          }
         }
       } catch (e) {
         // ignore, keep defaults

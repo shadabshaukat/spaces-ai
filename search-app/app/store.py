@@ -14,7 +14,7 @@ from urllib.parse import quote as urlquote
 from .config import settings
 from .db import get_conn
 from .embeddings import embed_texts
-from .vision_embeddings import embed_image_paths
+from .vision_embeddings import embed_image_paths, vision_dependencies_ready, VisionModelUnavailable
 from .text_utils import ChunkParams, chunk_text, read_text_from_file
 from .pgvector_utils import to_vec_literal
 from .opensearch_adapter import OpenSearchAdapter
@@ -81,6 +81,20 @@ def _build_oci_config():
                 "region": settings.oci_region,
             }
     return cfg, settings.oci_region
+
+
+def oci_upload_ready() -> Tuple[bool, str]:
+    """Validate that OCI uploads can proceed (bucket + credentials + SDK)."""
+    if not settings.oci_os_bucket_name:
+        return False, "Set OCI_OS_BUCKET_NAME to enable OCI uploads"
+    try:
+        import oci  # type: ignore  # noqa: F401
+    except Exception as exc:  # pragma: no cover - optional dependency
+        return False, f"oci SDK not available: {exc}"
+    cfg, _region = _build_oci_config()
+    if not cfg:
+        return False, "OCI credentials/config missing (provide config file or API key env vars)"
+    return True, ""
 
 
 def _relative_upload_path(abs_path: str) -> Path:
@@ -257,6 +271,8 @@ def save_upload(file_bytes: bytes, filename: str, user_email: Optional[str] = No
         raise ValueError(f"File too large (> {settings.max_upload_size_mb} MB)")
 
     persist_local = settings.storage_backend in {"local", "both"}
+    want_oci = settings.storage_backend in {"oci", "both"}
+    oci_enabled = want_oci and settings.oci_os_upload_enabled
 
     base_name = Path(filename).name.replace("..", ".")
     dated_rel = _dated_rel(base_name, user_email)
@@ -273,9 +289,22 @@ def save_upload(file_bytes: bytes, filename: str, user_email: Optional[str] = No
         f.write(file_bytes)
 
     oci_url: Optional[str] = None
-    if settings.storage_backend in {"oci", "both"} and settings.oci_os_bucket_name and settings.oci_os_upload_enabled:
-        obj_name = str(dated_rel).replace("\\", "/")
-        oci_url = _upload_to_oci(settings.oci_os_bucket_name, obj_name, file_bytes)
+    if want_oci and not settings.oci_os_upload_enabled:
+        msg = "OCI uploads disabled via OCI_OS_UPLOAD"
+        if settings.storage_backend == "oci":
+            raise RuntimeError(msg)
+        logger.warning(msg)
+        oci_enabled = False
+    if oci_enabled:
+        ready, detail = oci_upload_ready()
+        if not ready:
+            msg = f"OCI upload unavailable: {detail}"
+            if settings.storage_backend == "oci":
+                raise RuntimeError(msg)
+            logger.warning(msg)
+        else:
+            obj_name = str(dated_rel).replace("\\", "/")
+            oci_url = _upload_to_oci(settings.oci_os_bucket_name, obj_name, file_bytes)
 
     return str(target), oci_url
 
@@ -289,6 +318,8 @@ def save_upload_stream(fileobj, filename: str, user_email: Optional[str] = None)
 
     ensure_dirs()
     persist_local = settings.storage_backend in {"local", "both"}
+    want_oci = settings.storage_backend in {"oci", "both"}
+    oci_enabled = want_oci and settings.oci_os_upload_enabled
 
     base_name = Path(filename).name.replace("..", ".")
     dated_rel = _dated_rel(base_name, user_email)
@@ -300,7 +331,14 @@ def save_upload_stream(fileobj, filename: str, user_email: Optional[str] = None)
     oci_url: Optional[str] = None
 
     # If using OCI, stream the file object to Object Storage first (then rewind for local copy)
-    if settings.storage_backend in {"oci", "both"} and settings.oci_os_bucket_name and settings.oci_os_upload_enabled:
+    if want_oci and not settings.oci_os_upload_enabled:
+        msg = "OCI uploads disabled via OCI_OS_UPLOAD"
+        if settings.storage_backend == "oci":
+            raise RuntimeError(msg)
+        logger.warning(msg)
+        oci_enabled = False
+
+    if oci_enabled and settings.oci_os_bucket_name:
         try:
             import oci  # type: ignore
             cfg, region = _build_oci_config()
@@ -320,7 +358,10 @@ def save_upload_stream(fileobj, filename: str, user_email: Optional[str] = None)
                 oci_url = f"{base}/n/{urlquote(ns)}/b/{urlquote(settings.oci_os_bucket_name)}/o/{urlquote(object_name)}"
                 logger.info("OCI streaming upload complete: bucket=%s object=%s url=%s", settings.oci_os_bucket_name, object_name, oci_url)
             else:
-                logger.warning("OCI streaming upload skipped: missing OCI config")
+                detail = "OCI credentials/config missing"
+                if settings.storage_backend == "oci":
+                    raise RuntimeError(detail)
+                logger.warning("OCI streaming upload skipped: %s", detail)
         except Exception as e:
             logger.exception("OCI streaming upload failed: %s", e)
 
@@ -403,8 +444,8 @@ def ingest_file_path(file_path: str, user_id: int, space_id: Optional[int] = Non
                 if img_meta_updates:
                     doc_metadata.update(img_meta_updates)
                     _update_document_metadata(conn, doc_id, doc_metadata)
-            except Exception as e:
-                logger.warning("Image asset processing failed for doc_id=%s: %s", doc_id, e)
+            except Exception:
+                logger.exception("Image asset processing failed for doc_id=%s", doc_id)
 
     try:
         if settings.search_backend == "opensearch" and settings.opensearch_dual_write:
@@ -437,6 +478,9 @@ def _process_image_asset(
     file_path: str,
     metadata: Dict[str, Any],
 ) -> Dict[str, Any]:
+    ready, detail = vision_dependencies_ready()
+    if not ready:
+        raise VisionModelUnavailable(detail or "Vision dependencies not available")
     if Image is None:
         raise RuntimeError("Pillow not available for image metadata")
     with Image.open(file_path) as img:

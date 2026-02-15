@@ -17,7 +17,15 @@ import uvicorn
 from .auth import SessionOrBasicAuthMiddleware
 from .config import settings
 from .db import init_db, get_conn
-from .store import ensure_dirs, ingest_file_path, save_upload, create_par_for_object, delete_oci_object, _build_oci_config
+from .store import (
+    ensure_dirs,
+    ingest_file_path,
+    save_upload,
+    create_par_for_object,
+    delete_oci_object,
+    _build_oci_config,
+    oci_upload_ready,
+)
 from .search import semantic_search, fulltext_search, hybrid_search, rag, image_search
 from .embeddings import get_model, embed_texts
 from .opensearch_adapter import OpenSearchAdapter
@@ -33,7 +41,12 @@ from .runtime_config import (
 )
 from .users import create_user, authenticate_user, list_spaces, get_default_space_id, create_space, set_default_space
 from .deep_research import start_conversation as dr_start, ask as dr_ask
-from .vision_embeddings import embed_image_paths, embed_image_texts, VisionModelUnavailable
+from .vision_embeddings import (
+    embed_image_paths,
+    embed_image_texts,
+    VisionModelUnavailable,
+    vision_dependencies_ready,
+)
 
 logger = logging.getLogger("searchapp")
 log_level = logging.DEBUG if settings.debug_logging else os.getenv("LOGLEVEL", "INFO")
@@ -101,6 +114,22 @@ def _extract_tags(raw: Any) -> List[str]:
     return _normalize_tags(raw)
 
 
+def _extract_query_text(raw: Any) -> str:
+    """Normalize arbitrary payload values into a single string query."""
+    if raw is None:
+        return ""
+    if isinstance(raw, str):
+        return raw.strip()
+    if isinstance(raw, (list, tuple, set)):
+        parts: List[str] = []
+        for item in raw:
+            txt = _extract_query_text(item)
+            if txt:
+                parts.append(txt)
+        return " ".join(parts).strip()
+    return str(raw).strip()
+
+
 def _extract_vector(raw: Any) -> List[float] | None:
     if raw is None:
         return None
@@ -155,6 +184,12 @@ def on_startup():
         logger.info("Embeddings model preloaded")
     except Exception as e:
         logger.exception("Failed to preload embeddings model: %s", e)
+    if settings.enable_image_storage:
+        ready, detail = vision_dependencies_ready(preload_model=False)
+        if ready:
+            logger.info("Vision embeddings dependencies detected")
+        else:
+            logger.warning("Vision embeddings unavailable: %s", detail or "missing dependencies")
     # OpenSearch connectivity and index ensure (optional)
     try:
         if settings.search_backend == "opensearch" and settings.opensearch_host:
@@ -200,10 +235,24 @@ def list_providers():
 
 @app.get("/api/upload-config")
 def upload_config():
+    oci_ready = None
+    oci_detail = None
+    if settings.storage_backend in {"oci", "both"}:
+        ready, detail = oci_upload_ready()
+        oci_ready = ready
+        oci_detail = detail
     return {
         "max_upload_size_mb": settings.max_upload_size_mb,
         "max_upload_files": settings.max_upload_files,
         "allowed_extensions": sorted(list(ALLOWED_EXTS)),
+        "storage_backend": settings.storage_backend,
+        "enable_image_storage": settings.enable_image_storage,
+        "oci": {
+            "bucket": settings.oci_os_bucket_name,
+            "upload_enabled": settings.oci_os_upload_enabled,
+            "ready": oci_ready,
+            "detail": oci_detail,
+        },
     }
 
 
@@ -539,7 +588,7 @@ async def api_image_search(request: Request):
     sid = payload.get("space_id")
     sid = int(sid) if sid is not None else get_default_space_id(uid)
 
-    query = (payload.get("query") or "").strip()
+    query = _extract_query_text(payload.get("query"))
     tag_filter = _extract_tags(payload.get("tags"))
     top_k_raw = payload.get("top_k")
     try:
@@ -1121,19 +1170,16 @@ async def api_set_default_space(request: Request, payload: Dict[str, Any]):
 
 
 @app.get("/api/kb")
-async def api_kb(request: Request, limit: int = 200, offset: int = 0, space_id: int | None = None, order: str = "desc"):
+async def api_kb(request: Request, limit: int = 200, offset: int = 0, space_id: int | None = None, order: str = "desc", include_images: bool = True):
     user = await get_current_user(request)
     if not user:
         return JSONResponse(status_code=401, content={"error": "unauthorized"})
     uid = int(user.get("user_id") or user.get("id"))
     items: List[Dict[str, Any]] = []
-    ord_dir = "ASC" if str(order).lower() == "asc" else "DESC"
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            if space_id is not None:
                 cur.execute(
                     f"""
                     SELECT d.id, d.source_path, d.source_type, COALESCE(d.title,''), d.created_at,
+                           COALESCE(d.metadata,'{}'::jsonb) AS metadata,
                            (SELECT count(*) FROM chunks c WHERE c.document_id = d.id) AS chunk_count
                     FROM documents d
                     WHERE d.user_id = %s AND d.space_id = %s
@@ -1142,10 +1188,11 @@ async def api_kb(request: Request, limit: int = 200, offset: int = 0, space_id: 
                     """,
                     (uid, int(space_id), int(limit), int(offset)),
                 )
-            else:
+                    LIMIT %s OFFSET %s
                 cur.execute(
                     f"""
                     SELECT d.id, d.source_path, d.source_type, COALESCE(d.title,''), d.created_at,
+                           COALESCE(d.metadata,'{}'::jsonb) AS metadata,
                            (SELECT count(*) FROM chunks c WHERE c.document_id = d.id) AS chunk_count
                     FROM documents d
                     WHERE d.user_id = %s
@@ -1154,20 +1201,62 @@ async def api_kb(request: Request, limit: int = 200, offset: int = 0, space_id: 
                     """,
                     (uid, int(limit), int(offset)),
                 )
+                    LIMIT %s OFFSET %s
+                    """,
+                    (uid, int(limit), int(offset)),
+                )
             rows = cur.fetchall()
+            image_map: Dict[int, List[Dict[str, Any]]] = {}
+            if include_images and doc_ids:
+                placeholders = "(" + ",".join(["%s"] * len(doc_ids)) + ")"
+                cur.execute(
+                    f"""
+                    SELECT document_id, id, thumbnail_path, file_path, width, height, caption, tags
+                    FROM image_assets
+                    WHERE document_id IN {placeholders}
+                    ORDER BY created_at DESC
+                    """,
+                    doc_ids,
+                )
+                for row in cur.fetchall():
+                    doc_key = int(row[0])
+                    image_map.setdefault(doc_key, []).append(
+                        {
+                            "image_id": int(row[1]),
+                            "thumbnail_path": row[2],
+                            "file_path": row[3],
+                            "width": row[4],
+                            "height": row[5],
+                            "caption": row[6],
+                            "tags": row[7] or [],
+                        }
+                    )
+
             for r in rows:
                 sp = r[1] or ""
                 fn = sp.rsplit("/", 1)[-1] if sp else ""
+                doc_id = int(r[0])
+                metadata = meta_by_doc.get(doc_id) or {}
+                images = image_map.get(doc_id, [])
                 items.append({
-                    "id": int(r[0]),
+                    "id": doc_id,
                     "file_name": fn,
                     "source_path": sp,
                     "source_type": r[2] or "",
                     "title": r[3] or "",
                     "created_at": (r[4].isoformat() if r[4] else None),
-                    "chunk_count": int(r[5] or 0),
+                    "chunk_count": chunk_counts.get(doc_id, 0),
+                    "metadata": metadata,
+                    "images": images,
                 })
-    return {"documents": items, "limit": int(limit), "offset": int(offset), "space_id": (int(space_id) if space_id is not None else None), "order": ord_dir.lower()}
+    return {
+        "documents": items,
+        "limit": int(limit),
+        "offset": int(offset),
+        "space_id": (int(space_id) if space_id is not None else None),
+        "order": ord_dir.lower(),
+        "include_images": bool(include_images),
+    }
 
 
 @app.get("/api/doc-url")

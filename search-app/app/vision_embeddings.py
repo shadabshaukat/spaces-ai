@@ -36,6 +36,22 @@ def _get_clip_model():
     return model, preprocess, tokenizer
 
 
+def vision_dependencies_ready(preload_model: bool = False) -> tuple[bool, str | None]:
+    """Return whether Pillow/OpenCLIP dependencies are ready along with an optional detail string."""
+    try:
+        import PIL  # type: ignore  # noqa: F401
+    except ModuleNotFoundError as exc:  # pragma: no cover - depends on extras
+        return False, "Pillow is not installed. Install extras with `uv sync --extra image` or `pip install .[image]`."
+    try:
+        if preload_model:
+            _get_clip_model()
+    except VisionModelUnavailable as e:
+        return False, str(e)
+    except Exception as e:  # pragma: no cover - safety net for model issues
+        return False, f"Vision model initialization failed: {e}"
+    return True, None
+
+
 def embed_image_paths(paths: Iterable[str]) -> List[List[float]]:
     paths = list(paths)
     if not paths:

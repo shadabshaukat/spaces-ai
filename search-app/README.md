@@ -198,6 +198,13 @@ OLLAMA_MODEL=llama3.2:latest
     ```bash
     ./stop-app.sh
     ```
+  - Toggle debug logging:
+    ```bash
+    ./run-app.sh --no-debug   # disable verbose logs
+    ./run-app.sh --debug      # (default) explicitly enable
+    ./start-app.sh --no-debug # runs in background with DEBUG_LOGGING=false
+    ```
+    All launch scripts accept `--debug`/`--no-debug` and default to verbose logging. You can also export `DEBUG_LOGGING=false` before invoking any script to permanently reduce log noise in production.
 
 ## Running locally
 

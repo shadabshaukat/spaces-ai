@@ -36,7 +36,8 @@ from .deep_research import start_conversation as dr_start, ask as dr_ask
 from .vision_embeddings import embed_image_paths, embed_image_texts, VisionModelUnavailable
 
 logger = logging.getLogger("searchapp")
-logging.basicConfig(level=os.getenv("LOGLEVEL", "INFO"))
+log_level = logging.DEBUG if settings.debug_logging else os.getenv("LOGLEVEL", "INFO")
+logging.basicConfig(level=log_level)
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -498,16 +499,43 @@ async def api_search(request: Request, payload: Dict[str, Any]):
 
 
 @app.post("/api/image-search")
-async def api_image_search(
-    request: Request,
-    payload: Dict[str, Any] | None = None,
-    reference: UploadFile | None = None,
-):
+async def api_image_search(request: Request):
     user = await get_current_user(request)
     if not user:
         return JSONResponse(status_code=401, content={"error": "unauthorized"})
     uid = int(user["user_id"]) if "user_id" in user else int(user.get("id"))
-    payload = payload or {}
+    content_type = request.headers.get("content-type", "")
+    payload: Dict[str, Any] = {}
+    reference_file: UploadFile | None = None
+
+    logger.debug(
+        "image_search request content-type=%s query-params=%s",
+        content_type,
+        dict(request.query_params),
+    )
+
+    if "multipart/form-data" in content_type or "application/x-www-form-urlencoded" in content_type:
+        form = await request.form()
+        for key, value in form.multi_items():
+            if isinstance(value, UploadFile):
+                if key == "reference" and reference_file is None:
+                    reference_file = value
+                continue
+            payload[key] = value
+    else:
+        try:
+            body = await request.json()
+            if isinstance(body, dict):
+                payload = body
+        except Exception:
+            payload = {}
+
+    logger.info(
+        "image_search payload keys=%s reference=%s",
+        sorted(payload.keys()),
+        bool(reference_file),
+    )
+
     sid = payload.get("space_id")
     sid = int(sid) if sid is not None else get_default_space_id(uid)
 
@@ -523,32 +551,52 @@ async def api_image_search(
     vector_input = payload.get("vector")
     vector = _extract_vector(vector_input)
 
+    logger.debug(
+        "image_search normalized inputs: space_id=%s query=%r tags=%s top_k=%s vector_provided=%s",
+        sid,
+        query,
+        tag_filter,
+        top_k,
+        vector is not None,
+    )
+
     temp_file_path: str | None = None
+    reference_used = False
     try:
-        if reference is not None:
-            if not reference.filename:
+        if reference_file is not None:
+            if not reference_file.filename:
                 return JSONResponse(status_code=400, content={"error": "reference filename missing"})
-            suffix = Path(reference.filename).suffix.lower()
+            suffix = Path(reference_file.filename).suffix.lower()
             if suffix and suffix not in IMAGE_EXTS:
                 return JSONResponse(status_code=400, content={"error": "unsupported reference type"})
             with NamedTemporaryFile(delete=False, suffix=suffix or ".img") as tmp:
-                data = await reference.read()
+                data = await reference_file.read()
                 tmp.write(data)
                 temp_file_path = tmp.name
+            logger.debug("image_search embedding reference file=%s size=%s", reference_file.filename, os.path.getsize(temp_file_path))
             try:
                 vectors = embed_image_paths([temp_file_path])
                 vector = vectors[0] if vectors else None
+                reference_used = vector is not None
+                logger.debug("image_search reference vector generated=%s", reference_used)
             except VisionModelUnavailable as e:
                 logger.warning("Vision model unavailable for reference: %s", e)
                 return JSONResponse(status_code=503, content={"error": "vision model unavailable", "detail": str(e), "install_hint": "uv sync --extra image"})
             except Exception as e:
                 logger.warning("Failed to embed reference image: %s", e)
                 return JSONResponse(status_code=400, content={"error": "failed to process reference image", "detail": str(e)})
+            finally:
+                try:
+                    if reference_file and reference_file.file:
+                        reference_file.file.close()
+                except Exception:
+                    pass
 
         if vector is None and query:
             try:
                 vecs = embed_image_texts([query])
                 vector = vecs[0] if vecs else None
+                logger.debug("image_search text vector generated=%s", vector is not None)
             except VisionModelUnavailable as e:
                 logger.warning("Vision model unavailable: %s", e)
                 return JSONResponse(status_code=503, content={"error": "vision model unavailable", "detail": str(e), "install_hint": "uv sync --extra image"})
@@ -564,6 +612,15 @@ async def api_image_search(
 
     if vector is None and not query and not tag_filter:
         return JSONResponse(status_code=400, content={"error": "provide query, tags, or vector"})
+
+    logger.info(
+        "image_search executing: query=%r tags=%s top_k=%s has_vector=%s reference=%s",
+        query,
+        tag_filter,
+        top_k,
+        vector is not None,
+        reference_used,
+    )
 
     hits = image_search(query=query, vector=vector, top_k=top_k, user_id=uid, space_id=sid, tags=tag_filter)
 
@@ -597,7 +654,7 @@ async def api_image_search(
                             "space_id": sid,
                             "tags": tag_filter,
                             "vector": bool(vector),
-                            "reference": bool(reference),
+                            "reference": reference_used,
                         }),
                     ),
                 )

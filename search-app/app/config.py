@@ -136,6 +136,7 @@ class Settings:
     # Security & Auth
     allow_cors: bool = _get_bool("ALLOW_CORS", True)
     cors_origins: tuple[str, ...] = tuple([s.strip() for s in os.getenv("CORS_ORIGINS", "*").split(",") if s.strip()])
+    debug_logging: bool = _get_bool("DEBUG_LOGGING", True)
     # Session and cookie config
     secret_key: str = os.getenv("SECRET_KEY") or secrets.token_urlsafe(32)
     session_cookie_name: str = os.getenv("SESSION_COOKIE_NAME", "spacesai_session")

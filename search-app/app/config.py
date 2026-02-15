@@ -105,6 +105,11 @@ class Settings:
     valkey_db: int = int(os.getenv("VALKEY_DB", "0"))
     valkey_tls: bool = _get_bool("VALKEY_TLS", False)
     cache_ttl_seconds: int = int(os.getenv("CACHE_TTL_SECONDS", "300"))
+    cache_namespace: str = os.getenv("CACHE_NAMESPACE", "spacesai")
+    cache_schema_version: str = os.getenv("CACHE_SCHEMA_VERSION", "v1")
+    cache_failure_threshold: int = int(os.getenv("CACHE_FAILURE_THRESHOLD", "3"))
+    cache_cooldown_seconds: int = int(os.getenv("CACHE_COOLDOWN_SECONDS", "60"))
+    llm_cache_ttl_seconds: int = int(os.getenv("LLM_CACHE_TTL_SECONDS", "900"))
 
     # AWS Bedrock (optional)
     aws_region: Optional[str] = os.getenv("AWS_REGION")

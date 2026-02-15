@@ -66,6 +66,7 @@ button:hover { filter: brightness(0.98); }
 .badge-soft { background: #f3f4f6; color: #374151; }
 .badge-web { background: #fef3c7; color: #92400e; }
 .badge-local { background: #dcfce7; color: #065f46; }
+.badge-remote { background: #e0f2fe; color: #075985; }
 .muted { color: #6b7280; font-size: 12px; }
 .toast { position: fixed; bottom: 16px; right: 16px; background: #111827; color: #fff; padding: 10px 14px; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,0.15); }
 .loader { display: flex; align-items: center; gap: 8px; color: #4b5563; }
@@ -161,6 +162,7 @@ body.dark .dr-refs a { color: #60a5fa; }
 .image-card-meta { display: flex; gap: 6px; flex-wrap: wrap; }
 .image-card-caption { margin: 0; font-weight: 600; font-size: 14px; color: #111827; min-height: 40px; }
 .image-card-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.image-card-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .image-card.small .image-card-thumb { padding-top: 55%; }
 .image-card.large .image-card-thumb { padding-top: 90%; }
 .image-card.large .image-card-caption { font-size: 16px; }
@@ -196,6 +198,7 @@ body.dark .dr-refs a { color: #60a5fa; }
 .kb-image-body { padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #4b5563; }
 .kb-image-caption { font-weight: 600; color: #111827; margin: 0; }
 .kb-image-tags { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; color: #374151; }
+.kb-image-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* Dropzone meta info */
 .dz-meta { font-size: 12px; color: #6b7280; text-align: center; }
@@ -211,6 +214,7 @@ body.dark .kb-image-thumb { background: #111827; }
 body.dark .kb-image-body { color: #cbd5f5; }
 body.dark .kb-image-caption { color: #e5e7eb; }
 body.dark .kb-image-tags { color: #94a3b8; }
+body.dark .kb-image-actions a { color: #60a5fa; }
 body.dark .dz-meta { color: #94a3b8; }
 
 /* Hover polish */

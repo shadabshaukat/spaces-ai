@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import json
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 from .config import settings
 from .db import get_conn, set_search_runtime
 from .embeddings import embed_texts
+from .pgvector_utils import to_vec_literal
 from .opensearch_adapter import OpenSearchAdapter
 from .valkey_cache import get_json as cache_get, set_json as cache_set, get_revision
 from .runtime_config import get_pgvector_probes
@@ -268,7 +270,95 @@ def image_search(query: Optional[str], vector: Optional[List[float]], top_k: int
     if cached:
         return cached
 
-    adapter = OpenSearchAdapter()
-    hits = adapter.search_images(vector=vector, query=query, top_k=top_k, user_id=user_id, space_id=space_id, tags=tags)
+    hits: List[Dict[str, Any]] = []
+    use_opensearch = settings.search_backend == "opensearch" and bool(settings.opensearch_host)
+    if use_opensearch:
+        adapter = OpenSearchAdapter()
+        try:
+            hits = adapter.search_images(vector=vector, query=query, top_k=top_k, user_id=user_id, space_id=space_id, tags=tags)
+        except Exception as exc:
+            logger.warning("OpenSearch image search failed (%s); falling back to Postgres", exc)
+            hits = _image_search_postgres(vector=vector, query=query, top_k=top_k, user_id=user_id, space_id=space_id, tags=tags)
+    else:
+        hits = _image_search_postgres(vector=vector, query=query, top_k=top_k, user_id=user_id, space_id=space_id, tags=tags)
+
     cache_set(ck, hits)
     return hits
+
+
+def _image_search_postgres(*, vector: Optional[List[float]], query: Optional[str], top_k: int, user_id: Optional[int], space_id: Optional[int], tags: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+    if not settings.enable_image_storage:
+        return []
+
+    where = []
+    params: List[Any] = []
+    if user_id is not None:
+        where.append("ia.user_id = %s")
+        params.append(int(user_id))
+    if space_id is not None:
+        where.append("ia.space_id = %s")
+        params.append(int(space_id))
+    if tags:
+        where.append("ia.tags @> %s::jsonb")
+        params.append(json.dumps(tags))
+    if query and vector is None:
+        where.append("ia.caption ILIKE %s")
+        params.append(f"%{query}%")
+
+    order_clause = "ia.created_at DESC"
+    distance_expr = "NULL::double precision AS distance"
+    vector_param = None
+    if vector is not None:
+        distance_expr = f"(ia.embedding {_vector_operator()} %s::vector) AS distance"
+        vector_param = to_vec_literal(vector)
+
+    sql = [
+        "SELECT ia.id, ia.document_id, ia.file_path, ia.thumbnail_path, ia.caption, ia.tags, ia.width, ia.height, ia.created_at,",
+        distance_expr,
+        "FROM image_assets ia",
+    ]
+    if where:
+        sql.append("WHERE " + " AND ".join(where))
+    if vector_param is not None:
+        params.append(vector_param)
+        order_clause = "distance ASC"
+
+    sql.append(f"ORDER BY {order_clause} LIMIT %s")
+    params.append(int(top_k))
+
+    query_str = "\n".join(sql)
+    results: List[Dict[str, Any]] = []
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query_str, params)
+            rows = cur.fetchall()
+    for row in rows:
+        image_id, doc_id, file_path, thumb_path, caption, tags_raw, width, height, created_at, distance = row
+        parsed_tags: List[str]
+        if isinstance(tags_raw, list):
+            parsed_tags = tags_raw
+        else:
+            try:
+                parsed_tags = json.loads(tags_raw) if tags_raw else []
+            except Exception:
+                parsed_tags = []
+        src = {
+            "doc_id": doc_id,
+            "image_id": image_id,
+            "file_path": file_path,
+            "thumbnail_path": thumb_path,
+            "caption": caption,
+            "tags": parsed_tags,
+            "width": width,
+            "height": height,
+            "created_at": created_at.isoformat() if created_at else None,
+        }
+        entry: Dict[str, Any] = {"_source": src}
+        if distance is not None:
+            try:
+                dist_val = float(distance)
+                entry["_score"] = 1.0 / (1.0 + max(dist_val, 0.0))
+            except Exception:
+                entry["_score"] = None
+        results.append(entry)
+    return results

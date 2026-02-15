@@ -95,8 +95,17 @@ def embed_image_texts(texts: Iterable[str]) -> List[List[float]]:
                 tok = tokenizer(text)
                 if hasattr(tok, "unsqueeze"):
                     single_tokens.append(tok.unsqueeze(0))
-                else:
-                    raise TypeError("Tokenizer output unsupported for batching") from exc
+                    continue
+                if isinstance(tok, (list, tuple)):
+                    tok = torch.tensor(tok)
+                    single_tokens.append(tok.unsqueeze(0))
+                    continue
+                if isinstance(tok, dict) and tok.get("input_ids") is not None:
+                    tensor = tok["input_ids"]
+                    if hasattr(tensor, "unsqueeze"):
+                        single_tokens.append(tensor.unsqueeze(0))
+                        continue
+                raise TypeError("Tokenizer output unsupported for batching") from exc
             tokens = torch.cat(single_tokens, dim=0)
         tokens = tokens.to(device)
         vecs = model.encode_text(tokens)

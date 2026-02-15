@@ -1182,12 +1182,12 @@ async def api_kb(request: Request, limit: int = 200, offset: int = 0, space_id: 
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
-                base_sql = f"""
+                base_sql = """
                     SELECT d.id, d.source_path, d.source_type, COALESCE(d.title,''), d.created_at,
-                           COALESCE(d.metadata,'{}'::jsonb) AS metadata
+                           COALESCE(d.metadata,'{{}}'::jsonb) AS metadata
                     FROM documents d
-                    WHERE d.user_id = %s {{space_clause}}
-                    ORDER BY d.created_at {ord_dir}
+                    WHERE d.user_id = %s {space_clause}
+                    ORDER BY d.created_at {order_dir}
                     LIMIT %s OFFSET %s
                 """
                 params: List[Any] = [uid]
@@ -1196,7 +1196,7 @@ async def api_kb(request: Request, limit: int = 200, offset: int = 0, space_id: 
                     space_clause = "AND d.space_id = %s"
                     params.append(int(space_id))
                 params.extend([int(limit), int(offset)])
-                sql = base_sql.replace("{space_clause}", space_clause)
+                sql = base_sql.format(space_clause=space_clause, order_dir=ord_dir)
                 cur.execute(sql, params)
                 rows = cur.fetchall()
 

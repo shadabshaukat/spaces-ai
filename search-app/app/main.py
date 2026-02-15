@@ -1175,80 +1175,94 @@ async def api_kb(request: Request, limit: int = 200, offset: int = 0, space_id: 
     if not user:
         return JSONResponse(status_code=401, content={"error": "unauthorized"})
     uid = int(user.get("user_id") or user.get("id"))
+    order = order.lower()
+    ord_dir = "DESC" if order != "asc" else "ASC"
     items: List[Dict[str, Any]] = []
-                cur.execute(
-                    f"""
+
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                base_sql = f"""
                     SELECT d.id, d.source_path, d.source_type, COALESCE(d.title,''), d.created_at,
-                           COALESCE(d.metadata,'{}'::jsonb) AS metadata,
-                           (SELECT count(*) FROM chunks c WHERE c.document_id = d.id) AS chunk_count
+                           COALESCE(d.metadata,'{}'::jsonb) AS metadata
                     FROM documents d
-                    WHERE d.user_id = %s AND d.space_id = %s
+                    WHERE d.user_id = %s {{space_clause}}
                     ORDER BY d.created_at {ord_dir}
                     LIMIT %s OFFSET %s
-                    """,
-                    (uid, int(space_id), int(limit), int(offset)),
-                )
-                    LIMIT %s OFFSET %s
-                cur.execute(
-                    f"""
-                    SELECT d.id, d.source_path, d.source_type, COALESCE(d.title,''), d.created_at,
-                           COALESCE(d.metadata,'{}'::jsonb) AS metadata,
-                           (SELECT count(*) FROM chunks c WHERE c.document_id = d.id) AS chunk_count
-                    FROM documents d
-                    WHERE d.user_id = %s
-                    ORDER BY d.created_at {ord_dir}
-                    LIMIT %s OFFSET %s
-                    """,
-                    (uid, int(limit), int(offset)),
-                )
-                    LIMIT %s OFFSET %s
-                    """,
-                    (uid, int(limit), int(offset)),
-                )
-            rows = cur.fetchall()
-            image_map: Dict[int, List[Dict[str, Any]]] = {}
-            if include_images and doc_ids:
-                placeholders = "(" + ",".join(["%s"] * len(doc_ids)) + ")"
-                cur.execute(
-                    f"""
-                    SELECT document_id, id, thumbnail_path, file_path, width, height, caption, tags
-                    FROM image_assets
-                    WHERE document_id IN {placeholders}
-                    ORDER BY created_at DESC
-                    """,
-                    doc_ids,
-                )
-                for row in cur.fetchall():
-                    doc_key = int(row[0])
-                    image_map.setdefault(doc_key, []).append(
+                """
+                params: List[Any] = [uid]
+                space_clause = ""
+                if space_id is not None:
+                    space_clause = "AND d.space_id = %s"
+                    params.append(int(space_id))
+                params.extend([int(limit), int(offset)])
+                sql = base_sql.replace("{space_clause}", space_clause)
+                cur.execute(sql, params)
+                rows = cur.fetchall()
+
+                doc_ids = [int(r[0]) for r in rows]
+                chunk_counts: Dict[int, int] = {}
+                meta_by_doc: Dict[int, Dict[str, Any]] = {}
+                if doc_ids:
+                    cur.execute(
+                        "SELECT document_id, count(*) FROM chunks WHERE document_id = ANY(%s) GROUP BY document_id",
+                        (doc_ids,),
+                    )
+                    chunk_counts = {int(r[0]): int(r[1]) for r in cur.fetchall()}
+                    cur.execute(
+                        "SELECT id, COALESCE(metadata,'{}'::jsonb) FROM documents WHERE id = ANY(%s)",
+                        (doc_ids,),
+                    )
+                    meta_by_doc = {int(r[0]): (r[1] or {}) for r in cur.fetchall()}
+
+                image_map: Dict[int, List[Dict[str, Any]]] = {}
+                if include_images and doc_ids:
+                    placeholders = "(" + ",".join(["%s"] * len(doc_ids)) + ")"
+                    cur.execute(
+                        f"""
+                        SELECT document_id, id, thumbnail_path, file_path, width, height, caption, tags
+                        FROM image_assets
+                        WHERE document_id IN {placeholders}
+                        ORDER BY created_at DESC
+                        """,
+                        doc_ids,
+                    )
+                    for row in cur.fetchall():
+                        doc_key = int(row[0])
+                        image_map.setdefault(doc_key, []).append(
+                            {
+                                "image_id": int(row[1]),
+                                "thumbnail_path": row[2],
+                                "file_path": row[3],
+                                "width": row[4],
+                                "height": row[5],
+                                "caption": row[6],
+                                "tags": row[7] or [],
+                            }
+                        )
+
+                for r in rows:
+                    sp = r[1] or ""
+                    fn = sp.rsplit("/", 1)[-1] if sp else ""
+                    doc_id = int(r[0])
+                    metadata = meta_by_doc.get(doc_id) or {}
+                    items.append(
                         {
-                            "image_id": int(row[1]),
-                            "thumbnail_path": row[2],
-                            "file_path": row[3],
-                            "width": row[4],
-                            "height": row[5],
-                            "caption": row[6],
-                            "tags": row[7] or [],
+                            "id": doc_id,
+                            "file_name": fn,
+                            "source_path": sp,
+                            "source_type": r[2] or "",
+                            "title": r[3] or "",
+                            "created_at": (r[4].isoformat() if r[4] else None),
+                            "chunk_count": chunk_counts.get(doc_id, 0),
+                            "metadata": metadata,
+                            "images": image_map.get(doc_id, []),
                         }
                     )
+    except Exception as e:
+        logger.exception("Failed to load KB: %s", e)
+        return JSONResponse(status_code=500, content={"error": "failed to load knowledge base"})
 
-            for r in rows:
-                sp = r[1] or ""
-                fn = sp.rsplit("/", 1)[-1] if sp else ""
-                doc_id = int(r[0])
-                metadata = meta_by_doc.get(doc_id) or {}
-                images = image_map.get(doc_id, [])
-                items.append({
-                    "id": doc_id,
-                    "file_name": fn,
-                    "source_path": sp,
-                    "source_type": r[2] or "",
-                    "title": r[3] or "",
-                    "created_at": (r[4].isoformat() if r[4] else None),
-                    "chunk_count": chunk_counts.get(doc_id, 0),
-                    "metadata": metadata,
-                    "images": images,
-                })
     return {
         "documents": items,
         "limit": int(limit),

@@ -10,10 +10,18 @@ from .config import settings
 logger = logging.getLogger(__name__)
 
 
+class VisionModelUnavailable(RuntimeError):
+    pass
+
+
 @lru_cache(maxsize=1)
 def _get_clip_model():
-    import open_clip  # type: ignore
-
+    try:
+        import open_clip  # type: ignore
+    except ModuleNotFoundError as exc:  # pragma: no cover - depends on extras
+        raise VisionModelUnavailable(
+            "open_clip is not installed. Install extras with `uv sync --extra image` or `pip install .[image]`"
+        ) from exc
     model_name = settings.image_embed_model
     cache_dir = Path(settings.model_cache_dir) / "vision"
     cache_dir.mkdir(parents=True, exist_ok=True)

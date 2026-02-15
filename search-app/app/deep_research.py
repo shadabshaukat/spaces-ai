@@ -7,6 +7,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
 
+from .db import get_conn
+
 from .config import settings
 from .search import hybrid_search, ChunkHit
 from .agentic_research import decide_web_and_contexts
@@ -182,13 +184,32 @@ def ask(user_id: int, space_id: Optional[int], conversation_id: str, message: st
 
     # Prepare references (top few)
     refs: List[Dict[str, object]] = []
+    local_hits = hits_all[:5]
+    doc_meta: Dict[int, Dict[str, object]] = {}
+    if local_hits:
+        doc_ids = sorted({int(h.document_id) for h in local_hits})
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id, COALESCE(title,''), source_path FROM documents WHERE id = ANY(%s)",
+                    (doc_ids,),
+                )
+                for row in cur.fetchall():
+                    doc_meta[int(row[0])] = {
+                        "title": row[1] or "",
+                        "source_path": row[2] or "",
+                    }
     try:
-        for h in hits_all[:5]:
+        for h in local_hits:
+            info = doc_meta.get(int(h.document_id), {})
             refs.append({
                 "document_id": h.document_id,
                 "chunk_id": h.chunk_id,
                 "chunk_index": h.chunk_index,
                 "source": "local",
+                "title": info.get("title") or "",
+                "source_path": info.get("source_path") or "",
+                "excerpt": h.content,
             })
         for hit in web_hits[:5]:
             refs.append({

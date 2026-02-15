@@ -3,13 +3,15 @@ from __future__ import annotations
 import logging
 import os
 import json
+import mimetypes
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse, unquote
 
 from fastapi import FastAPI, File, UploadFile, Request, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse, FileResponse, StreamingResponse
+from fastapi.responses import JSONResponse, HTMLResponse, FileResponse, StreamingResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import uvicorn
@@ -68,6 +70,49 @@ ALLOWED_EXTS = {
     ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif",
 }
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif"}
+
+
+def _asset_candidate_bases() -> List[Path]:
+    bases = [Path(settings.upload_dir)]
+    tmp_dir = Path(settings.data_dir) / "tmp_uploads"
+    if tmp_dir != bases[0]:
+        bases.append(tmp_dir)
+    return bases
+
+
+def _resolve_asset_path(rel_path: Optional[str]) -> Optional[Path]:
+    if not rel_path:
+        return None
+    rel = str(rel_path).lstrip("/\\")
+    if not rel:
+        return None
+    for base in _asset_candidate_bases():
+        base_resolved = base.resolve()
+        candidate = (base_resolved / rel).resolve()
+        try:
+            candidate.relative_to(base_resolved)
+        except ValueError:
+            continue
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _augment_image_payload(doc_id: int, image: Dict[str, Any], metadata: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    payload = dict(image)
+    image_id = image.get("image_id")
+    if image_id:
+        payload["thumbnail_url"] = f"/api/image-assets/{image_id}/thumbnail"
+    else:
+        payload["thumbnail_url"] = None
+    payload["file_url"] = f"/api/doc-download?doc_id={doc_id}" if doc_id else None
+    if isinstance(metadata, dict):
+        payload["object_url"] = metadata.get("object_url")
+        payload["thumbnail_object_url"] = metadata.get("thumbnail_object_url")
+    else:
+        payload["object_url"] = None
+        payload["thumbnail_object_url"] = None
+    return payload
 
 
 def _normalize_tags(raw: Any) -> List[str]:
@@ -703,6 +748,30 @@ async def api_image_search(request: Request):
             }
         )
 
+    doc_meta_map: Dict[int, Dict[str, Any]] = {}
+    doc_ids = sorted({int(r["doc_id"]) for r in results if r.get("doc_id")})
+    if doc_ids:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id, COALESCE(metadata,'{}'::jsonb) FROM documents WHERE id = ANY(%s)",
+                    (doc_ids,),
+                )
+                doc_meta_map = {int(row[0]): (row[1] or {}) for row in cur.fetchall()}
+
+    for item in results:
+        doc_id = item.get("doc_id")
+        image_id = item.get("image_id")
+        meta = doc_meta_map.get(int(doc_id)) if doc_id else {}
+        item["thumbnail_url"] = f"/api/image-assets/{image_id}/thumbnail" if image_id else None
+        if isinstance(meta, dict):
+            item["thumbnail_object_url"] = meta.get("thumbnail_object_url")
+            item["object_url"] = meta.get("object_url")
+        else:
+            item["thumbnail_object_url"] = None
+            item["object_url"] = None
+        item["file_url"] = f"/api/doc-download?doc_id={doc_id}" if doc_id else None
+
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
@@ -1246,6 +1315,10 @@ async def api_kb(request: Request, limit: int = 200, offset: int = 0, space_id: 
                     fn = sp.rsplit("/", 1)[-1] if sp else ""
                     doc_id = int(r[0])
                     metadata = meta_by_doc.get(doc_id) or {}
+                    doc_images = [_augment_image_payload(doc_id, img, metadata) for img in image_map.get(doc_id, [])]
+                    preview_url = doc_images[0].get("thumbnail_url") if doc_images else None
+                    if not preview_url and isinstance(metadata, dict):
+                        preview_url = metadata.get("thumbnail_object_url")
                     items.append(
                         {
                             "id": doc_id,
@@ -1256,7 +1329,8 @@ async def api_kb(request: Request, limit: int = 200, offset: int = 0, space_id: 
                             "created_at": (r[4].isoformat() if r[4] else None),
                             "chunk_count": chunk_counts.get(doc_id, 0),
                             "metadata": metadata,
-                            "images": image_map.get(doc_id, []),
+                            "images": doc_images,
+                            "thumbnail_preview_url": preview_url,
                         }
                     )
     except Exception as e:
@@ -1271,6 +1345,44 @@ async def api_kb(request: Request, limit: int = 200, offset: int = 0, space_id: 
         "order": ord_dir.lower(),
         "include_images": bool(include_images),
     }
+
+
+@app.get("/api/image-assets/{image_id}/thumbnail")
+async def api_image_thumbnail(request: Request, image_id: int):
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    uid = int(user.get("user_id") or user.get("id"))
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT ia.thumbnail_path, ia.document_id, d.user_id, COALESCE(d.metadata,'{}'::jsonb)
+                FROM image_assets ia
+                JOIN documents d ON d.id = ia.document_id
+                WHERE ia.id = %s
+                """,
+                (int(image_id),),
+            )
+            row = cur.fetchone()
+    if not row:
+        return JSONResponse(status_code=404, content={"error": "not found"})
+    thumb_rel, doc_id, owner_id, metadata = row
+    if int(owner_id) != uid:
+        return JSONResponse(status_code=404, content={"error": "not found"})
+
+    path = _resolve_asset_path(thumb_rel)
+    if path and path.exists():
+        media_type = mimetypes.guess_type(str(path))[0] or "image/jpeg"
+        return FileResponse(str(path), media_type=media_type)
+
+    meta = metadata or {}
+    if isinstance(meta, dict):
+        remote = meta.get("thumbnail_object_url")
+        if remote:
+            return RedirectResponse(remote, status_code=307)
+
+    return JSONResponse(status_code=404, content={"error": "thumbnail unavailable"})
 
 
 @app.get("/api/doc-url")

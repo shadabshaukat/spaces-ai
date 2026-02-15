@@ -310,6 +310,21 @@
         return escapeHtml(text);
       }
     }
+    function basename(path) {
+      if (!path) return '';
+      const idx = path.lastIndexOf('/');
+      return idx >= 0 ? path.slice(idx + 1) : path;
+    }
+    function formatDocTitle(doc) {
+      if (!doc) return '';
+      return doc.title || doc.file_name || basename(doc.source_path) || `Document ${doc.id ?? ''}`.trim();
+    }
+    function formatDateLabel(value) {
+      if (!value) return '';
+      const dt = new Date(value);
+      if (Number.isNaN(dt.getTime())) return '';
+      return dt.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    }
     function renderLLMText(s) {
       // Minimal markdown-ish renderer: code fences, lists, paragraphs
       const text = s || '';
@@ -723,23 +738,31 @@
       if (imageResultsSection) imageResultsSection.hidden = false;
       const size = imageThumbSizeEl.value || 'medium';
       const cards = results.map((item) => {
-        const thumb = item.thumbnail_path || item.file_path;
-        const caption = escapeHtml(item.caption || '');
+        const rawThumb = item.thumbnail_url || item.thumbnail_object_url || item.thumbnail_path || item.file_path || '';
+        const thumb = rawThumb ? escapeHtml(rawThumb) : '';
+        const caption = escapeHtml(item.caption || 'Untitled image');
         const tags = Array.isArray(item.tags) ? item.tags : [];
-        const tagBadges = tags.map(t => `<span class="badge">${escapeHtml(t)}</span>`).join('');
-        const meta = [
-          item.score != null ? `<span class="badge">score ${(item.score ?? '').toFixed ? item.score.toFixed(3) : item.score}</span>` : '',
-          item.rank != null ? `<span class="badge">#${item.rank}</span>` : '',
-        ].join('');
-        const href = item.file_path ? `/api/doc-download?doc_id=${item.doc_id || ''}` : '#';
+        const tagBadges = tags.map(t => `<span class="badge badge-soft">${escapeHtml(t)}</span>`).join('');
+        const meta = [];
+        if (item.score != null) {
+          const score = (item.score ?? '').toFixed ? item.score.toFixed(3) : item.score;
+          meta.push(`<span class="badge">score ${score}</span>`);
+        }
+        if (item.rank != null) meta.push(`<span class="badge">#${item.rank}</span>`);
+        if (item.object_url || item.thumbnail_object_url) meta.push('<span class="badge badge-remote">Remote</span>');
+        const docId = item.doc_id != null ? Number(item.doc_id) : null;
+        const primaryHref = item.file_url || (docId != null ? `/api/doc-download?doc_id=${encodeURIComponent(docId)}` : '');
+        const remoteHref = item.object_url ? escapeHtml(item.object_url) : null;
+        const sourceLink = primaryHref ? `<a class="ghost" href="${escapeHtml(primaryHref)}" target="_blank" rel="noopener">Open document</a>` : '';
+        const remoteLink = remoteHref ? `<a class="ghost" href="${remoteHref}" target="_blank" rel="noopener">Object copy</a>` : '';
         return `
           <div class="image-card ${size}">
             <div class="image-card-thumb">${thumb ? `<img src="${thumb}" alt="result ${item.rank || ''}" loading="lazy" />` : '<div class="thumb-placeholder">No preview</div>'}</div>
             <div class="image-card-body">
-              <div class="image-card-meta">${meta}</div>
-              <p class="image-card-caption">${caption || '(no caption yet)'}</p>
-              <div class="image-card-tags">${tagBadges}</div>
-              ${item.doc_id ? `<a class="ghost" href="${href}" target="_blank" rel="noopener">Open source</a>` : ''}
+              <div class="image-card-meta">${meta.join('')}</div>
+              <p class="image-card-caption">${caption}</p>
+              <div class="image-card-tags">${tagBadges || '<span class="muted">No tags</span>'}</div>
+              <div class="image-card-actions">${sourceLink}${remoteLink}</div>
             </div>
           </div>`;
       }).join('');
@@ -881,17 +904,53 @@
 
     function renderDrReferences(refs) {
       if (!Array.isArray(refs) || !refs.length) return '';
-      const items = refs.map((ref, idx) => {
-        if (ref.source === 'web') {
-          const title = escapeHtml(ref.title || `Web result ${idx + 1}`);
-          const url = escapeHtml(ref.url || '#');
-          const snippet = escapeHtml(ref.snippet || '');
-          return `<li><span class="badge badge-web">Web</span> <a href="${url}" target="_blank" rel="noopener">${title}</a><div class="dr-ref-snippet">${snippet}</div></li>`;
-        }
-        const label = `Document ${ref.document_id ?? ''} · Chunk ${ref.chunk_index ?? ''}`;
-        return `<li><span class="badge badge-local">KB</span> ${escapeHtml(label)}</li>`;
-      });
-      return `<div class="dr-refs"><div class="dr-refs-title">Sources</div><ol>${items.join('')}</ol></div>`;
+      const docRefs = refs.filter(r => r.source === 'local');
+      const webRefs = refs.filter(r => r.source === 'web');
+
+      const renderDocCard = (ref, idx) => {
+        const title = escapeHtml(ref.title || basename(ref.source_path || '') || `Document ${ref.document_id ?? idx + 1}`);
+        const chunkLabel = typeof ref.chunk_index === 'number' ? `Chunk #${ref.chunk_index}` : '';
+        const excerpt = escapeHtml(ref.excerpt || 'No excerpt available.');
+        const downloadHref = ref.document_id ? `/api/doc-download?doc_id=${encodeURIComponent(ref.document_id)}` : '';
+        const subtitle = [chunkLabel, ref.source_path ? basename(ref.source_path) : ''].filter(Boolean).join(' • ');
+        return `
+          <details class="dr-ref-card" data-source="local">
+            <summary>
+              <div class="dr-ref-card-title"><span class="badge badge-local">KB</span> ${title}</div>
+              ${subtitle ? `<div class="dr-ref-card-sub">${escapeHtml(subtitle)}</div>` : ''}
+            </summary>
+            <div class="dr-ref-body">
+              <p>${excerpt}</p>
+              ${downloadHref ? `<a class="ghost" href="${escapeHtml(downloadHref)}" target="_blank" rel="noopener">Open document</a>` : ''}
+            </div>
+          </details>`;
+      };
+
+      const renderWebCard = (ref, idx) => {
+        const title = escapeHtml(ref.title || `Web result ${idx + 1}`);
+        const url = escapeHtml(ref.url || '#');
+        const snippet = escapeHtml(ref.snippet || '');
+        return `
+          <details class="dr-ref-card" data-source="web">
+            <summary>
+              <div class="dr-ref-card-title"><span class="badge badge-web">Web</span> ${title}</div>
+              <div class="dr-ref-card-sub">${url}</div>
+            </summary>
+            <div class="dr-ref-body">
+              <p>${snippet || 'No snippet available.'}</p>
+              <a class="ghost" href="${url}" target="_blank" rel="noopener">Open link</a>
+            </div>
+          </details>`;
+      };
+
+      const sections = [];
+      if (docRefs.length) {
+        sections.push(`<div class="dr-refs-group"><div class="dr-refs-title">Knowledge Base</div>${docRefs.map(renderDocCard).join('')}</div>`);
+      }
+      if (webRefs.length) {
+        sections.push(`<div class="dr-refs-group"><div class="dr-refs-title">Web</div>${webRefs.map(renderWebCard).join('')}</div>`);
+      }
+      return `<div class="dr-refs">${sections.join('')}</div>`;
     }
 
     function pushMsg(role, text, meta) {
@@ -1048,62 +1107,67 @@
         const sec = document.getElementById('kbSection');
         list.innerHTML = '';
         if (Array.isArray(data.documents) && data.documents.length) {
-          for (const d of data.documents) {
+          data.documents.forEach((doc) => {
             const div = document.createElement('div');
             div.className = 'hit kb-doc-item';
-            const link = `<a href="#" data-doc-id="${d.id}">${escapeHtml(d.file_name || d.title || ('doc ' + d.id))}</a>`;
-            const kbMeta = [];
-            if (d.source_type) kbMeta.push(`<span class="badge">${escapeHtml(d.source_type)}</span>`);
-            if (typeof d.chunk_count === 'number') kbMeta.push(`<span class="badge">${d.chunk_count} chunks</span>`);
-            if (d.created_at) kbMeta.push(`<span class="badge">${escapeHtml(new Date(d.created_at).toLocaleString())}</span>`);
-            const metaHtml = kbMeta.join('');
+            const docTitle = formatDocTitle(doc);
+            const link = `<a href="#" data-doc-id="${doc.id}">${escapeHtml(docTitle)}</a>`;
+            const metaChips = [];
+            if (doc.source_type) metaChips.push(`<span class="badge badge-soft">${escapeHtml(doc.source_type)}</span>`);
+            if (typeof doc.chunk_count === 'number') metaChips.push(`<span class="badge badge-soft">${doc.chunk_count} chunks</span>`);
+            const created = formatDateLabel(doc.created_at);
+            if (created) metaChips.push(`<span class="badge badge-soft">${escapeHtml(created)}</span>`);
+            if (doc.metadata && doc.metadata.object_url) metaChips.push('<span class="badge badge-remote">Remote</span>');
+            const metaHtml = metaChips.join('');
 
-            const thumbnails = Array.isArray(d.images) ? d.images : [];
-            const docImages = thumbnails.map((img) => {
-              const thumb = escapeHtml(img.thumbnail_path || img.file_path || '');
-              const caption = escapeHtml(img.caption || '');
-              const tags = Array.isArray(img.tags) ? img.tags.map(t => `<span class="badge">${escapeHtml(t)}</span>`).join('') : '';
-              const downloadLink = d.id ? `<a class="ghost" href="/api/doc-download?doc_id=${d.id}" target="_blank" rel="noopener">Download</a>` : '';
+            const docDetails = [];
+            if (doc.metadata && doc.metadata.summary) {
+              docDetails.push(`<div class="kb-meta-line"><strong>Summary:</strong> ${escapeHtml(doc.metadata.summary)}</div>`);
+            }
+            if (doc.thumbnail_preview_url && !(doc.images && doc.images.length)) {
+              docDetails.push(`<div class="kb-meta-line"><img class="kb-inline-thumb" src="${escapeHtml(doc.thumbnail_preview_url)}" alt="thumbnail" /></div>`);
+            }
+            if (doc.metadata && doc.metadata.image_caption && !(doc.images && doc.images.length)) {
+              docDetails.push(`<div class="kb-meta-line"><strong>Caption:</strong> ${escapeHtml(doc.metadata.image_caption)}</div>`);
+            }
+
+            const docImages = Array.isArray(doc.images) ? doc.images : [];
+            const gallery = docImages.map((img) => {
+              const thumbSrc = img.thumbnail_url || img.thumbnail_object_url || img.thumbnail_path || img.file_path || '';
+              const thumb = thumbSrc ? escapeHtml(thumbSrc) : '';
+              const caption = escapeHtml(img.caption || 'No caption');
+              const tags = Array.isArray(img.tags) ? img.tags.map(t => `<span class="badge badge-soft">${escapeHtml(t)}</span>`).join('') : '';
+              const remote = (img.object_url || img.thumbnail_object_url) ? '<span class="badge badge-remote">Remote</span>' : '';
+              const fileUrl = img.file_url || (doc.id ? `/api/doc-download?doc_id=${doc.id}` : '');
+              const downloadLink = fileUrl ? `<a class="ghost" href="${escapeHtml(fileUrl)}" target="_blank" rel="noopener">Open document</a>` : '';
+              const objectLink = img.object_url ? `<a class="ghost" href="${escapeHtml(img.object_url)}" target="_blank" rel="noopener">Object copy</a>` : '';
               return `
                 <div class="kb-image-card">
-                  <div class="kb-image-thumb">${thumb ? `<img src="${thumb}" alt="thumbnail for doc ${d.id}" loading="lazy" />` : '<div class="thumb-placeholder">No preview</div>'}</div>
+                  <div class="kb-image-thumb">${thumb ? `<img src="${thumb}" alt="thumbnail for doc ${doc.id}" loading="lazy" />` : '<div class="thumb-placeholder">No preview</div>'}</div>
                   <div class="kb-image-body">
-                    <div class="kb-image-caption">${caption || '(no caption)'}</div>
-                    <div class="kb-image-tags">${tags}</div>
-                    ${downloadLink}
+                    <div class="kb-image-caption">${caption} ${remote}</div>
+                    <div class="kb-image-tags">${tags || '<span class="muted">No tags</span>'}</div>
+                    <div class="kb-image-actions">${downloadLink}${objectLink}</div>
                   </div>
                 </div>`;
             }).join('');
 
-            const docMeta = d.metadata || {};
-            const docDetails = [];
-            if (docMeta.image_caption && thumbnails.length === 0) {
-              docDetails.push(`<div class="kb-meta-line"><strong>Caption:</strong> ${escapeHtml(docMeta.image_caption)}</div>`);
-            }
-            if (docMeta.image_tags && docMeta.image_tags.length && thumbnails.length === 0) {
-              const tags = docMeta.image_tags.map(t => `<span class="badge">${escapeHtml(t)}</span>`).join('');
-              docDetails.push(`<div class="kb-meta-line"><strong>Tags:</strong> ${tags}</div>`);
-            }
-            if (docMeta.thumbnail_path && thumbnails.length === 0) {
-              docDetails.push(`<div class="kb-meta-line"><img class="kb-inline-thumb" src="${escapeHtml(docMeta.thumbnail_path)}" alt="thumbnail" /></div>`);
-            }
-
             div.innerHTML = `
               <div class="kb-doc-head">
                 <div class="kb-doc-title">
-                  <input type="checkbox" class="kbSel" data-doc-id="${d.id}" aria-label="Select document" />
+                  <input type="checkbox" class="kbSel" data-doc-id="${doc.id}" aria-label="Select document" />
                   &nbsp; ${link}
                 </div>
                 <div class="kb-doc-actions">
                   ${metaHtml}
-                  <button class="ghost" data-delete-doc-id="${d.id}">Delete</button>
+                  <button class="ghost" data-delete-doc-id="${doc.id}">Delete</button>
                 </div>
               </div>
               ${docDetails.length ? `<div class="kb-doc-meta">${docDetails.join('')}</div>` : ''}
-              ${thumbnails.length ? `<div class="kb-image-grid">${docImages}</div>` : ''}
+              ${docImages.length ? `<div class="kb-image-grid">${gallery}</div>` : ''}
             `;
             list.appendChild(div);
-          }
+          });
         } else {
           list.textContent = 'No documents yet.';
         }

@@ -849,8 +849,9 @@ async def api_dr_ask(request: Request, payload: Dict[str, Any]):
         return JSONResponse(status_code=400, content={"error": "conversation_id required"})
     if not message:
         return JSONResponse(status_code=400, content={"error": "message required"})
+    force_web = bool(payload.get("force_web"))
     try:
-        out = dr_ask(uid, sid, conversation_id, message, provider_override=provider)
+        out = dr_ask(uid, sid, conversation_id, message, provider_override=provider, force_web=force_web)
         return out
     except Exception as e:
         logger.exception("DR ask failed: %s", e)

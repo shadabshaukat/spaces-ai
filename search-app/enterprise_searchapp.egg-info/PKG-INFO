@@ -150,10 +150,10 @@ cp .env.example .env
 # (Optional) set LLM provider credentials (OCI, OpenAI, Bedrock, or Ollama)
 ```
 
-2) Install deps and run the app:
+2) Install deps (including image/vision stack) and run the app:
 
 ```bash
-uv sync --extra pdf --extra office --extra vision --extra audio
+uv sync --extra pdf --extra office --extra vision --extra audio --extra image
 uv run searchapp
 ```
 
@@ -239,7 +239,7 @@ OLLAMA_MODEL=llama3.2:latest
     ```
   - Run (foreground):
     ```bash
-    ./run-app.sh
+    ./run-app.sh --debug      # installs all extras, starts with verbose logs
     ```
   - Start (background):
     ```bash
@@ -249,6 +249,13 @@ OLLAMA_MODEL=llama3.2:latest
     ```bash
     ./stop-app.sh
     ```
+  - Toggle debug logging:
+    ```bash
+    ./run-app.sh --no-debug   # disable verbose logs
+    ./run-app.sh --debug      # (default) explicitly enable
+    ./start-app.sh --no-debug # runs in background with DEBUG_LOGGING=false
+    ```
+    All launch scripts accept `--debug`/`--no-debug` and default to verbose logging. You can also export `DEBUG_LOGGING=false` before invoking any script to permanently reduce log noise in production.
 
 ## Running locally
 
@@ -256,7 +263,7 @@ OLLAMA_MODEL=llama3.2:latest
 
 - Install deps and run:
 ```bash
-uv sync --extra pdf --extra office --extra vision --extra audio
+uv sync --extra pdf --extra office --extra vision --extra audio --extra image
 uv run searchapp
 ```
 - UI: http://0.0.0.0:8000

@@ -268,6 +268,13 @@
     </div>
     <div id="drChat" class="dr-chat"></div>
     <div class="dr-input">
+      <div class="dr-web-toggle">
+        <label>
+          <input id="drForceWeb" type="checkbox" />
+          Always include web search
+        </label>
+        <span id="drWebStatus" class="muted"></span>
+      </div>
       <input id="drMessage" type="text" placeholder="Ask a question…" />
       <button id="drSend" class="primary">Send</button>
     </div>
@@ -1017,7 +1024,7 @@
       try {
         const cid = await ensureDrConversation();
         const provider = document.getElementById('provider')?.value || undefined;
-        const body = { conversation_id: cid, message: txt, space_id: state.spaceId, llm_provider: provider };
+        const body = { conversation_id: cid, message: txt, space_id: state.spaceId, llm_provider: provider, force_web: document.getElementById('drForceWeb')?.checked || false };
         const r = await api('/api/deep-research/ask', { method: 'POST', body });
         const ans = (r && r.answer) ? String(r.answer) : '(no answer)';
         const meta = {
@@ -1026,6 +1033,16 @@
           web_attempted: r.web_attempted,
           references: Array.isArray(r.references) ? r.references : [],
         };
+        const webStatus = document.getElementById('drWebStatus');
+        if (webStatus) {
+          if (r.web_attempted) {
+            webStatus.textContent = 'Web search included';
+            webStatus.classList.remove('warning');
+          } else {
+            webStatus.textContent = 'Local knowledge only (toggle to force web)';
+            webStatus.classList.add('warning');
+          }
+        }
         // Replace thinking bubble with answer
         if (th && th.parentElement) th.parentElement.removeChild(th);
         pushMsg('assistant', ans, meta);

@@ -124,7 +124,7 @@ def _refine(question: str, draft: str, contexts: List[str], provider_override: O
         return None
 
 
-def ask(user_id: int, space_id: Optional[int], conversation_id: str, message: str, provider_override: Optional[str] = None) -> Dict[str, object]:
+def ask(user_id: int, space_id: Optional[int], conversation_id: str, message: str, provider_override: Optional[str] = None, force_web: bool = False) -> Dict[str, object]:
     start_ts = time.monotonic()
     max_budget = max(float(settings.deep_research_timeout_seconds or 0), 15.0)
 
@@ -168,6 +168,7 @@ def ask(user_id: int, space_id: Optional[int], conversation_id: str, message: st
         contexts,
         max_seconds=_remaining_budget(),
         web_top_k=max(15, int(settings.deep_research_web_top_k or 15)),
+        force_web=force_web,
     )
 
     # SYNTHESIZE

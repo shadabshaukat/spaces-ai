@@ -28,7 +28,7 @@ class WebHit:
 class SmartResearchAgent:
     """Coordinates local context gathering and optional web lookups with simple heuristics."""
 
-    def __init__(self, max_seconds: Optional[int] = None, web_top_k: Optional[int] = None):
+    def __init__(self, max_seconds: Optional[int] = None, web_top_k: Optional[int] = None, force_web: bool = False):
         timeout = max_seconds if max_seconds is not None else settings.deep_research_timeout_seconds
         timeout = max(5, min(int(timeout or 120), 180))
         self._deadline = time.monotonic() + timeout
@@ -36,12 +36,15 @@ class SmartResearchAgent:
         self.confidence: float = 0.0
         self.web_attempted: bool = False
         self.web_top_k = max(1, int(web_top_k or settings.deep_research_web_top_k or 8))
+        self.force_web = bool(force_web)
 
     def time_remaining(self) -> float:
         return self._deadline - time.monotonic()
 
     def should_consider_web(self, hits: Sequence[ChunkHit]) -> bool:
         """Decide whether local evidence is sufficient. Returns True if web search is needed."""
+        if self.force_web:
+            return True
         if not hits:
             return True
         unique_docs = len({h.document_id for h in hits if h.document_id is not None})
@@ -124,11 +127,12 @@ def decide_web_and_contexts(
     local_contexts: List[str],
     max_seconds: Optional[float] = None,
     web_top_k: Optional[int] = None,
+    force_web: bool = False,
 ) -> tuple[List[str], List[WebHit], float, bool]:
     budget = None
     if max_seconds is not None and max_seconds > 0:
         budget = int(max_seconds)
-    agent = SmartResearchAgent(max_seconds=budget, web_top_k=web_top_k)
+    agent = SmartResearchAgent(max_seconds=budget, web_top_k=web_top_k, force_web=force_web)
     if agent.should_consider_web(local_hits):
         agent.maybe_fetch_web(query)
     contexts = agent.aggregate_contexts(local_contexts)

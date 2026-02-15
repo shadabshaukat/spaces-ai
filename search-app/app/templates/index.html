@@ -907,44 +907,64 @@
       const docRefs = refs.filter(r => r.source === 'local');
       const webRefs = refs.filter(r => r.source === 'web');
 
-      const buildDocPill = (ref, idx) => {
+      const buildDocCard = (ref, idx) => {
+        const num = ref.rank ?? (idx + 1);
         const title = escapeHtml(ref.title || basename(ref.source_path || '') || `Document ${ref.document_id ?? idx + 1}`);
         const chunkLabel = typeof ref.chunk_index === 'number' ? `Chunk #${ref.chunk_index}` : '';
         const subtitle = [chunkLabel, ref.source_path ? basename(ref.source_path) : '' ].filter(Boolean).join(' • ');
         const excerptRaw = (ref.excerpt || '').trim();
-        const excerpt = excerptRaw ? escapeHtml(excerptRaw.length > 320 ? `${excerptRaw.slice(0, 320)}…` : excerptRaw) : '';
+        const excerpt = excerptRaw ? escapeHtml(excerptRaw.length > 320 ? `${excerptRaw.slice(0, 320)}…` : excerptRaw) : '<span class="muted">No excerpt available.</span>';
         const downloadHref = ref.document_id ? `/api/doc-download?doc_id=${encodeURIComponent(ref.document_id)}` : '';
         return `
-          <details class="dr-ref-pill" data-source="local">
-            <summary><span class="pill-badge">KB</span><span class="pill-title">${title}</span>${subtitle ? `<span class="pill-sub">${escapeHtml(subtitle)}</span>` : ''}</summary>
-            <div class="dr-ref-pill-body">
-              ${excerpt ? `<p>${excerpt}</p>` : '<p class="muted">No excerpt available.</p>'}
-              ${downloadHref ? `<a class="ghost" href="${escapeHtml(downloadHref)}" target="_blank" rel="noopener">Open document</a>` : ''}
+          <div class="dr-ref-card" data-source="local">
+            <div class="dr-ref-rank">${num}</div>
+            <div class="dr-ref-body">
+              <div class="dr-ref-heading">
+                <span class="pill-badge">KB</span>
+                <div class="dr-ref-texts">
+                  <div class="dr-ref-title">${title}</div>
+                  ${subtitle ? `<div class="dr-ref-sub">${escapeHtml(subtitle)}</div>` : ''}
+                </div>
+              </div>
+              <div class="dr-ref-snippet">${excerpt}</div>
+              <div class="dr-ref-actions">
+                ${downloadHref ? `<a class="ghost" href="${escapeHtml(downloadHref)}" target="_blank" rel="noopener">Open document</a>` : ''}
+              </div>
             </div>
-          </details>`;
+          </div>`;
       };
 
-      const buildWebPill = (ref, idx) => {
+      const buildWebCard = (ref, idx) => {
+        const num = ref.rank ?? (idx + 1);
         const title = escapeHtml(ref.title || `Web result ${idx + 1}`);
         const url = escapeHtml(ref.url || '#');
         const snippetRaw = (ref.snippet || '').trim();
-        const snippet = snippetRaw ? escapeHtml(snippetRaw.length > 260 ? `${snippetRaw.slice(0, 260)}…` : snippetRaw) : '';
+        const snippet = snippetRaw ? escapeHtml(snippetRaw.length > 260 ? `${snippetRaw.slice(0, 260)}…` : snippetRaw) : '<span class="muted">No snippet available.</span>';
         return `
-          <details class="dr-ref-pill" data-source="web">
-            <summary><span class="pill-badge pill-web">Web</span><span class="pill-title">${title}</span></summary>
-            <div class="dr-ref-pill-body">
-              ${snippet ? `<p>${snippet}</p>` : '<p class="muted">No snippet available.</p>'}
-              <a class="ghost" href="${url}" target="_blank" rel="noopener">Open link</a>
+          <div class="dr-ref-card" data-source="web">
+            <div class="dr-ref-rank">${num}</div>
+            <div class="dr-ref-body">
+              <div class="dr-ref-heading">
+                <span class="pill-badge pill-web">Web</span>
+                <div class="dr-ref-texts">
+                  <div class="dr-ref-title">${title}</div>
+                  <div class="dr-ref-sub">${url.replace(/^https?:\/\//, '')}</div>
+                </div>
+              </div>
+              <div class="dr-ref-snippet">${snippet}</div>
+              <div class="dr-ref-actions">
+                <a class="ghost" href="${url}" target="_blank" rel="noopener">Open link</a>
+              </div>
             </div>
-          </details>`;
+          </div>`;
       };
 
       const sections = [];
       if (docRefs.length) {
-        sections.push(`<div class="dr-refs-section"><div class="dr-refs-title">Knowledge Base</div><div class="dr-pill-row">${docRefs.map(buildDocPill).join('')}</div></div>`);
+        sections.push(`<div class="dr-refs-section"><div class="dr-refs-title">Knowledge Base</div><div class="dr-card-column">${docRefs.map(buildDocCard).join('')}</div></div>`);
       }
       if (webRefs.length) {
-        sections.push(`<div class="dr-refs-section"><div class="dr-refs-title">Web</div><div class="dr-pill-row">${webRefs.map(buildWebPill).join('')}</div></div>`);
+        sections.push(`<div class="dr-refs-section"><div class="dr-refs-title">Web</div><div class="dr-card-column">${webRefs.map(buildWebCard).join('')}</div></div>`);
       }
       return `<div class="dr-refs dr-refs-condensed">${sections.join('')}</div>`;
     }
@@ -974,8 +994,8 @@
       // Show thinking indicator (animated dots only, no bubble)
       const chat = document.getElementById('drChat');
       const th = document.createElement('div');
-      th.className = 'dr-thinking-inline';
-      th.innerHTML = `<span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span>`;
+      th.className = 'dr-thinking-card';
+      th.innerHTML = `<div class="dr-thinking-spinner"></div><div>Researching…</div>`;
       chat.appendChild(th);
       chat.scrollTop = chat.scrollHeight;
       try {

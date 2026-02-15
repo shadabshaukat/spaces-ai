@@ -149,6 +149,8 @@ class Settings:
     dr_rerank_enable: bool = _get_bool("DR_RERANK_ENABLE", True)
     dr_topic_lock_default: bool = _get_bool("DR_TOPIC_LOCK_DEFAULT", False)
     deep_research_timeout_seconds: int = int(os.getenv("DEEP_RESEARCH_TIMEOUT_SECONDS", "120"))
+    deep_research_local_top_k: int = int(os.getenv("DEEP_RESEARCH_LOCAL_TOP_K", "15"))
+    deep_research_web_top_k: int = int(os.getenv("DEEP_RESEARCH_WEB_TOP_K", "15"))
 
     # MCP server credentials (optional)
     mcp_admin_user: Optional[str] = os.getenv("MCP_ADMIN_USER")

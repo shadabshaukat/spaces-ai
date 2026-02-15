@@ -28,13 +28,14 @@ class WebHit:
 class SmartResearchAgent:
     """Coordinates local context gathering and optional web lookups with simple heuristics."""
 
-    def __init__(self, max_seconds: Optional[int] = None):
+    def __init__(self, max_seconds: Optional[int] = None, web_top_k: Optional[int] = None):
         timeout = max_seconds if max_seconds is not None else settings.deep_research_timeout_seconds
         timeout = max(5, min(int(timeout or 120), 180))
         self._deadline = time.monotonic() + timeout
         self.web_hits: List[WebHit] = []
         self.confidence: float = 0.0
         self.web_attempted: bool = False
+        self.web_top_k = max(1, int(web_top_k or settings.deep_research_web_top_k or 8))
 
     def time_remaining(self) -> float:
         return self._deadline - time.monotonic()
@@ -62,7 +63,7 @@ class SmartResearchAgent:
         logger.debug("DR heuristic coverage=%s diversity=%s semantic=%s total=%s", coverage, diversity, semantic_quality, heuristic)
         return heuristic < 0.55
 
-    def _fetch_duckduckgo(self, query: str, limit: int = 4) -> List[WebHit]:
+    def _fetch_duckduckgo(self, query: str, limit: Optional[int] = None) -> List[WebHit]:
         url = "https://duckduckgo.com/html/"
         params = {"q": query, "kl": "us-en"}
         headers = {
@@ -72,6 +73,7 @@ class SmartResearchAgent:
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
         results: List[WebHit] = []
+        limit = limit or self.web_top_k
         for a in soup.select("a.result__a"):
             title = (a.get_text(strip=True) or "(untitled)")
             href = a.get("href") or ""
@@ -121,11 +123,12 @@ def decide_web_and_contexts(
     local_hits: Sequence[ChunkHit],
     local_contexts: List[str],
     max_seconds: Optional[float] = None,
+    web_top_k: Optional[int] = None,
 ) -> tuple[List[str], List[WebHit], float, bool]:
     budget = None
     if max_seconds is not None and max_seconds > 0:
         budget = int(max_seconds)
-    agent = SmartResearchAgent(max_seconds=budget)
+    agent = SmartResearchAgent(max_seconds=budget, web_top_k=web_top_k)
     if agent.should_consider_web(local_hits):
         agent.maybe_fetch_web(query)
     contexts = agent.aggregate_contexts(local_contexts)

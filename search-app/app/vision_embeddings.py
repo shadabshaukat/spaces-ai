@@ -23,17 +23,36 @@ def _get_clip_model():
             "open_clip is not installed. Install extras with `uv sync --extra image` or `pip install .[image]`"
         ) from exc
     model_name = settings.image_embed_model
+    variant = model_name.split("/")[-1]
     cache_dir = Path(settings.model_cache_dir) / "vision"
     cache_dir.mkdir(parents=True, exist_ok=True)
     pretrained = "openai" if "openclip" in model_name else "laion2b_s34b_b79k"
-    model, preprocess, tokenizer = open_clip.create_model_and_transforms(
-        model_name.split("/")[-1],
+    model, _preprocess_train, preprocess = open_clip.create_model_and_transforms(
+        variant,
         pretrained=pretrained,
         cache_dir=str(cache_dir),
         device=settings.image_embed_device,
     )
+    try:
+        tokenizer = open_clip.get_tokenizer(variant)
+    except Exception as exc:  # pragma: no cover - safety net for API drift
+        logger.warning("open_clip.get_tokenizer failed for %s: %s", variant, exc)
+        tokenizer = getattr(open_clip, "tokenize", None)
+    if tokenizer is None:
+        raise RuntimeError(f"open_clip tokenizer unavailable for model {variant}")
     logger.info("Loaded image embedding model %s on %s", model_name, settings.image_embed_device)
     return model, preprocess, tokenizer
+
+
+@lru_cache(maxsize=1)
+def _get_clip_text_tokenizer():
+    try:
+        from open_clip.simple_tokenizer import SimpleTokenizer  # type: ignore
+
+        return SimpleTokenizer()
+    except Exception as exc:
+        logger.warning("SimpleTokenizer unavailable: %s", exc)
+        return None
 
 
 def vision_dependencies_ready(preload_model: bool = False) -> tuple[bool, str | None]:
@@ -78,6 +97,7 @@ def embed_image_texts(texts: Iterable[str]) -> List[List[float]]:
     if not texts:
         return []
     model, _preprocess, tokenizer = _get_clip_model()
+    clip_tokenizer = _get_clip_text_tokenizer()
     import torch  # type: ignore
 
     device = settings.image_embed_device
@@ -85,38 +105,19 @@ def embed_image_texts(texts: Iterable[str]) -> List[List[float]]:
     with torch.no_grad():
         try:
             tokens = tokenizer(texts)
-        except TypeError as exc:
-            msg = str(exc)
-            if "Unexpected type" not in msg:
+        except TypeError:
+            if clip_tokenizer is None:
                 raise
-            logger.debug("Tokenizer does not support batched input; tokenizing %d texts individually", len(texts))
-            def _coerce(obj):
-                if isinstance(obj, torch.Tensor):
-                    return obj.unsqueeze(0) if obj.dim() == 1 else obj
-                if hasattr(obj, "unsqueeze"):
-                    return obj.unsqueeze(0)
-                if isinstance(obj, (list, tuple)):
-                    return torch.tensor(obj).unsqueeze(0)
-                if isinstance(obj, dict):
-                    inner = obj.get("input_ids") or obj.get("ids")
-                    if isinstance(inner, torch.Tensor):
-                        return inner.unsqueeze(0) if inner.dim() == 1 else inner
-                    if isinstance(inner, (list, tuple)):
-                        return torch.tensor(inner).unsqueeze(0)
-                return None
-
-            single_tokens = []
-            for text in texts:
-                tok = tokenizer(text)
-                tensor = _coerce(tok)
-                if tensor is None and isinstance(tok, str):
-                    # Some tokenizers expect batched input; retry with list form
-                    tok = tokenizer([text])
-                    tensor = _coerce(tok)
-                if tensor is None:
-                    raise TypeError("Tokenizer output unsupported for batching") from exc
-                single_tokens.append(tensor)
-            tokens = torch.cat(single_tokens, dim=0)
+            logger.debug("Falling back to CLIP SimpleTokenizer for %d prompts", len(texts))
+            encoded = [torch.tensor(clip_tokenizer.encode(text, truncate=True)) for text in texts]
+            max_len = max(tok.shape[0] for tok in encoded)
+            padded = []
+            for tok in encoded:
+                if tok.shape[0] < max_len:
+                    pad = torch.zeros(max_len - tok.shape[0], dtype=tok.dtype)
+                    tok = torch.cat([tok, pad], dim=0)
+                padded.append(tok)
+            tokens = torch.stack(padded, dim=0)
         tokens = tokens.to(device)
         vecs = model.encode_text(tokens)
         vecs /= vecs.norm(dim=-1, keepdim=True)

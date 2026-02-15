@@ -260,8 +260,18 @@
   <div id="drBackdrop" class="dr-backdrop" hidden></div>
   <div id="drModal" class="dr-modal" hidden aria-modal="true" role="dialog">
     <div class="dr-header">
-      <div style="display:flex; align-items:center; gap:10px" class="dr-title"><strong>Deep Research</strong><span class="microscope-icon">🔬</span></div>
-      <div style="display:flex; gap:6px; align-items:center">
+      <div class="dr-title">
+        <div class="dr-title-main">
+          <strong>Deep Research</strong>
+          <span class="microscope-icon">🔬</span>
+        </div>
+        <label class="ios-toggle" title="Always include web search">
+          <input id="drForceWeb" type="checkbox" />
+          <span class="ios-toggle-slider"></span>
+          <span class="ios-toggle-label">Always include web</span>
+        </label>
+      </div>
+      <div class="dr-header-actions">
         <button id="drReset" class="ghost" title="Reset conversation">↺</button>
         <button id="drClose" class="ghost" title="Close">✕</button>
       </div>
@@ -269,10 +279,6 @@
     <div id="drChat" class="dr-chat"></div>
     <div class="dr-input">
       <div class="dr-web-toggle">
-        <label>
-          <input id="drForceWeb" type="checkbox" />
-          Always include web search
-        </label>
         <span id="drWebStatus" class="muted"></span>
       </div>
       <input id="drMessage" type="text" placeholder="Ask a question…" />

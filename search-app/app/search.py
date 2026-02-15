@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
@@ -196,6 +197,18 @@ def hybrid_search(query: str, top_k: int = 10, alpha: float = 0.5, *, user_id: O
     return out
 
 
+def _rag_cache_key(query: str, *, user_id: Optional[int], space_id: Optional[int], provider: str, mode: str, top_k: int, hits: List[ChunkHit], context: str) -> str:
+    hasher = hashlib.sha256()
+    hasher.update(query.strip().lower().encode("utf-8"))
+    hasher.update(b"|")
+    chunk_fingerprint = ":".join(f"{h.document_id}-{h.chunk_index}" for h in hits)
+    hasher.update(chunk_fingerprint.encode("utf-8"))
+    hasher.update(b"|")
+    hasher.update(context.encode("utf-8"))
+    digest = hasher.hexdigest()
+    return f"rag:{provider}:{mode}:{user_id}:{space_id}:{top_k}:{digest}"
+
+
 def rag(query: str, mode: str = "hybrid", top_k: int = 6, *, user_id: Optional[int] = None, space_id: Optional[int] = None, provider_override: Optional[str] = None) -> Tuple[str, List[ChunkHit], bool]:
     logger.info("rag: query=%r mode=%s top_k=%s provider=%s user_id=%s space_id=%s", query, mode, top_k, provider_override or settings.llm_provider, user_id, space_id)
     mode = mode.lower()
@@ -209,6 +222,13 @@ def rag(query: str, mode: str = "hybrid", top_k: int = 6, *, user_id: Optional[i
     context = "\n\n".join(h.content for h in hits)
     logger.info("rag: context_chars=%d hits=%d", len(context), len(hits))
 
+    provider = (provider_override or settings.llm_provider or "none").lower()
+    cache_key = _rag_cache_key(query, user_id=user_id, space_id=space_id, provider=provider, mode=mode, top_k=top_k, hits=hits, context=context)
+    cached_ans = cache_get(cache_key)
+    if cached_ans and "answer" in cached_ans:
+        logger.debug("rag: cache hit for provider=%s user_id=%s space_id=%s", provider, user_id, space_id)
+        return cached_ans["answer"], hits, bool(cached_ans.get("used_llm", True))
+
     # Call unified LLM
     try:
         from .llm import chat as llm_chat
@@ -220,4 +240,12 @@ def rag(query: str, mode: str = "hybrid", top_k: int = 6, *, user_id: Optional[i
     used_llm = bool(out)
     answer = out or context
     logger.info("rag: answer_chars=%d used_llm=%s", len(answer or ''), used_llm)
+
+    if settings.llm_cache_ttl_seconds > 0:
+        cache_set(
+            cache_key,
+            {"answer": answer, "used_llm": used_llm},
+            ttl_seconds=settings.llm_cache_ttl_seconds,
+        )
+
     return answer, hits, used_llm

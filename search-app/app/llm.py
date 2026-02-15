@@ -4,12 +4,37 @@ import logging
 from typing import Optional
 
 from .config import settings
+from .valkey_cache import get_json as cache_get, set_json as cache_set
 
 logger = logging.getLogger(__name__)
 
 
-def chat(question: str, context: str, provider_override: Optional[str] = None, max_tokens: int = 512, temperature: float = 0.2) -> Optional[str]:
+def _llm_cache_key(provider: str, question: str, context: str, max_tokens: int, temperature: float) -> str:
+    import hashlib
+
+    h = hashlib.sha256()
+    h.update(provider.encode("utf-8"))
+    h.update(b"|")
+    h.update(question.strip().lower().encode("utf-8"))
+    h.update(b"|")
+    h.update(str(max_tokens).encode("utf-8"))
+    h.update(b"|")
+    h.update(f"{temperature:.2f}".encode("utf-8"))
+    h.update(b"|")
+    h.update(context.encode("utf-8"))
+    return f"llm:{h.hexdigest()}"
+
+
+def chat(question: str, context: str, provider_override: Optional[str] = None, max_tokens: int = 512, temperature: float = 0.2, *, cache_answer: bool = True) -> Optional[str]:
     provider = (provider_override or settings.llm_provider or "none").lower()
+
+    cache_key = None
+    if cache_answer and settings.llm_cache_ttl_seconds > 0:
+        cache_key = _llm_cache_key(provider, question, context, max_tokens, temperature)
+        cached = cache_get(cache_key)
+        if cached and isinstance(cached, dict) and "answer" in cached:
+            logger.debug("llm cache hit for provider=%s", provider)
+            return cached["answer"]
 
     if provider == "oci":
         try:
@@ -36,7 +61,10 @@ def chat(question: str, context: str, provider_override: Optional[str] = None, m
                 temperature=temperature,
                 max_tokens=max_tokens,
             )
-            return resp.choices[0].message.content
+            answer = resp.choices[0].message.content
+            if cache_key:
+                cache_set(cache_key, {"answer": answer}, ttl_seconds=settings.llm_cache_ttl_seconds)
+            return answer
         except Exception as e:
             logger.exception("OpenAI LLM failed: %s", e)
             return None
@@ -146,6 +174,8 @@ def chat(question: str, context: str, provider_override: Optional[str] = None, m
 
             if not answer:
                 answer = str(data)
+            if cache_key:
+                cache_set(cache_key, {"answer": answer}, ttl_seconds=settings.llm_cache_ttl_seconds)
             return answer
         except Exception as e:
             logger.exception("Bedrock LLM failed: %s", e)
@@ -168,6 +198,8 @@ def chat(question: str, context: str, provider_override: Optional[str] = None, m
             data = r.json()
             out = data.get("response") or data.get("output")
             logger.info("llm[ollama]: got answer=%s", bool(out))
+            if cache_key and out:
+                cache_set(cache_key, {"answer": out}, ttl_seconds=settings.llm_cache_ttl_seconds)
             return out
         except Exception as e:
             logger.exception("Ollama LLM failed: %s", e)

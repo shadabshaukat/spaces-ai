@@ -21,6 +21,7 @@ from .search import semantic_search, fulltext_search, hybrid_search, rag
 from .embeddings import get_model, embed_texts
 from .opensearch_adapter import OpenSearchAdapter
 from .session import get_current_user, sign_session, set_session_cookie_headers, clear_session_cookie_headers
+from .valkey_cache import cache_status
 from .runtime_config import (
     get_default_top_k,
     set_default_top_k,
@@ -113,7 +114,9 @@ async def index(request: Request):
 # API routes
 @app.get("/api/health")
 def health():
-    return {"status": "ok"}
+    cache_info = cache_status()
+    status = "ok" if cache_info.get("state") in {"ready", "skipped"} else "degraded"
+    return {"status": status, "cache": cache_info}
 
 
 @app.get("/api/providers")

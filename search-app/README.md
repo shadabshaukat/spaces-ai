@@ -122,7 +122,11 @@ Key environment variables (see .env.example for full list):
   - OPENSEARCH_TIMEOUT/RETRIES/VERIFY_CERTS
   - OPENSEARCH_DUAL_WRITE=true
 - Valkey:
-  - VALKEY_HOST, VALKEY_PORT, VALKEY_PASSWORD (if any), VALKEY_DB, VALKEY_TLS, CACHE_TTL_SECONDS
+  - VALKEY_HOST, VALKEY_PORT, VALKEY_PASSWORD (if any), VALKEY_DB, VALKEY_TLS
+  - CACHE_TTL_SECONDS (default 300s) controls semantic/BM25 result caching
+  - LLM_CACHE_TTL_SECONDS (default 900s) controls cached RAG/LLM answers
+  - CACHE_NAMESPACE + CACHE_SCHEMA_VERSION let you invalidate keys after schema changes
+  - CACHE_FAILURE_THRESHOLD and CACHE_COOLDOWN_SECONDS enable circuit-breaking when OCI Cache is unhealthy
 - Storage backends:
   - STORAGE_BACKEND=local|oci|both
   - OCI_OS_BUCKET_NAME (required when using oci/both)

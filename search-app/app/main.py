@@ -4,6 +4,7 @@ import logging
 import os
 import json
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Any, Dict, List
 
 from fastapi import FastAPI, File, UploadFile, Request, Form
@@ -32,7 +33,7 @@ from .runtime_config import (
 )
 from .users import create_user, authenticate_user, list_spaces, get_default_space_id, create_space, set_default_space
 from .deep_research import start_conversation as dr_start, ask as dr_ask
-from .vision_embeddings import embed_image_texts
+from .vision_embeddings import embed_image_paths, embed_image_texts, VisionModelUnavailable
 
 logger = logging.getLogger("searchapp")
 logging.basicConfig(level=os.getenv("LOGLEVEL", "INFO"))
@@ -74,6 +75,52 @@ def _normalize_tags(raw: Any) -> List[str]:
         if sval:
             tags.append(sval)
     return tags
+
+
+def _extract_tags(raw: Any) -> List[str]:
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        stripped = raw.strip()
+        if not stripped:
+            return []
+        if stripped.startswith("["):
+            try:
+                loaded = json.loads(stripped)
+                if isinstance(loaded, list):
+                    return _normalize_tags(loaded)
+            except json.JSONDecodeError:
+                pass
+        return _normalize_tags(stripped)
+    if isinstance(raw, (list, tuple, set)):
+        tags: List[str] = []
+        for item in raw:
+            tags.extend(_normalize_tags(item))
+        return tags
+    return _normalize_tags(raw)
+
+
+def _extract_vector(raw: Any) -> List[float] | None:
+    if raw is None:
+        return None
+    if isinstance(raw, list):
+        floats: List[float] = []
+        for v in raw:
+            try:
+                floats.append(float(v))
+            except (TypeError, ValueError):
+                return None
+        return floats
+    if isinstance(raw, str):
+        stripped = raw.strip()
+        if not stripped:
+            return None
+        try:
+            loaded = json.loads(stripped)
+        except json.JSONDecodeError:
+            return None
+        return _extract_vector(loaded)
+    return None
 
 # Protect API with session or basic auth; root UI is public (it will render login if unauthenticated)
 app.add_middleware(SessionOrBasicAuthMiddleware, protect_paths=("/api", "/docs", "/openapi.json", "/redoc"))
@@ -451,16 +498,21 @@ async def api_search(request: Request, payload: Dict[str, Any]):
 
 
 @app.post("/api/image-search")
-async def api_image_search(request: Request, payload: Dict[str, Any]):
+async def api_image_search(
+    request: Request,
+    payload: Dict[str, Any] | None = None,
+    reference: UploadFile | None = None,
+):
     user = await get_current_user(request)
     if not user:
         return JSONResponse(status_code=401, content={"error": "unauthorized"})
     uid = int(user["user_id"]) if "user_id" in user else int(user.get("id"))
+    payload = payload or {}
     sid = payload.get("space_id")
     sid = int(sid) if sid is not None else get_default_space_id(uid)
 
     query = (payload.get("query") or "").strip()
-    tag_filter = _normalize_tags(payload.get("tags"))
+    tag_filter = _extract_tags(payload.get("tags"))
     top_k_raw = payload.get("top_k")
     try:
         top_k = int(top_k_raw) if top_k_raw is not None else min(24, int(get_default_top_k()))
@@ -469,16 +521,46 @@ async def api_image_search(request: Request, payload: Dict[str, Any]):
     top_k = max(1, min(top_k, 100))
 
     vector_input = payload.get("vector")
-    vector = None
-    if isinstance(vector_input, list) and all(isinstance(v, (int, float)) for v in vector_input):
-        vector = [float(v) for v in vector_input]
-    elif query:
-        try:
-            vecs = embed_image_texts([query])
-            vector = vecs[0] if vecs else None
-        except Exception as e:
-            logger.warning("Image text embedding failed: %s", e)
-            vector = None
+    vector = _extract_vector(vector_input)
+
+    temp_file_path: str | None = None
+    try:
+        if reference is not None:
+            if not reference.filename:
+                return JSONResponse(status_code=400, content={"error": "reference filename missing"})
+            suffix = Path(reference.filename).suffix.lower()
+            if suffix and suffix not in IMAGE_EXTS:
+                return JSONResponse(status_code=400, content={"error": "unsupported reference type"})
+            with NamedTemporaryFile(delete=False, suffix=suffix or ".img") as tmp:
+                data = await reference.read()
+                tmp.write(data)
+                temp_file_path = tmp.name
+            try:
+                vectors = embed_image_paths([temp_file_path])
+                vector = vectors[0] if vectors else None
+            except VisionModelUnavailable as e:
+                logger.warning("Vision model unavailable for reference: %s", e)
+                return JSONResponse(status_code=503, content={"error": "vision model unavailable", "detail": str(e), "install_hint": "uv sync --extra image"})
+            except Exception as e:
+                logger.warning("Failed to embed reference image: %s", e)
+                return JSONResponse(status_code=400, content={"error": "failed to process reference image", "detail": str(e)})
+
+        if vector is None and query:
+            try:
+                vecs = embed_image_texts([query])
+                vector = vecs[0] if vecs else None
+            except VisionModelUnavailable as e:
+                logger.warning("Vision model unavailable: %s", e)
+                return JSONResponse(status_code=503, content={"error": "vision model unavailable", "detail": str(e), "install_hint": "uv sync --extra image"})
+            except Exception as e:
+                logger.warning("Image text embedding failed: %s", e)
+                vector = None
+    finally:
+        if temp_file_path:
+            try:
+                os.remove(temp_file_path)
+            except OSError:
+                pass
 
     if vector is None and not query and not tag_filter:
         return JSONResponse(status_code=400, content={"error": "provide query, tags, or vector"})
@@ -514,7 +596,8 @@ async def api_image_search(request: Request, payload: Dict[str, Any]):
                             "top_k": top_k,
                             "space_id": sid,
                             "tags": tag_filter,
-                            "vector": bool(vector_input),
+                            "vector": bool(vector),
+                            "reference": bool(reference),
                         }),
                     ),
                 )

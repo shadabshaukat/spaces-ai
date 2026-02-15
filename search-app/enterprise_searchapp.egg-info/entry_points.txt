@@ -1,0 +1,3 @@
+[console_scripts]
+ingestcli = app.ingest_cli:main
+searchapp = app.main:main

@@ -231,11 +231,6 @@ def oci_chat_completion(question: str, context: str, max_tokens: int = 512, temp
         if not comp_id or not model_id:
             raise ValueError("Set OCI_COMPARTMENT_OCID and OCI_GENAI_MODEL_ID in environment")
 
-        prompt = (
-            "You are a helpful assistant. Using the provided context, answer the question concisely.\n\n"
-            f"Question: {question}\n\nContext:\n{context[:12000]}"
-        )
-
         # Try chat() path first
         try:
             from oci.generative_ai_inference.models import (
@@ -283,11 +278,16 @@ def oci_chat_completion(question: str, context: str, max_tokens: int = 512, temp
             from oci.generative_ai_inference.models import GenerateTextDetails, OnDemandServingMode, TextContent
             sm = _safe_build(OnDemandServingMode, model_id=model_id)
             _apply_aliases(sm, {"model_id": model_id, "modelId": model_id})
+            fallback_prompt = (
+                "You are a helpful assistant. Using the provided context, answer the question concisely.\n\n"
+                f"Question: {question}\n\nContext:\n{context[:12000]}"
+            )
+            text_input = _safe_build(TextContent, text=fallback_prompt)
             details = _safe_build(
                 GenerateTextDetails,
                 compartment_id=comp_id,
                 serving_mode=sm,
-                input=[_safe_build(TextContent, text=prompt)],
+                input=[text_input],
                 max_tokens=max_tokens,
                 temperature=temperature,
             )
@@ -338,15 +338,25 @@ def oci_try_chat_debug(question: str, context: str, max_tokens: int = 512, tempe
         model_id = settings.oci_genai_model_id
         if not comp_id or not model_id:
             return None, "missing_ids", []
-        prompt = (
-            "You are a helpful assistant. Using the provided context, answer the question concisely.\n\n"
-            f"Question: {question}\n\nContext:\n{context[:12000]}"
-        )
         details = _safe_build(
             ChatDetails,
             compartment_id=comp_id,
             serving_mode=_safe_build(OnDemandServingMode, model_id=model_id),
-            messages=[_safe_build(Message, role="USER", content=[_safe_build(TextContent, text=prompt)])],
+            messages=[
+                _safe_build(
+                    Message,
+                    role="USER",
+                    content=[
+                        _safe_build(
+                            TextContent,
+                            text=(
+                                "You are a helpful assistant. Using the provided context, answer the question concisely.\n\n"
+                                f"Question: {question}\n\nContext:\n{context[:12000]}"
+                            ),
+                        )
+                    ],
+                )
+            ],
             max_tokens=max_tokens,
             temperature=temperature,
         )
@@ -368,15 +378,19 @@ def oci_try_text_debug(question: str, context: str, max_tokens: int = 512, tempe
         model_id = settings.oci_genai_model_id
         if not comp_id or not model_id:
             return None, "missing_ids", []
-        prompt = (
-            "You are a helpful assistant. Using the provided context, answer the question concisely.\n\n"
-            f"Question: {question}\n\nContext:\n{context[:12000]}"
-        )
         details = _safe_build(
             GenerateTextDetails,
             compartment_id=comp_id,
             serving_mode=_safe_build(OnDemandServingMode, model_id=model_id),
-            input=[_safe_build(TextContent, text=prompt)],
+            input=[
+                _safe_build(
+                    TextContent,
+                    text=(
+                        "You are a helpful assistant. Using the provided context, answer the question concisely.\n\n"
+                        f"Question: {question}\n\nContext:\n{context[:12000]}"
+                    ),
+                )
+            ],
             max_tokens=max_tokens,
             temperature=temperature,
         )
@@ -401,10 +415,6 @@ def oci_chat_completion_chat_only(question: str, context: str, max_tokens: int =
         model_id = settings.oci_genai_model_id
         if not comp_id or not model_id:
             return None
-        prompt = (
-            "You are a helpful assistant. Using the provided context, answer the question concisely.\n\n"
-            f"Question: {question}\n\nContext:\n{context[:12000]}"
-        )
         sm = _safe_build(OnDemandServingMode, model_id=model_id)
         _apply_aliases(sm, {"model_id": model_id, "modelId": model_id})
         sys_txt = _safe_build(TextContent, text="You are a helpful assistant. Answer directly based ONLY on the provided context. If the context is insufficient, say 'No answer found in the provided context.' Do not ask for more input.")
@@ -446,15 +456,19 @@ def oci_chat_completion_text_only(question: str, context: str, max_tokens: int =
         model_id = settings.oci_genai_model_id
         if not comp_id or not model_id:
             return None
-        prompt = (
-            "You are a helpful assistant. Using the provided context, answer the question concisely.\n\n"
-            f"Question: {question}\n\nContext:\n{context[:12000]}"
-        )
         details = _safe_build(
             GenerateTextDetails,
             compartment_id=comp_id,
             serving_mode=_safe_build(OnDemandServingMode, model_id=model_id),
-            input=[_safe_build(TextContent, text=prompt)],
+            input=[
+                _safe_build(
+                    TextContent,
+                    text=(
+                        "You are a helpful assistant. Using the provided context, answer the question concisely.\n\n"
+                        f"Question: {question}\n\nContext:\n{context[:12000]}"
+                    ),
+                )
+            ],
             max_tokens=max_tokens,
             temperature=temperature,
         )

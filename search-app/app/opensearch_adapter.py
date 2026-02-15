@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import logging
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from opensearchpy import OpenSearch, helpers  # type: ignore
 
@@ -96,6 +96,56 @@ class OpenSearchAdapter:
             else:
                 raise
 
+    def ensure_image_index(self, *, force_recreate: bool = False) -> None:
+        os_client = self.client()
+        idx = settings.image_index_name
+        dim = settings.image_embed_dim
+        exists = os_client.indices.exists(index=idx)
+        if exists and not force_recreate:
+            return
+        if exists and force_recreate:
+            try:
+                os_client.indices.delete(index=idx)
+            except Exception as e:
+                logger.warning("Failed to delete existing image index %s: %s", idx, e)
+        mapping = {
+            "settings": {
+                "index": {
+                    "knn": True,
+                    "number_of_shards": settings.image_index_shards,
+                    "number_of_replicas": settings.image_index_replicas,
+                }
+            },
+            "mappings": {
+                "properties": {
+                    "doc_id": {"type": "long"},
+                    "user_id": {"type": "long"},
+                    "space_id": {"type": "long"},
+                    "file_path": {"type": "keyword"},
+                    "thumbnail_path": {"type": "keyword"},
+                    "tags": {"type": "keyword"},
+                    "caption": {"type": "text"},
+                    "vector": {
+                        "type": "knn_vector",
+                        "dimension": dim,
+                        "method": {
+                            "name": "hnsw",
+                            "engine": os.getenv("OPENSEARCH_KNN_ENGINE", "lucene"),
+                            "space_type": os.getenv("OPENSEARCH_DISTANCE", "cosinesimil"),
+                        },
+                    },
+                }
+            },
+        }
+        try:
+            os_client.indices.create(index=idx, body=mapping)
+            logger.info("Created OpenSearch image index %s with dim=%s", idx, dim)
+        except Exception as e:
+            if "resource_already_exists_exception" in str(e):
+                logger.info("Image index %s already exists", idx)
+            else:
+                raise
+
     def index_chunks(self, *,
                      user_id: int,
                      space_id: Optional[int],
@@ -131,6 +181,66 @@ class OpenSearchAdapter:
         if errors:
             logger.warning("OpenSearch bulk index had errors: %s", errors)
         return int(ok)
+
+    def index_image_asset(self, *, user_id: int, space_id: Optional[int], doc_id: int, image_id: int, file_path: str, thumbnail_path: str, tags: list[str], caption: str, vector: Optional[List[float]], refresh: bool = False) -> None:
+        self.ensure_image_index()
+        if vector is None:
+            logger.debug("Skipping image vector index because embedding missing (doc_id=%s image_id=%s)", doc_id, image_id)
+            return
+        os_client = self.client()
+        doc = {
+            "doc_id": doc_id,
+            "image_id": image_id,
+            "user_id": user_id,
+            "space_id": space_id,
+            "file_path": file_path,
+            "thumbnail_path": thumbnail_path,
+            "tags": tags,
+            "caption": caption,
+            "vector": vector,
+        }
+        os_client.index(index=settings.image_index_name, id=f"{doc_id}:{image_id}", body=doc, refresh=refresh)
+
+    def search_images(self, *, vector: Optional[List[float]], query: Optional[str], top_k: int, user_id: Optional[int], space_id: Optional[int], tags: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        os_client = self.client()
+        self.ensure_image_index()
+        filters = self._filters(user_id, space_id)
+        if tags:
+            filters.append({"terms": {"tags": tags}})
+
+        knn_part = None
+        if vector is not None:
+            knn_part = {
+                "field": "vector",
+                "query_vector": vector,
+                "k": int(top_k),
+            }
+            engine = (os.getenv("OPENSEARCH_KNN_ENGINE", "lucene") or "lucene").lower()
+            if engine != "lucene":
+                rc = get_os_num_candidates()
+                num_cand_default = max(int(top_k) * 10, 100)
+                knn_part["num_candidates"] = int(rc if rc is not None else getattr(settings, "opensearch_knn_num_candidates", num_cand_default))
+
+        query_part: Dict[str, Any]
+        if query:
+            query_part = {
+                "bool": {
+                    "must": [{"multi_match": {"query": query, "fields": ["caption^2", "tags"]}}],
+                    "filter": filters,
+                }
+            }
+        else:
+            query_part = {"bool": {"filter": filters or [], "must": [{"match_all": {}}]}}
+
+        body: Dict[str, Any] = {
+            "size": int(top_k),
+            "query": query_part,
+        }
+        if knn_part is not None:
+            body["knn"] = knn_part
+
+        res = os_client.search(index=settings.image_index_name, body=body)
+        return res.get("hits", {}).get("hits", [])
 
     def search_vector(self, *, query: str, vector: List[float], top_k: int, user_id: Optional[int], space_id: Optional[int]) -> List[Dict[str, Any]]:
         os_client = self.client()

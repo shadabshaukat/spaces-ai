@@ -3,16 +3,14 @@ from __future__ import annotations
 import hashlib
 import logging
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from .config import settings
 from .db import get_conn, set_search_runtime
 from .embeddings import embed_texts
 from .opensearch_adapter import OpenSearchAdapter
-from .valkey_cache import get_json as cache_get, set_json as cache_set
+from .valkey_cache import get_json as cache_get, set_json as cache_set, get_revision
 from .runtime_config import get_pgvector_probes
-import json
-import os
 
 # Mutable flags for Deep Research features (overrides Settings defaults at runtime)
 DR_FLAGS = {
@@ -46,7 +44,8 @@ def _vector_operator() -> str:
 
 def semantic_search(query: str, top_k: int = 10, probes: Optional[int] = None, *, user_id: Optional[int] = None, space_id: Optional[int] = None) -> List[ChunkHit]:
     # Cache key
-    ck = f"sem:{user_id}:{space_id}:{top_k}:{query.strip().lower()}"
+    rev = get_revision("text", user_id, space_id)
+    ck = f"sem:{rev}:{user_id}:{space_id}:{top_k}:{query.strip().lower()}"
     cached = cache_get(ck)
     if cached:
         return [ChunkHit(**h) for h in cached]
@@ -116,7 +115,8 @@ def semantic_search(query: str, top_k: int = 10, probes: Optional[int] = None, *
 
 
 def fulltext_search(query: str, top_k: int = 10, *, user_id: Optional[int] = None, space_id: Optional[int] = None) -> List[ChunkHit]:
-    ck = f"fts:{user_id}:{space_id}:{top_k}:{query.strip().lower()}"
+    rev = get_revision("text", user_id, space_id)
+    ck = f"fts:{rev}:{user_id}:{space_id}:{top_k}:{query.strip().lower()}"
     cached = cache_get(ck)
     if cached:
         return [ChunkHit(**h) for h in cached]
@@ -145,7 +145,7 @@ def fulltext_search(query: str, top_k: int = 10, *, user_id: Optional[int] = Non
         with conn.cursor() as cur:
             if user_id is not None:
                 cur.execute(
-                    f"""
+                    """
                     SELECT c.id, c.document_id, c.chunk_index, c.content,
                            ts_rank_cd(c.content_tsv, plainto_tsquery(%s, %s)) AS rank
                     FROM chunks c
@@ -160,7 +160,7 @@ def fulltext_search(query: str, top_k: int = 10, *, user_id: Optional[int] = Non
                 )
             else:
                 cur.execute(
-                    f"""
+                    """
                     SELECT id, document_id, chunk_index, content,
                            ts_rank_cd(content_tsv, plainto_tsquery(%s, %s)) AS rank
                     FROM chunks
@@ -249,3 +249,26 @@ def rag(query: str, mode: str = "hybrid", top_k: int = 6, *, user_id: Optional[i
         )
 
     return answer, hits, used_llm
+
+
+def image_search(query: Optional[str], vector: Optional[List[float]], top_k: int, *, user_id: Optional[int], space_id: Optional[int], tags: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+    rev = get_revision("image", user_id, space_id)
+    key_parts = [
+        "img",
+        str(rev),
+        str(user_id),
+        str(space_id),
+        str(top_k),
+        (query or "").strip().lower(),
+        ",".join(sorted(tags)) if tags else "",
+        "vec" if vector is not None else "novec",
+    ]
+    ck = ":".join(key_parts)
+    cached = cache_get(ck)
+    if cached:
+        return cached
+
+    adapter = OpenSearchAdapter()
+    hits = adapter.search_images(vector=vector, query=query, top_k=top_k, user_id=user_id, space_id=space_id, tags=tags)
+    cache_set(ck, hits)
+    return hits

@@ -55,77 +55,123 @@
       <div id="appPanel" class="app-panel" hidden>
 
 
-        <div class="searchbar">
-          <input id="query" class="search-input" type="text" placeholder="Search..." autocomplete="off" />
-          <button id="drBtn" class="dr-icon" title="Deep Research">🔬</button>
-        </div>
-        <div class="search-actions-row">
-          <button id="searchBtn" class="primary">Search</button>
-          <button id="settingsBtn" class="ghost" title="Settings" aria-expanded="false">⚙️</button>
+        <div class="search-tabs" role="tablist" aria-label="Search mode">
+          <button id="tabTextSearch" class="search-tab active" role="tab" aria-selected="true" aria-controls="textSearchPanel">Text Search</button>
+          <button id="tabImageSearch" class="search-tab" role="tab" aria-selected="false" aria-controls="imageSearchPanel">Image Search</button>
         </div>
 
-        <div id="settingsPanel" class="settings" hidden>
-          <div class="row wrap">
-            <div class="row no-grow">
-              <label for="mode">Mode</label>
-              <select id="mode">
-                <option value="hybrid">Hybrid</option>
-                <option value="semantic">Semantic</option>
-                <option value="fulltext">Full-text</option>
-                <option value="rag" selected>RAG</option>
-              </select>
+        <section id="textSearchPanel" class="search-panel" role="tabpanel" aria-labelledby="tabTextSearch">
+          <div class="searchbar">
+            <input id="query" class="search-input" type="text" placeholder="Search documents…" autocomplete="off" />
+            <button id="drBtn" class="dr-icon" title="Deep Research">🔬</button>
+          </div>
+          <div class="search-actions-row">
+            <button id="searchBtn" class="primary">Search</button>
+            <button id="settingsBtn" class="ghost" title="Settings" aria-expanded="false">⚙️</button>
+          </div>
+
+          <div id="settingsPanel" class="settings" hidden>
+            <div class="row wrap">
+              <div class="row no-grow">
+                <label for="mode">Mode</label>
+                <select id="mode">
+                  <option value="hybrid">Hybrid</option>
+                  <option value="semantic">Semantic</option>
+                  <option value="fulltext">Full-text</option>
+                  <option value="rag" selected>RAG</option>
+                </select>
+              </div>
+              <div class="row no-grow">
+                <label for="provider" class="leftpad">LLM Provider</label>
+                <select id="provider">
+                  <option value="">Default</option>
+                  <option value="oci">OCI</option>
+                  <option value="openai">OpenAI</option>
+                  <option value="bedrock">Bedrock</option>
+                  <option value="ollama">Ollama</option>
+                </select>
+              </div>
+              <div class="row no-grow">
+                <label for="topk" class="leftpad">Top K</label>
+                <input id="topk" type="number" value="25" min="1" max="50" />
+              </div>
+              <div class="row no-grow">
+                <label for="autoSearch" class="leftpad">Auto search</label>
+                <input id="autoSearch" type="checkbox" />
+                <label for="debounceMs" class="leftpad">Debounce (ms)</label>
+                <input id="debounceMs" type="number" value="400" min="100" max="2000" />
+              </div>
             </div>
-            <div class="row no-grow">
-              <label for="provider" class="leftpad">LLM Provider</label>
-              <select id="provider">
-                <option value="">Default</option>
-                <option value="oci">OCI</option>
-                <option value="openai">OpenAI</option>
-                <option value="bedrock">Bedrock</option>
-                <option value="ollama">Ollama</option>
-              </select>
+            <div class="row wrap">
+              <div class="row no-grow">
+                <strong>Search backend:</strong>&nbsp;<span id="cfgBackend">-</span>
+              </div>
+              <div class="row no-grow">
+                <label for="cfgTopK" class="leftpad">Default Top K</label>
+                <input id="cfgTopK" type="number" min="1" max="1000" placeholder="25" />
+              </div>
+              <div class="row no-grow" id="cfgPgvectorRow" hidden>
+                <label for="cfgProbes" class="leftpad">pgvector probes</label>
+                <input id="cfgProbes" type="number" min="1" max="10000" placeholder="env default" />
+              </div>
+              <div class="row no-grow" id="cfgNumCandRow" hidden>
+                <label for="cfgNumCand" class="leftpad">OS num_candidates</label>
+                <input id="cfgNumCand" type="number" min="1" max="1000000" placeholder="heuristic default" />
+              </div>
+              <div class="row no-grow">
+                <button id="loadCfgBtn" class="ghost">Refresh config</button>
+                <button id="saveCfgBtn" class="ghost">Save</button>
+              </div>
             </div>
-            <div class="row no-grow">
-              <label for="topk" class="leftpad">Top K</label>
-              <input id="topk" type="number" value="25" min="1" max="50" />
-            </div>
-            <div class="row no-grow">
-              <label for="autoSearch" class="leftpad">Auto search</label>
-              <input id="autoSearch" type="checkbox" />
-              <label for="debounceMs" class="leftpad">Debounce (ms)</label>
-              <input id="debounceMs" type="number" value="400" min="100" max="2000" />
+            <div class="row wrap">
+              <label for="spacesSelect">Space</label>
+              <select id="spacesSelect"></select>
+              <button id="setDefaultSpaceBtn" class="ghost">Set default</button>
+              <span class="leftpad"></span>
+              <input id="newSpaceName" placeholder="Create new space…" />
+              <button id="createSpaceBtn">Create</button>
             </div>
           </div>
-          <div class="row wrap">
-            <div class="row no-grow">
-              <strong>Search backend:</strong>&nbsp;<span id="cfgBackend">-</span>
+        </section>
+
+        <section id="imageSearchPanel" class="search-panel" role="tabpanel" aria-labelledby="tabImageSearch" hidden>
+          <div class="image-search-form">
+            <label class="block">Describe the image or paste an image URL</label>
+            <input id="imageQuery" type="text" class="search-input" placeholder="e.g. 'Architectural diagrams for zero trust'" />
+            <div class="row wrap">
+              <div class="row no-grow">
+                <label class="block">Tag filters (comma separated)</label>
+                <input id="imageTags" type="text" placeholder="policy, architecture" />
+              </div>
+              <div class="row no-grow">
+                <label class="block">Top K</label>
+                <input id="imageTopK" type="number" min="1" max="100" value="12" />
+              </div>
+              <div class="row no-grow">
+                <label class="block">Preview size</label>
+                <select id="imageThumbSize">
+                  <option value="small">Small</option>
+                  <option value="medium" selected>Medium</option>
+                  <option value="large">Large</option>
+                </select>
+              </div>
             </div>
-            <div class="row no-grow">
-              <label for="cfgTopK" class="leftpad">Default Top K</label>
-              <input id="cfgTopK" type="number" min="1" max="1000" placeholder="25" />
+            <div class="row wrap">
+              <label class="block">Optional: upload reference image</label>
+              <input id="imageFile" type="file" accept="image/png,image/jpeg,image/jpg,image/gif,image/webp,image/bmp" />
             </div>
-            <div class="row no-grow" id="cfgPgvectorRow" hidden>
-              <label for="cfgProbes" class="leftpad">pgvector probes</label>
-              <input id="cfgProbes" type="number" min="1" max="10000" placeholder="env default" />
-            </div>
-            <div class="row no-grow" id="cfgNumCandRow" hidden>
-              <label for="cfgNumCand" class="leftpad">OS num_candidates</label>
-              <input id="cfgNumCand" type="number" min="1" max="1000000" placeholder="heuristic default" />
-            </div>
-            <div class="row no-grow">
-              <button id="loadCfgBtn" class="ghost">Refresh config</button>
-              <button id="saveCfgBtn" class="ghost">Save</button>
+            <div class="row wrap">
+              <button id="imageSearchBtn" class="primary">Search images</button>
+              <button id="imageClearBtn" class="ghost">Clear</button>
             </div>
           </div>
-          <div class="row wrap">
-            <label for="spacesSelect">Space</label>
-            <select id="spacesSelect"></select>
-            <button id="setDefaultSpaceBtn" class="ghost">Set default</button>
-            <span class="leftpad"></span>
-            <input id="newSpaceName" placeholder="Create new space…" />
-            <button id="createSpaceBtn">Create</button>
+          <div class="row middle" id="imageSearchLoading" hidden>
+            <div class="spinner"></div>
+            <span>Searching images…</span>
           </div>
-        </div>
+          <div id="imageResultsEmpty" class="muted" hidden>No images yet. Try uploading visual assets or drag & drop a reference image.</div>
+          <div id="imageResultsGrid" class="image-results-grid"></div>
+        </section>
 
 
 
@@ -306,10 +352,12 @@
       return html;
     }
     async function api(path, opts={}) {
+      const isForm = opts.body instanceof FormData;
+      const headers = opts.headers || (isForm ? undefined : { 'Content-Type': 'application/json' });
       const res = await fetch(path, {
         method: opts.method || 'GET',
-        headers: opts.body instanceof FormData ? undefined : { 'Content-Type': 'application/json' },
-        body: opts.body ? (opts.body instanceof FormData ? opts.body : JSON.stringify(opts.body)) : undefined,
+        headers,
+        body: opts.body ? (isForm ? opts.body : JSON.stringify(opts.body)) : undefined,
         signal: opts.signal,
       });
       if (!res.ok) throw new Error(await res.text());
@@ -322,6 +370,7 @@
       user: null,
       spaces: [],
       spaceId: null,
+      imageSearchAbort: null,
     };
 
     function setLoggedInUI() {
@@ -585,6 +634,146 @@
 
     document.getElementById('searchBtn').addEventListener('click', () => doSearch());
 
+    // Tab switching
+    const textTab = document.getElementById('tabTextSearch');
+    const imageTab = document.getElementById('tabImageSearch');
+    const textPanel = document.getElementById('textSearchPanel');
+    const imagePanel = document.getElementById('imageSearchPanel');
+
+    function switchTab(active) {
+      if (active === 'text') {
+        textTab.classList.add('active');
+        textTab.setAttribute('aria-selected', 'true');
+        imageTab.classList.remove('active');
+        imageTab.setAttribute('aria-selected', 'false');
+        textPanel.hidden = false;
+        imagePanel.hidden = true;
+      } else {
+        imageTab.classList.add('active');
+        imageTab.setAttribute('aria-selected', 'true');
+        textTab.classList.remove('active');
+        textTab.setAttribute('aria-selected', 'false');
+        textPanel.hidden = true;
+        imagePanel.hidden = false;
+      }
+    }
+
+    textTab.addEventListener('click', () => switchTab('text'));
+    imageTab.addEventListener('click', () => switchTab('image'));
+
+    const imageQueryEl = document.getElementById('imageQuery');
+    const imageTagsEl = document.getElementById('imageTags');
+    const imageTopKEl = document.getElementById('imageTopK');
+    const imageThumbSizeEl = document.getElementById('imageThumbSize');
+    const imageFileEl = document.getElementById('imageFile');
+    const imageResultsGrid = document.getElementById('imageResultsGrid');
+    const imageEmptyState = document.getElementById('imageResultsEmpty');
+    const imageLoading = document.getElementById('imageSearchLoading');
+
+    function resetImageResults() {
+      imageResultsGrid.innerHTML = '';
+      imageEmptyState.hidden = false;
+    }
+
+    function renderImageResults(results) {
+      imageResultsGrid.innerHTML = '';
+      if (!Array.isArray(results) || !results.length) {
+        imageEmptyState.hidden = false;
+        return;
+      }
+      imageEmptyState.hidden = true;
+      const size = imageThumbSizeEl.value || 'medium';
+      const cards = results.map((item) => {
+        const thumb = item.thumbnail_path || item.file_path;
+        const caption = escapeHtml(item.caption || '');
+        const tags = Array.isArray(item.tags) ? item.tags : [];
+        const tagBadges = tags.map(t => `<span class="badge">${escapeHtml(t)}</span>`).join('');
+        const meta = [
+          item.score != null ? `<span class="badge">score ${(item.score ?? '').toFixed ? item.score.toFixed(3) : item.score}</span>` : '',
+          item.rank != null ? `<span class="badge">#${item.rank}</span>` : '',
+        ].join('');
+        const href = item.file_path ? `/api/doc-download?doc_id=${item.doc_id || ''}` : '#';
+        return `
+          <div class="image-card ${size}">
+            <div class="image-card-thumb">${thumb ? `<img src="${thumb}" alt="result ${item.rank || ''}" loading="lazy" />` : '<div class="thumb-placeholder">No preview</div>'}</div>
+            <div class="image-card-body">
+              <div class="image-card-meta">${meta}</div>
+              <p class="image-card-caption">${caption || '(no caption yet)'}</p>
+              <div class="image-card-tags">${tagBadges}</div>
+              ${item.doc_id ? `<a class="ghost" href="${href}" target="_blank" rel="noopener">Open source</a>` : ''}
+            </div>
+          </div>`;
+      }).join('');
+      imageResultsGrid.innerHTML = cards;
+    }
+
+    async function doImageSearch() {
+      if (!state.user) { showToast('Login required'); return; }
+      const query = (imageQueryEl.value || '').trim();
+      const tagsRaw = imageTagsEl.value || '';
+      const topK = parseInt(imageTopKEl.value || '12', 10);
+      const file = imageFileEl.files && imageFileEl.files[0] ? imageFileEl.files[0] : null;
+
+      if (!query && !tagsRaw && !file) {
+        showToast('Enter a query, tags, or choose a reference image');
+        return;
+      }
+
+      if (state.imageSearchAbort) {
+        state.imageSearchAbort.abort();
+        state.imageSearchAbort = null;
+      }
+
+      const controller = new AbortController();
+      state.imageSearchAbort = controller;
+      imageLoading.hidden = false;
+      imageResultsGrid.innerHTML = '';
+      imageEmptyState.hidden = true;
+
+      try {
+        const tags = tagsRaw.split(',').map(t => t.trim()).filter(Boolean);
+        const payload = { query, tags, top_k: topK, space_id: state.spaceId };
+        let body;
+        let headers;
+        if (file) {
+          body = new FormData();
+          Object.entries(payload).forEach(([k, v]) => {
+            if (Array.isArray(v)) {
+              body.append(k, JSON.stringify(v));
+            } else if (v != null) {
+              body.append(k, v);
+            }
+          });
+          body.append('reference', file);
+        } else {
+          body = payload;
+          headers = { 'Content-Type': 'application/json' };
+        }
+        const res = await api('/api/image-search', { method: 'POST', body, headers, signal: controller.signal });
+        renderImageResults(res.results || []);
+        showToast(`Found ${res.count || 0} images`);
+      } catch (e) {
+        if (e.name !== 'AbortError') {
+          console.error(e);
+          showToast('Image search failed');
+        }
+      } finally {
+        imageLoading.hidden = true;
+        if (state.imageSearchAbort === controller) state.imageSearchAbort = null;
+      }
+    }
+
+    function clearImageSearch() {
+      imageQueryEl.value = '';
+      imageTagsEl.value = '';
+      imageTopKEl.value = '12';
+      imageFileEl.value = '';
+      resetImageResults();
+    }
+
+    document.getElementById('imageSearchBtn').addEventListener('click', () => doImageSearch());
+    document.getElementById('imageClearBtn').addEventListener('click', () => clearImageSearch());
+
     // Deep Research UI
     let dr = { open: false, conversationId: null };
     function drStorageKey(spaceId) { return `dr:space:${spaceId || '_'}`; }
@@ -633,11 +822,50 @@
         showToast('Failed to reset conversation');
       }
     }
-    function pushMsg(role, text) {
+    function renderDrMetadata(meta) {
+      if (!meta) return '';
+      const parts = [];
+      if (typeof meta.confidence === 'number') {
+        parts.push(`<span class="badge">Confidence ${(meta.confidence * 100).toFixed(0)}%</span>`);
+      }
+      if (typeof meta.elapsed_seconds === 'number') {
+        parts.push(`<span class="badge badge-soft">${meta.elapsed_seconds}s</span>`);
+      }
+      if (meta.web_attempted) {
+        parts.push('<span class="badge badge-web">Web search triggered</span>');
+      } else {
+        parts.push('<span class="badge badge-local">Local context only</span>');
+      }
+      return parts.join('');
+    }
+
+    function renderDrReferences(refs) {
+      if (!Array.isArray(refs) || !refs.length) return '';
+      const items = refs.map((ref, idx) => {
+        if (ref.source === 'web') {
+          const title = escapeHtml(ref.title || `Web result ${idx + 1}`);
+          const url = escapeHtml(ref.url || '#');
+          const snippet = escapeHtml(ref.snippet || '');
+          return `<li><span class="badge badge-web">Web</span> <a href="${url}" target="_blank" rel="noopener">${title}</a><div class="dr-ref-snippet">${snippet}</div></li>`;
+        }
+        const label = `Document ${ref.document_id ?? ''} · Chunk ${ref.chunk_index ?? ''}`;
+        return `<li><span class="badge badge-local">KB</span> ${escapeHtml(label)}</li>`;
+      });
+      return `<div class="dr-refs"><div class="dr-refs-title">Sources</div><ol>${items.join('')}</ol></div>`;
+    }
+
+    function pushMsg(role, text, meta) {
       const chat = document.getElementById('drChat');
       const div = document.createElement('div');
       div.className = 'dr-msg ' + (role === 'user' ? 'me' : 'ai');
-      const content = role === 'assistant' ? renderLLMText(text) : `<p>${escapeHtml(text)}</p>`;
+      let content;
+      if (role === 'assistant') {
+        const refs = renderDrReferences(meta?.references);
+        const badges = renderDrMetadata(meta);
+        content = `${badges ? `<div class="dr-meta">${badges}</div>` : ''}${renderLLMText(text)}${refs}`;
+      } else {
+        content = `<p>${escapeHtml(text)}</p>`;
+      }
       div.innerHTML = `<div class="bubble">${content}</div>`;
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
@@ -661,9 +889,15 @@
         const body = { conversation_id: cid, message: txt, space_id: state.spaceId, llm_provider: provider };
         const r = await api('/api/deep-research/ask', { method: 'POST', body });
         const ans = (r && r.answer) ? String(r.answer) : '(no answer)';
+        const meta = {
+          confidence: typeof r.confidence === 'number' ? r.confidence : undefined,
+          elapsed_seconds: r.elapsed_seconds,
+          web_attempted: r.web_attempted,
+          references: Array.isArray(r.references) ? r.references : [],
+        };
         // Replace thinking bubble with answer
         if (th && th.parentElement) th.parentElement.removeChild(th);
-        pushMsg('assistant', ans);
+        pushMsg('assistant', ans, meta);
       } catch (e) {
         if (th && th.parentElement) th.parentElement.removeChild(th);
         pushMsg('assistant', 'Sorry, something went wrong.');

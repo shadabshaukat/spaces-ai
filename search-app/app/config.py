@@ -111,6 +111,18 @@ class Settings:
     cache_cooldown_seconds: int = int(os.getenv("CACHE_COOLDOWN_SECONDS", "60"))
     llm_cache_ttl_seconds: int = int(os.getenv("LLM_CACHE_TTL_SECONDS", "900"))
 
+    # Vision embeddings & image storage
+    image_embed_model: str = os.getenv("IMAGE_EMBED_MODEL", "openclip/ViT-B-32")
+    image_embed_dim: int = int(os.getenv("IMAGE_EMBED_DIM", "512"))
+    image_embed_device: str = os.getenv("IMAGE_EMBED_DEVICE", "cpu")
+    image_index_name: str = os.getenv("IMAGE_INDEX_NAME", "spacesai_images")
+    image_index_shards: int = int(os.getenv("IMAGE_INDEX_SHARDS", "3"))
+    image_index_replicas: int = int(os.getenv("IMAGE_INDEX_REPLICAS", "1"))
+    enable_image_storage: bool = _get_bool("ENABLE_IMAGE_STORAGE", True)
+
+    # Table storage
+    enable_table_storage: bool = _get_bool("ENABLE_TABLE_STORAGE", True)
+
     # AWS Bedrock (optional)
     aws_region: Optional[str] = os.getenv("AWS_REGION")
     aws_bedrock_model_id: Optional[str] = os.getenv("AWS_BEDROCK_MODEL_ID")
@@ -135,6 +147,11 @@ class Settings:
     # Deep Research feature flags
     dr_rerank_enable: bool = _get_bool("DR_RERANK_ENABLE", True)
     dr_topic_lock_default: bool = _get_bool("DR_TOPIC_LOCK_DEFAULT", False)
+    deep_research_timeout_seconds: int = int(os.getenv("DEEP_RESEARCH_TIMEOUT_SECONDS", "120"))
+
+    # MCP server credentials (optional)
+    mcp_admin_user: Optional[str] = os.getenv("MCP_ADMIN_USER")
+    mcp_admin_password: Optional[str] = os.getenv("MCP_ADMIN_PASSWORD")
 
     # Back-compat basic auth (unused in SpacesAI but kept for compatibility in some tools)
     basic_auth_user: str = os.getenv("BASIC_AUTH_USER", "admin")

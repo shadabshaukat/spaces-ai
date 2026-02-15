@@ -80,7 +80,7 @@ def _remove_common_headers_footers(pages: List[str]) -> List[str]:
     first_lines: List[str] = []
     last_lines: List[str] = []
     for p in pages:
-        ls = [l.strip() for l in p.split("\n") if l.strip()]
+        ls = [line.strip() for line in p.split("\n") if line.strip()]
         if not ls:
             first_lines.append("")
             last_lines.append("")
@@ -102,7 +102,7 @@ def _remove_common_headers_footers(pages: List[str]) -> List[str]:
             if ls and ls[-1].strip() == last_common:
                 ls = ls[:-1]
         # Remove generic page footers like "Page X of Y"
-        ls = [l for l in ls if not PAGE_FOOTER_RE.match(l.strip())]
+        ls = [line for line in ls if not PAGE_FOOTER_RE.match(line.strip())]
         cleaned_pages.append("\n".join(ls))
     return cleaned_pages
 
@@ -373,7 +373,6 @@ def extract_text_from_av(path: str, kind: str = "audio") -> str:
     kind: 'audio' or 'video'
     """
     try:
-        import os as _os
         import tempfile
         import subprocess
         try:

@@ -30,6 +30,7 @@ dependencies = [
   "redis>=5.0.0",
   "boto3>=1.34.0",
   "requests>=2.31.0",
+  "beautifulsoup4>=4.12.2",
 ]
 
 
@@ -43,6 +44,7 @@ vision = ["pillow>=10.3.0", "pytesseract>=0.3.10"]
 audio = ["ffmpeg-python>=0.2.0", "openai-whisper>=20231117"]
 # Developer tools (optional)
 dev = ["pytest>=7.4.0", "httpx>=0.27.0", "anyio>=4.0.0"]
+image = ["open-clip-torch>=2.24.0", "torch>=2.3.0"]
 
 [project.urls]
 Homepage = "https://github.com/your-org/enterprise-searchapp"

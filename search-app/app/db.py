@@ -94,7 +94,7 @@ def init_db(s: Settings = settings) -> None:
             )
 
             cur.execute(
-                f"""
+                """
                 CREATE TABLE IF NOT EXISTS documents (
                     id BIGSERIAL PRIMARY KEY,
                     user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -102,7 +102,7 @@ def init_db(s: Settings = settings) -> None:
                     source_path TEXT,
                     source_type TEXT NOT NULL,
                     title TEXT,
-                    metadata JSONB DEFAULT '{{}}'::jsonb,
+                    metadata JSONB DEFAULT '{}'::jsonb,
                     created_at TIMESTAMPTZ DEFAULT now()
                 );
                 """
@@ -164,8 +164,63 @@ def init_db(s: Settings = settings) -> None:
 
             cur.execute("CREATE INDEX IF NOT EXISTS idx_user_activity_user_time ON user_activity(user_id, created_at DESC)")
 
-        logger.info("Database initialized with vector dim=%s, metric=%s, lists=%s", dim, metric, s.pgvector_lists)
+            # Image assets table (stores metadata + pgvector embeddings if enabled)
+            cur.execute(
+                f"""
+                CREATE TABLE IF NOT EXISTS image_assets (
+                    id BIGSERIAL PRIMARY KEY,
+                    document_id BIGINT REFERENCES documents(id) ON DELETE CASCADE,
+                    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    space_id BIGINT REFERENCES spaces(id) ON DELETE SET NULL,
+                    file_path TEXT,
+                    thumbnail_path TEXT,
+                    width INT,
+                    height INT,
+                    tags JSONB DEFAULT '[]'::jsonb,
+                    caption TEXT,
+                    embedding vector({settings.image_embed_dim}),
+                    embedding_model TEXT,
+                    created_at TIMESTAMPTZ DEFAULT now()
+                );
+                """
+            )
 
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_image_assets_user_space ON image_assets(user_id, space_id, created_at DESC);
+                """
+            )
+
+            cur.execute(
+                f"""
+                CREATE INDEX IF NOT EXISTS idx_image_assets_embedding_ivfflat
+                ON image_assets USING ivfflat (embedding {opclass})
+                WITH (lists = {s.pgvector_lists});
+                """
+            )
+
+            # Structured tables extracted from documents
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS document_tables (
+                    id BIGSERIAL PRIMARY KEY,
+                    document_id BIGINT REFERENCES documents(id) ON DELETE CASCADE,
+                    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    space_id BIGINT REFERENCES spaces(id) ON DELETE SET NULL,
+                    table_index INT,
+                    schema_json JSONB DEFAULT '[]'::jsonb,
+                    rows_json JSONB DEFAULT '[]'::jsonb,
+                    summary TEXT,
+                    created_at TIMESTAMPTZ DEFAULT now()
+                );
+                """
+            )
+
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_document_tables_user_space ON document_tables(user_id, space_id, created_at DESC);
+                """
+            )
 
         logger.info("Database initialized with vector dim=%s, metric=%s, lists=%s", dim, metric, s.pgvector_lists)
 

@@ -581,7 +581,14 @@ async def api_image_search(request: Request):
                 logger.debug("image_search reference vector generated=%s", reference_used)
             except VisionModelUnavailable as e:
                 logger.warning("Vision model unavailable for reference: %s", e)
-                return JSONResponse(status_code=503, content={"error": "vision model unavailable", "detail": str(e), "install_hint": "uv sync --extra image"})
+                return JSONResponse(
+                    status_code=503,
+                    content={
+                        "error": "vision model unavailable",
+                        "detail": str(e),
+                        "install_hint": "Install OpenCLIP/Torch via `uv sync --extra image` or `pip install .[image]`",
+                    },
+                )
             except Exception as e:
                 logger.warning("Failed to embed reference image: %s", e)
                 return JSONResponse(status_code=400, content={"error": "failed to process reference image", "detail": str(e)})
@@ -599,7 +606,14 @@ async def api_image_search(request: Request):
                 logger.debug("image_search text vector generated=%s", vector is not None)
             except VisionModelUnavailable as e:
                 logger.warning("Vision model unavailable: %s", e)
-                return JSONResponse(status_code=503, content={"error": "vision model unavailable", "detail": str(e), "install_hint": "uv sync --extra image"})
+                return JSONResponse(
+                    status_code=503,
+                    content={
+                        "error": "vision model unavailable",
+                        "detail": str(e),
+                        "install_hint": "Install OpenCLIP/Torch via `uv sync --extra image` or `pip install .[image]`",
+                    },
+                )
             except Exception as e:
                 logger.warning("Image text embedding failed: %s", e)
                 vector = None

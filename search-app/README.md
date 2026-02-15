@@ -99,10 +99,10 @@ cp .env.example .env
 # (Optional) set LLM provider credentials (OCI, OpenAI, Bedrock, or Ollama)
 ```
 
-2) Install deps and run the app:
+2) Install deps (including image/vision stack) and run the app:
 
 ```bash
-uv sync --extra pdf --extra office --extra vision --extra audio
+uv sync --extra pdf --extra office --extra vision --extra audio --extra image
 uv run searchapp
 ```
 
@@ -188,7 +188,7 @@ OLLAMA_MODEL=llama3.2:latest
     ```
   - Run (foreground):
     ```bash
-    ./run-app.sh
+    ./run-app.sh --debug      # installs all extras, starts with verbose logs
     ```
   - Start (background):
     ```bash
@@ -212,7 +212,7 @@ OLLAMA_MODEL=llama3.2:latest
 
 - Install deps and run:
 ```bash
-uv sync --extra pdf --extra office --extra vision --extra audio
+uv sync --extra pdf --extra office --extra vision --extra audio --extra image
 uv run searchapp
 ```
 - UI: http://0.0.0.0:8000

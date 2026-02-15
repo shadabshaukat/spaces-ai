@@ -83,7 +83,21 @@ def embed_image_texts(texts: Iterable[str]) -> List[List[float]]:
     device = settings.image_embed_device
     model.eval()
     with torch.no_grad():
-        tokens = tokenizer(texts)
+        try:
+            tokens = tokenizer(texts)
+        except TypeError as exc:
+            msg = str(exc)
+            if "Unexpected type" not in msg:
+                raise
+            logger.debug("Tokenizer does not support batched input; tokenizing %d texts individually", len(texts))
+            single_tokens = []
+            for text in texts:
+                tok = tokenizer(text)
+                if hasattr(tok, "unsqueeze"):
+                    single_tokens.append(tok.unsqueeze(0))
+                else:
+                    raise TypeError("Tokenizer output unsupported for batching") from exc
+            tokens = torch.cat(single_tokens, dim=0)
         tokens = tokens.to(device)
         vecs = model.encode_text(tokens)
         vecs /= vecs.norm(dim=-1, keepdim=True)

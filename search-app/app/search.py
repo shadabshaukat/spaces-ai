@@ -291,19 +291,19 @@ def _image_search_postgres(*, vector: Optional[List[float]], query: Optional[str
         return []
 
     where = []
-    params: List[Any] = []
+    filter_params: List[Any] = []
     if user_id is not None:
         where.append("ia.user_id = %s")
-        params.append(int(user_id))
+        filter_params.append(int(user_id))
     if space_id is not None:
         where.append("ia.space_id = %s")
-        params.append(int(space_id))
+        filter_params.append(int(space_id))
     if tags:
         where.append("ia.tags @> %s::jsonb")
-        params.append(json.dumps(tags))
+        filter_params.append(json.dumps(tags))
     if query and vector is None:
         where.append("ia.caption ILIKE %s")
-        params.append(f"%{query}%")
+        filter_params.append(f"%{query}%")
 
     order_clause = "ia.created_at DESC"
     distance_expr = "NULL::double precision AS distance"
@@ -319,9 +319,11 @@ def _image_search_postgres(*, vector: Optional[List[float]], query: Optional[str
     ]
     if where:
         sql.append("WHERE " + " AND ".join(where))
+    params: List[Any] = []
     if vector_param is not None:
         params.append(vector_param)
         order_clause = "distance ASC"
+    params.extend(filter_params)
 
     sql.append(f"ORDER BY {order_clause} LIMIT %s")
     params.append(int(top_k))

@@ -232,12 +232,30 @@ class OpenSearchAdapter:
         else:
             query_part = {"bool": {"filter": filters or [], "must": [{"match_all": {}}]}}
 
-        body: Dict[str, Any] = {
-            "size": int(top_k),
-            "query": query_part,
-        }
+        body: Dict[str, Any]
         if knn_part is not None:
-            body["knn"] = knn_part
+            engine = (os.getenv("OPENSEARCH_KNN_ENGINE", "lucene") or "lucene").lower()
+            if engine == "lucene":
+                body = {
+                    "size": int(top_k),
+                    "query": {
+                        "bool": {
+                            "must": [{"knn": knn_part}],
+                            "filter": filters or [],
+                        }
+                    },
+                }
+            else:
+                body = {
+                    "size": int(top_k),
+                    "query": query_part,
+                    "knn": knn_part,
+                }
+        else:
+            body = {
+                "size": int(top_k),
+                "query": query_part,
+            }
 
         res = os_client.search(index=settings.image_index_name, body=body)
         return res.get("hits", {}).get("hits", [])

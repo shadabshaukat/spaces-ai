@@ -446,6 +446,7 @@ def ingest_file_path(file_path: str, user_id: int, space_id: Optional[int] = Non
                     _update_document_metadata(conn, doc_id, doc_metadata)
             except Exception:
                 logger.exception("Image asset processing failed for doc_id=%s", doc_id)
+                raise
 
     try:
         if settings.search_backend == "opensearch" and settings.opensearch_dual_write:

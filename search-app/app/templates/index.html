@@ -904,69 +904,76 @@
 
     function renderDrReferences(refs) {
       if (!Array.isArray(refs) || !refs.length) return '';
-      const docRefs = refs.filter(r => r.source === 'local');
+      const localRefs = refs.filter(r => r.source === 'local');
       const webRefs = refs.filter(r => r.source === 'web');
 
-      const buildDocCard = (ref, idx) => {
+      const buildChunkCard = (ref, idx, type) => {
         const num = ref.rank ?? (idx + 1);
-        const title = escapeHtml(ref.title || basename(ref.source_path || '') || `Document ${ref.document_id ?? idx + 1}`);
-        const chunkLabel = typeof ref.chunk_index === 'number' ? `Chunk #${ref.chunk_index}` : '';
-        const subtitle = [chunkLabel, ref.source_path ? basename(ref.source_path) : '' ].filter(Boolean).join(' • ');
-        const excerptRaw = (ref.excerpt || '').trim();
-        const excerpt = excerptRaw ? escapeHtml(excerptRaw.length > 320 ? `${excerptRaw.slice(0, 320)}…` : excerptRaw) : '<span class="muted">No excerpt available.</span>';
-        const downloadHref = ref.document_id ? `/api/doc-download?doc_id=${encodeURIComponent(ref.document_id)}` : '';
+        const title = escapeHtml(ref.title || (type === 'local' ? basename(ref.source_path || '') || `Document ${ref.document_id ?? idx + 1}` : `Web result ${idx + 1}`));
+        const chunkLabel = typeof ref.chunk_index === 'number' ? `Chunk #${ref.chunk_index}` : null;
+        const subtitleBits = [];
+        if (chunkLabel) subtitleBits.push(chunkLabel);
+        if (type === 'local' && ref.source_path) subtitleBits.push(basename(ref.source_path));
+        if (type === 'web' && ref.url) subtitleBits.push(ref.url.replace(/^https?:\/\//, ''));
+        const subtitle = subtitleBits.join(' • ');
+        const textField = type === 'local' ? (ref.excerpt || ref.snippet || ref.text || '') : (ref.snippet || ref.excerpt || '');
+        const trimmed = textField.trim();
+        const display = trimmed ? escapeHtml(trimmed.length > 320 ? `${trimmed.slice(0, 320)}…` : trimmed) : '<span class="muted">No excerpt available.</span>';
+        const downloadHref = type === 'local' && ref.document_id ? `/api/doc-download?doc_id=${encodeURIComponent(ref.document_id)}` : '';
+        const badge = type === 'local' ? '<span class="pill-badge">Local</span>' : '<span class="pill-badge pill-web">Web</span>';
+        const action = type === 'local'
+          ? (downloadHref ? `<a class="ghost" href="${escapeHtml(downloadHref)}" target="_blank" rel="noopener">Open document</a>` : '')
+          : `<a class="ghost" href="${escapeHtml(ref.url || '#')}" target="_blank" rel="noopener">Open link</a>`;
         return `
-          <div class="dr-ref-card" data-source="local">
-            <div class="dr-ref-rank">${num}</div>
-            <div class="dr-ref-body">
-              <div class="dr-ref-heading">
-                <span class="pill-badge">KB</span>
-                <div class="dr-ref-texts">
-                  <div class="dr-ref-title">${title}</div>
-                  ${subtitle ? `<div class="dr-ref-sub">${escapeHtml(subtitle)}</div>` : ''}
-                </div>
+          <details class="dr-source-card" data-source="${type}">
+            <summary>
+              <div class="dr-source-chip">${badge}<span class="rank">#${num}</span></div>
+              <div class="dr-source-summary">
+                <div class="title">${title}</div>
+                ${subtitle ? `<div class="sub">${escapeHtml(subtitle)}</div>` : ''}
               </div>
-              <div class="dr-ref-snippet">${excerpt}</div>
-              <div class="dr-ref-actions">
-                ${downloadHref ? `<a class="ghost" href="${escapeHtml(downloadHref)}" target="_blank" rel="noopener">Open document</a>` : ''}
-              </div>
+              <span class="chevron">▸</span>
+            </summary>
+            <div class="dr-source-body">
+              <div class="snippet">${display}</div>
+              <div class="actions">${action || ''}</div>
             </div>
-          </div>`;
+          </details>`;
       };
 
-      const buildWebCard = (ref, idx) => {
-        const num = ref.rank ?? (idx + 1);
-        const title = escapeHtml(ref.title || `Web result ${idx + 1}`);
-        const url = escapeHtml(ref.url || '#');
-        const snippetRaw = (ref.snippet || '').trim();
-        const snippet = snippetRaw ? escapeHtml(snippetRaw.length > 260 ? `${snippetRaw.slice(0, 260)}…` : snippetRaw) : '<span class="muted">No snippet available.</span>';
+      const buildDeck = (items, typeLabel, type) => {
+        if (!items.length) return '';
         return `
-          <div class="dr-ref-card" data-source="web">
-            <div class="dr-ref-rank">${num}</div>
-            <div class="dr-ref-body">
-              <div class="dr-ref-heading">
-                <span class="pill-badge pill-web">Web</span>
-                <div class="dr-ref-texts">
-                  <div class="dr-ref-title">${title}</div>
-                  <div class="dr-ref-sub">${url.replace(/^https?:\/\//, '')}</div>
-                </div>
+          <details class="dr-source-deck" data-type="${type}" ${type === 'local' ? '' : ''}>
+            <summary>
+              <div class="deck-header">
+                <span class="deck-title">${typeLabel}</span>
+                <span class="deck-count">${items.length} item${items.length === 1 ? '' : 's'}</span>
+                <span class="chevron">▸</span>
               </div>
-              <div class="dr-ref-snippet">${snippet}</div>
-              <div class="dr-ref-actions">
-                <a class="ghost" href="${url}" target="_blank" rel="noopener">Open link</a>
-              </div>
+            </summary>
+            <div class="deck-body">
+              ${items.map((ref, idx) => buildChunkCard(ref, idx, type)).join('')}
             </div>
-          </div>`;
+          </details>`;
       };
 
-      const sections = [];
-      if (docRefs.length) {
-        sections.push(`<div class="dr-refs-section"><div class="dr-refs-title">Knowledge Base</div><div class="dr-card-column">${docRefs.map(buildDocCard).join('')}</div></div>`);
-      }
-      if (webRefs.length) {
-        sections.push(`<div class="dr-refs-section"><div class="dr-refs-title">Web</div><div class="dr-card-column">${webRefs.map(buildWebCard).join('')}</div></div>`);
-      }
-      return `<div class="dr-refs dr-refs-condensed">${sections.join('')}</div>`;
+      const decks = [
+        buildDeck(localRefs, 'Knowledge Base Sources', 'local'),
+        buildDeck(webRefs, 'Web Sources', 'web'),
+      ].filter(Boolean).join('');
+
+      return `
+        <details class="dr-sources">
+          <summary>
+            <span class="pill-badge pill-source">Sources</span>
+            <span class="muted">Tap to expand local & web evidence</span>
+            <span class="chevron">▸</span>
+          </summary>
+          <div class="dr-sources-body">
+            ${decks || '<div class="muted">No supporting evidence returned.</div>'}
+          </div>
+        </details>`;
     }
 
     function pushMsg(role, text, meta) {

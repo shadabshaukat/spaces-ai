@@ -14,7 +14,7 @@ if ! command -v uv >/dev/null 2>&1; then
 fi
 
 # Sync dependencies with extras for PDF/Office/Vision/Audio
-uv sync --extra pdf --extra office --extra vision --extra audio
+uv sync --extra pdf --extra office --extra vision 
 
 echo "Dependencies installed. You can run the app with:"
 echo "  ./run-app.sh (foreground)"

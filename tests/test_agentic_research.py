@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+APP_DIR = ROOT / "search-app"
+if str(APP_DIR) not in sys.path:
+    sys.path.insert(0, str(APP_DIR))
+
 from search_app_entrypoint import get_app  # noqa: F401  # ensure settings load
-from search_app_entrypoint import patch_path  # type: ignore
-
-
-patch_path()
 
 from app.agentic_research import WebHit, decide_web_and_contexts  # type: ignore  # noqa: E402
 from app.search import ChunkHit  # type: ignore  # noqa: E402

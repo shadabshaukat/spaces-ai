@@ -222,6 +222,58 @@ def init_db(s: Settings = settings) -> None:
                 """
             )
 
+            cur.execute(
+                f"""
+                CREATE TABLE IF NOT EXISTS conversation_external_docs (
+                    id BIGSERIAL PRIMARY KEY,
+                    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    space_id BIGINT REFERENCES spaces(id) ON DELETE SET NULL,
+                    conversation_id TEXT NOT NULL,
+                    url TEXT NOT NULL,
+                    parent_url TEXT,
+                    depth INT DEFAULT 0,
+                    chunk_index INT NOT NULL,
+                    title TEXT,
+                    content TEXT NOT NULL,
+                    snippet TEXT,
+                    content_hash TEXT,
+                    metadata JSONB DEFAULT '{{}}'::jsonb,
+                    embedding vector({dim}),
+                    created_at TIMESTAMPTZ DEFAULT now(),
+                    updated_at TIMESTAMPTZ DEFAULT now()
+                );
+                """
+            )
+
+            cur.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_conv_ext_docs_dedup
+                ON conversation_external_docs(user_id, conversation_id, url, chunk_index);
+                """
+            )
+
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_conv_ext_docs_user_space
+                ON conversation_external_docs(user_id, space_id, conversation_id, created_at DESC);
+                """
+            )
+
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_conv_ext_docs_hash
+                ON conversation_external_docs(content_hash);
+                """
+            )
+
+            cur.execute(
+                f"""
+                CREATE INDEX IF NOT EXISTS idx_conv_ext_docs_embedding_ivfflat
+                ON conversation_external_docs USING ivfflat (embedding {opclass})
+                WITH (lists = {s.pgvector_lists});
+                """
+            )
+
         logger.info("Database initialized with vector dim=%s, metric=%s, lists=%s", dim, metric, s.pgvector_lists)
 
 

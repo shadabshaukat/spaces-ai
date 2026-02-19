@@ -850,8 +850,23 @@ async def api_dr_ask(request: Request, payload: Dict[str, Any]):
     if not message:
         return JSONResponse(status_code=400, content={"error": "message required"})
     force_web = bool(payload.get("force_web"))
+    urls = payload.get("urls")
+    if isinstance(urls, str):
+        urls = [urls]
+    if isinstance(urls, (list, tuple)):
+        urls = [str(u) for u in urls if u]
+    else:
+        urls = []
     try:
-        out = dr_ask(uid, sid, conversation_id, message, provider_override=provider, force_web=force_web)
+        out = dr_ask(
+            uid,
+            sid,
+            conversation_id,
+            message,
+            provider_override=provider,
+            force_web=force_web,
+            urls=urls,
+        )
         return out
     except Exception as e:
         logger.exception("DR ask failed: %s", e)

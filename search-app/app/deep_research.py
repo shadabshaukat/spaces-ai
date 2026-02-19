@@ -11,6 +11,7 @@ from .db import get_conn
 
 from .config import settings
 from .search import hybrid_search, ChunkHit
+from .external_sources import ingest_external_urls, retrieve_external_contexts
 from .agentic_research import decide_web_and_contexts
 from .valkey_cache import get_json as cache_get, set_json as cache_set
 
@@ -124,7 +125,15 @@ def _refine(question: str, draft: str, contexts: List[str], provider_override: O
         return None
 
 
-def ask(user_id: int, space_id: Optional[int], conversation_id: str, message: str, provider_override: Optional[str] = None, force_web: bool = False) -> Dict[str, object]:
+def ask(
+    user_id: int,
+    space_id: Optional[int],
+    conversation_id: str,
+    message: str,
+    provider_override: Optional[str] = None,
+    force_web: bool = False,
+    urls: Optional[List[str]] = None,
+) -> Dict[str, object]:
     start_ts = time.monotonic()
     max_budget = max(float(settings.deep_research_timeout_seconds or 0), 15.0)
 
@@ -145,6 +154,18 @@ def ask(user_id: int, space_id: Optional[int], conversation_id: str, message: st
     retrieval_seed = f"{message}\n\nConversation so far:\n{recent_snippet}" if recent_snippet else message
     subqs = _extract_subqueries(retrieval_seed)
 
+    if urls:
+        try:
+            ingest_external_urls(
+                user_id=user_id,
+                space_id=space_id,
+                conversation_id=conversation_id,
+                urls=urls,
+                recent_context=recent_snippet,
+            )
+        except Exception as exc:
+            logger.warning("External URL ingestion failed: %s", exc)
+
     # RETRIEVE for each subq
     contexts: List[str] = []
     hits_all: List[ChunkHit] = []
@@ -161,6 +182,15 @@ def ask(user_id: int, space_id: Optional[int], conversation_id: str, message: st
     # If no hits at all, answer from zero context
     if not contexts:
         contexts.append("(No relevant context found in your knowledge base.)")
+
+    extra_contexts = retrieve_external_contexts(
+        user_id=user_id,
+        space_id=space_id,
+        conversation_id=conversation_id,
+        query=message,
+    )
+    if extra_contexts:
+        contexts.extend(extra_contexts)
 
     contexts, web_hits, confidence, web_attempted = decide_web_and_contexts(
         message,

@@ -42,6 +42,8 @@ Validate that Deep Research mode behaves agentically: planning sub-queries, sele
      - Time badge reflects `elapsed_seconds`.
      - Web badge toggles when `web_attempted=true`.
      - Local references list document IDs/chunk indices; web references display titles/URLs.
+     - Ordered lists display sequential numbering and code fences render as formatted blocks.
+     - Follow-up questions appear as chips that insert text into the composer.
 
 7. **Caching + conversation continuity**
    - Ask multiple follow-up questions within the same conversation.
@@ -61,6 +63,7 @@ Validate that Deep Research mode behaves agentically: planning sub-queries, sele
 10. **Regression checks**
     - Run existing Phase 3 UI/API smoke tests to ensure no regressions in image search or core search flows.
     - Execute `pytest tests/test_agentic_research.py` to validate unit coverage.
+    - Run `uv run reindexcli --email <user>` to validate OpenSearch recency reindexing path.
 
 ### Acceptance Criteria
 - Deep Research responses consistently include confidence/time/web metadata and accurate references.

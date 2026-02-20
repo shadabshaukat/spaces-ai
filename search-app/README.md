@@ -18,6 +18,7 @@ This README covers application setup, configuration, endpoints, Deep Research wo
 - Chunking + embeddings; dual-write to OpenSearch for retrieval
 - Retrieval: semantic (KNN), fulltext (BM25), hybrid (RRF), **image search** (OpenCLIP + pgvector/OpenSearch)
 - Deep Research mode with agentic planning, selective web lookups, confidence scoring, and rich reference metadata
+- Recency-aware OpenSearch scoring via `created_at` decay
 - RAG over the selected Space with unified, pluggable LLM providers
 - Caching via Valkey to accelerate repeated queries (text + image namespaces)
 - Admin APIs for listing/deleting documents and reindexing
@@ -90,7 +91,7 @@ Note: cloud-init runs on first boot only. If you enable or change it later, recr
 1) Copy and edit environment file:
 
 ```bash
-ycd search-app
+cd search-app
 cp .env.example .env
 # Edit DB connection and set:
 #   SEARCH_BACKEND=opensearch
@@ -232,6 +233,12 @@ Deep Research is an opt-in mode surfaced in the UI modal and `/api/deep-research
    - `web_attempted` boolean.
    - `elapsed_seconds` for the full pipeline.
    - `references` covering both local chunk IDs and web citations (title, URL, snippet).
+   - `followup_questions` surfaced as clickable chips in the UI.
+
+### Deep Research UI enhancements
+- Ordered lists render with native numbering (fixes 1/1/1 bug).
+- Code fences render as formatted `<pre><code>` blocks.
+- Follow-up questions render as clickable chips that insert into the composer.
 
 ### Frontend indicators
 
@@ -271,10 +278,14 @@ Authentication for most endpoints is via session cookies acquired by /api/regist
 ### Deep Research endpoints
 
 - POST `/api/deep-research/start` → `{ conversation_id }`
-- POST `/api/deep-research/ask { conversation_id, question, provider_override? }`
-- GET  `/api/deep-research/history?conversation_id=`
+- POST `/api/deep-research/ask { conversation_id, message, llm_provider?, force_web?, urls? }`
+- GET  `/api/deep-research/conversations?space_id=`
+- GET  `/api/deep-research/conversations/{conversation_id}`
+- POST `/api/deep-research/conversations/{conversation_id}/title { title }`
+- POST `/api/deep-research/notebook/{conversation_id} { title, content }`
+- DELETE `/api/deep-research/notebook/{entry_id}`
 
-Responses include `confidence`, `web_attempted`, `elapsed_seconds`, and `references` as described above.
+Responses include `confidence`, `web_attempted`, `elapsed_seconds`, `references`, and `followup_questions` as described above.
 - Optional MCP server that exposes read-only SQL queries and OpenSearch diagnostics to editors like VS Code/Cursor
 
 
@@ -284,6 +295,22 @@ Responses include `confidence`, `web_attempted`, `elapsed_seconds`, and `referen
 2) Upload files → ingestion extracts/chunks/embeds; dual-write to OpenSearch; file stored under <email>/YYYY/MM/DD/HHMMSS/<filename> (local and/or OCI)
 3) Search → KNN/BM25 via OpenSearch with Valkey caching; RAG optionally with selected provider
 4) Admin → list/delete docs; reindex scope (doc/space/all)
+
+## CLI helpers
+
+Reindex OpenSearch for an existing user (useful after `created_at` scoring changes):
+
+```bash
+uv run reindexcli --email you@example.com
+uv run reindexcli --email you@example.com --space-id 123
+uv run reindexcli --email you@example.com --doc-id 456 --refresh
+```
+
+Ingest local files into a user’s space (bulk upload):
+
+```bash
+uv run ingestcli --email you@example.com ./docs
+```
 
 
 ## Integration Tests (pytest)
@@ -346,7 +373,7 @@ Once connected, the MCP client will list two tools named "SpacesAI SQL (SELECT o
 ## Troubleshooting
 
 - Ensure DB connectivity and SSL settings are correct.
-- For OpenSearch: verify OPENSEARCH_HOST and index mapping (vector dimensions must match EMBEDDING_DIM).
+- For OpenSearch: verify OPENSEARCH_HOST and index mapping (vector dimensions must match EMBEDDING_DIM). After mapping updates (e.g., `created_at`), run `reindexcli` or `/api/admin/reindex`.
 - For Valkey: check host/port/tls; caching is best-effort and does not block searches.
 - For Bedrock: confirm AWS credentials/region and model access.
 - For Ollama: ensure the local server is running and model is available.

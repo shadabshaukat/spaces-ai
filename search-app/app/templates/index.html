@@ -415,7 +415,14 @@
       for (let i = 0; i < parts.length; i++) {
         if (i % 2 === 1) {
           // code block
-          html += `<pre class="code"><code>${escapeHtml(parts[i])}</code></pre>`;
+          const rawCode = parts[i] || '';
+          let codeText = rawCode.replace(/^\r?\n/, '');
+          const codeLines = codeText.split(/\r?\n/);
+          if (codeLines.length && /^[a-z0-9_-]+$/i.test(codeLines[0].trim())) {
+            codeLines.shift();
+          }
+          codeText = codeLines.join('\n');
+          html += `<pre class="code"><code>${escapeHtml(codeText)}</code></pre>`;
         } else {
           // normal text -> handle lists and paragraphs
           const block = parts[i];
@@ -435,6 +442,9 @@
               if (!inOl) { flushList(); out.push('<ol>'); inOl = true; }
               out.push(`<li>${escapeHtml(ln.replace(/^\s*\d+\.\s+/, ''))}</li>`);
             } else if (ln.trim() === '') {
+              if (inUl || inOl) {
+                continue;
+              }
               flushList();
               out.push('<p></p>');
             } else {
@@ -1106,11 +1116,11 @@
 
     function renderFollowupQuestions(questions) {
       if (!Array.isArray(questions) || !questions.length) return '';
-      const items = questions.map(q => `<li>${escapeHtml(q)}</li>`).join('');
+      const items = questions.map(q => `<button type="button" class="dr-followup-chip">${escapeHtml(q)}</button>`).join('');
       return `
         <div class="dr-followup">
           <div class="dr-followup-title">Suggested follow-up questions</div>
-          <ul>${items}</ul>
+          <div class="dr-followup-chips">${items}</div>
         </div>`;
     }
 
@@ -1633,6 +1643,15 @@
     drEls.menuReset?.addEventListener('click', () => {
       drToggleMenu(false);
       drHandleReset();
+    });
+    drEls.timeline?.addEventListener('click', (e) => {
+      const chip = e.target.closest('.dr-followup-chip');
+      if (!chip || !drEls.message) return;
+      const text = (chip.textContent || '').trim();
+      if (!text) return;
+      const current = (drEls.message.value || '').trim();
+      drEls.message.value = current ? `${current}\n${text}` : text;
+      drEls.message.focus();
     });
     document.addEventListener('click', (e) => {
       if (!drEls.menuPanel || drEls.menuPanel.hidden) return;

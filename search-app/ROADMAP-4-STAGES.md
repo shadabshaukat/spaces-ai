@@ -96,6 +96,8 @@ Scope (complete, testable): DR controls + reranking with UI toggles and audits.
 - UI (index.html):
   - DR modal header: add “Topic lock” toggle (persist per‑space via localStorage) and display hint when active
 
+Note: DR UI now supports ordered list numbering, code fence rendering, and follow-up chips; ensure any new layouts preserve these behaviors.
+
 2) Runtime DR config endpoint (optional)
 - GET/POST /api/dr-config to inspect/set DR_TOPIC_LOCK_DEFAULT and DR_RERANK_ENABLE (process‑local overrides similar to search-config)
 

@@ -37,7 +37,7 @@ This document describes the target workflow for a **true agentic Deep Research m
 | **Reference ranking** | ✅ Added | Local refs ranked by distance/score |
 | **Per‑source confidence** | ✅ Added | Local/Web/URL confidence summary |
 | **Recency‑aware ranking** | ✅ Added | Recency boost with configurable half‑life |
-| **Follow‑up question prompts** | ✅ Added | Returned when confidence is low |
+| **Follow‑up question prompts** | ✅ Added | Returned when confidence is low; surfaced as chips in DR UI |
 | References output | ✅ Available | Local chunks + web refs |
 | Clean non‑redirect web links | ✅ Available | DuckDuckGo normalized |
 
@@ -97,7 +97,9 @@ Use LLM to list missing concepts not covered by retrieved evidence.
 - **Per‑source confidence** (local/web/url) in DR metadata.
 - **Local reference ranking** by distance/score.
 - **Recency‑aware ranking** with configurable half‑life.
-- **Follow‑up question prompts** when confidence is low.
+- **Follow‑up question prompts** when confidence is low (rendered as clickable UI chips).
+- **Deep Research renderer** supports code fences and ordered lists.
+- **OpenSearch recency weighting** via function_score decay on `created_at`.
 
 ---
 
@@ -171,6 +173,11 @@ These controls tune the agentic workflow (see `.env.example` for full annotation
 - Use the `deep_research_steps` metadata and the new `source_confidence` + `followup_questions` payload to populate this panel.
 - Keep it collapsed by default to avoid distracting users.
 
+### Implemented DR UI behaviors
+- Ordered list numbering uses browser `<ol>` numbering (fixes 1/1/1 issue).
+- Code fences render as `<pre><code>` blocks with optional language trimmed.
+- Follow-up questions render as clickable chips that insert text into the composer.
+
 ---
 
 ## 7. Recommended LLMs for Agentic Deep Research
@@ -210,6 +217,7 @@ Recommended for deep research synthesis:
 
 - Evidence ranking with embedding similarity + source authority signals.
 - Optional auto-generated follow-up actions (e.g., "Run again" button).
+- Persist OpenSearch `created_at` for existing docs via reindex (required after new mapping fields).
 
 ---
 

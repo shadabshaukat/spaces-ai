@@ -31,7 +31,7 @@ SpacesAI is a multi-tenant, production-oriented, Google NotebookLM-like SaaS tha
 - user_activity(id, user_id, activity_type, details JSONB, created_at)
 
 OpenSearch index (default: spacesai_chunks) mapping fields:
-- doc_id (long), chunk_index (int), text (text), file_name (keyword), source_path (keyword), file_type (keyword), user_id (long), space_id (long), vector (knn_vector with HNSW/cosine)
+- doc_id (long), chunk_index (int), text (text), file_name (keyword), source_path (keyword), file_type (keyword), user_id (long), space_id (long), created_at (date), vector (knn_vector with HNSW/cosine)
 
 Isolation: all queries/ingestion include user_id (+ optional space_id) so users only see their own data.
 
@@ -47,7 +47,7 @@ Isolation: all queries/ingestion include user_id (+ optional space_id) so users 
 
 - Register/Login: Creates user row and default space; issues session cookie
 - Upload: Streams each file, stores to local/OCI; extracts text (PDF/HTML/TXT/DOCX/PPTX/XLSX/CSV/MD/JSON/Images OCR/Audio+Video transcription), chunks and embeds, inserts metadata into Postgres, and dual-writes chunks+vectors to OpenSearch (best-effort). Activity logged.
-- Search: Per-user/per-space hybrid retrieval (OpenSearch KNN + BM25 via RRF); caches results in Valkey; optional LLM synthesis; returns hits + references with OCI object links when available. Activity logged.
+- Search: Per-user/per-space hybrid retrieval (OpenSearch KNN + BM25 via RRF), wrapped with recency-aware scoring when enabled; caches results in Valkey; optional LLM synthesis; returns hits + references with OCI object links when available. Activity logged.
 
 
 ## 6) Tech Stack (code locations)
@@ -104,6 +104,9 @@ Visit http://0.0.0.0:8000, register/login, create/select a space, upload and sea
   - semantic -> OpenSearch KNN (vector) with user/space filters; cache key: sem:{user}:{space}:{topk}:{query}
   - fulltext -> OpenSearch BM25 with user/space filters; cache key: fts:{...}
   - hybrid -> simple RRF across semantic + fulltext
+- Recency weighting:
+  - If DEEP_RESEARCH_RECENCY_BOOST is set, both semantic and fulltext queries are wrapped in a function_score with a gauss decay on created_at
+  - This favors newer chunks without overriding relevance; adjust DEEP_RESEARCH_RECENCY_SCALE_DAYS to widen/narrow the time window
 - Valkey cache:
   - redis-py used with small timeouts and TTL (default 300s)
   - Cache miss triggers backend search, then caches a compact JSON version of hits
@@ -170,6 +173,7 @@ Then update `search-app/.env` with the outputs and run the app.
 - Implemented streaming uploads; per-user email path in Object Storage
 - Extended text extraction: PPTX, XLSX, Images (OCR), Audio/Video (transcription)
 - Integrated OpenSearch (adapter, dual-write on ingest); integrated Valkey cache for retrieval
+- Added OpenSearch recency weighting (created_at mapping, decay scoring) and reindex support for backfilling created_at
 - SEARCH_BACKEND switch and DB_STORE_EMBEDDINGS flag; OpenSearch is default serving layer
 - Added unified LLM module with providers: OCI, OpenAI, AWS Bedrock, and Ollama; new /api/chat and /api/llm-test allow provider override
 - search-app/.env.example updated with OpenSearch/Valkey/Bedrock/Ollama settings
@@ -181,6 +185,8 @@ Then update `search-app/.env` with the outputs and run the app.
 - Added Dockerfile for app and root docker-compose.yml (binds 0.0.0.0, mounts storage, maps port)
 - Added Kubernetes manifests: search-app/k8s (Deployment/Service/ConfigMap) with resource requests/limits, probes, and env integration
 - Documentation: Root README.md and search-app/README.md updated with cloud-init packages/commands and deployment strategies for Bare VM, Docker, and Kubernetes
+- Deep Research UI formatting fixes: ordered lists render with proper numbering, code fences render as blocks, and follow-up questions appear as clickable chips
+- Added CLI helper (reindexcli) to reindex OpenSearch from Postgres for a user/space/doc
 
 
 ## 13) Roadmap / Next Steps
@@ -189,6 +195,7 @@ Then update `search-app/.env` with the outputs and run the app.
 - Optional: Disable DB vector storage by default when serving from OpenSearch (insert chunks without vectors) and provide backfill tooling
 - Add integration/contract tests for adapters and caching layer
 - Admin endpoints for listing/deleting documents per space and reindex controls
+- Ensure reindex CLI is run after enabling recency weighting so existing OpenSearch chunks have created_at
 - Streaming /api/search responses and UI improvements for citations
 - Optional: Add HorizontalPodAutoscaler and Ingress manifests for K8s
 - Optional: systemd service unit for bare VM auto-start
@@ -199,6 +206,7 @@ Then update `search-app/.env` with the outputs and run the app.
 - Review this README_SPACESAI.md for architecture and change list
 - Export the necessary env vars or copy .env.example to .env and set values
 - To develop locally: `uv sync --extra pdf --extra office --extra vision --extra audio && uv run searchapp`
+- If you enable OpenSearch recency weighting, run `uv run reindexcli --email <user>` to backfill created_at for existing chunks
 - To integrate Terraform: update variables and add opensearch.tf/cache.tf, then plan/apply
 
 

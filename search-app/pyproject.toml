@@ -52,6 +52,7 @@ Homepage = "https://github.com/your-org/enterprise-searchapp"
 [project.scripts]
 searchapp = "app.main:main"
 ingestcli = "app.ingest_cli:main"
+reindexcli = "app.reindex_cli:main"
 
 [tool.setuptools]
 # Explicitly declare packages to avoid auto-discovery picking up 'storage' as a namespace package

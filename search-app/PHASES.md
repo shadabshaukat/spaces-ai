@@ -43,6 +43,8 @@
 - ✅ Deep Research backend now uses `SmartResearchAgent` to selectively call web search, track confidence, and enforce configurable timeouts sourced from `.env`.
 - ✅ API responses include `confidence`, `web_attempted`, elapsed seconds, and detailed references for local vs. web sources for full transparency.
 - ✅ Frontend modal surfaces confidence/time/web badges plus separate reference sections so users can distinguish KB vs. external citations.
+- ✅ Deep Research UI now renders ordered lists, code fences, and follow-up chips.
+- ✅ OpenSearch recency weighting uses created_at decay (requires reindex for existing docs).
 - ✅ Unit tests cover agentic heuristics, time-budget enforcement, and confidence scoring edge cases.
 - ✅ Documentation refreshed (README, PHASE4 test plan) and a Postgres/OpenSearch MCP server was added so editors can run read-only diagnostics.
 

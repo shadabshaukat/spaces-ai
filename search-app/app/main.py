@@ -1636,7 +1636,7 @@ async def api_admin_reindex(request: Request, payload: Dict[str, Any]):
         with get_conn() as conn:
             with conn.cursor() as cur:
                 if doc_id:
-                    cur.execute("SELECT id, source_path, COALESCE(title,''), COALESCE(metadata,'{}'::jsonb) FROM documents WHERE id = %s AND user_id = %s", (int(doc_id), uid))
+                    cur.execute("SELECT id, source_path, COALESCE(title,''), COALESCE(metadata,'{}'::jsonb), created_at FROM documents WHERE id = %s AND user_id = %s", (int(doc_id), uid))
                     row = cur.fetchone()
                     if not row:
                         return JSONResponse(status_code=404, content={"error": "document not found"})
@@ -1644,10 +1644,11 @@ async def api_admin_reindex(request: Request, payload: Dict[str, Any]):
                     ch = cur.fetchall()
                     texts = [r[1] for r in ch]
                     vecs = embed_texts(texts) if texts else []
-                    adapter.index_chunks(user_id=uid, space_id=None, doc_id=int(doc_id), chunks=texts, vectors=vecs, file_name=None, source_path=row[1], file_type="", refresh=True)
+                    created_at = row[4].isoformat() if row[4] else None
+                    adapter.index_chunks(user_id=uid, space_id=None, doc_id=int(doc_id), chunks=texts, vectors=vecs, file_name=None, source_path=row[1], file_type="", created_at=created_at, refresh=True)
                     reindexed = len(texts)
                 elif space_id:
-                    cur.execute("SELECT id, source_path, COALESCE(title,'') FROM documents WHERE user_id = %s AND space_id = %s", (uid, int(space_id)))
+                    cur.execute("SELECT id, source_path, COALESCE(title,''), created_at FROM documents WHERE user_id = %s AND space_id = %s", (uid, int(space_id)))
                     docs = cur.fetchall()
                     for d in docs:
                         did = int(d[0])
@@ -1657,10 +1658,11 @@ async def api_admin_reindex(request: Request, payload: Dict[str, Any]):
                         if not texts:
                             continue
                         vecs = embed_texts(texts)
-                        adapter.index_chunks(user_id=uid, space_id=int(space_id), doc_id=did, chunks=texts, vectors=vecs, file_name=None, source_path=d[1], file_type="", refresh=True)
+                        created_at = d[3].isoformat() if d[3] else None
+                        adapter.index_chunks(user_id=uid, space_id=int(space_id), doc_id=did, chunks=texts, vectors=vecs, file_name=None, source_path=d[1], file_type="", created_at=created_at, refresh=True)
                         reindexed += len(texts)
                 elif scope_all:
-                    cur.execute("SELECT id, space_id, source_path FROM documents WHERE user_id = %s", (uid,))
+                    cur.execute("SELECT id, space_id, source_path, created_at FROM documents WHERE user_id = %s", (uid,))
                     docs = cur.fetchall()
                     for d in docs:
                         did = int(d[0])
@@ -1671,7 +1673,8 @@ async def api_admin_reindex(request: Request, payload: Dict[str, Any]):
                         if not texts:
                             continue
                         vecs = embed_texts(texts)
-                        adapter.index_chunks(user_id=uid, space_id=int(sid) if sid is not None else None, doc_id=did, chunks=texts, vectors=vecs, file_name=None, source_path=d[2], file_type="", refresh=True)
+                        created_at = d[3].isoformat() if d[3] else None
+                        adapter.index_chunks(user_id=uid, space_id=int(sid) if sid is not None else None, doc_id=did, chunks=texts, vectors=vecs, file_name=None, source_path=d[2], file_type="", created_at=created_at, refresh=True)
                         reindexed += len(texts)
                 else:
                     return JSONResponse(status_code=400, content={"error": "provide doc_id, space_id, or all:true"})

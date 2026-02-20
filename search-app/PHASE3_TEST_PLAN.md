@@ -41,6 +41,7 @@ Verify that image assets ingested in Phase 2 can be retrieved through the new `/
 7. **Regression**
    - Run existing `/api/search` (text) to confirm no regressions.
    - Execute Deep Research modal to ensure new tab logic doesn’t break prior UI controls.
+   - Confirm follow-up chips and formatted code/list rendering do not affect image search flows.
 
 ### Acceptance Criteria
 - API enforces auth/space isolation and returns accurate metadata.

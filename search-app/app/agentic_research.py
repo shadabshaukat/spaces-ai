@@ -90,10 +90,10 @@ class SmartResearchAgent:
         return results
 
     def maybe_fetch_web(self, query: str) -> List[WebHit]:
-        if self.time_remaining() < 5:
+        self.web_attempted = True
+        if self.time_remaining() < 5 and not self.force_web:
             logger.info("DR agent skipping web search due to low remaining time")
             return []
-        self.web_attempted = True
         try:
             hits = self._fetch_duckduckgo(query)
             logger.info("DR agent fetched %d web hits", len(hits))

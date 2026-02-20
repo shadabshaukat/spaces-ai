@@ -263,11 +263,9 @@
       <div class="dr-title">
         <div class="dr-title-main">
           <strong>Deep Research</strong>
-          <span class="microscope-icon" role="img" aria-label="Microscope">🔬</span>
-          <span class="brain-icon" role="img" aria-label="Notebook brain">🧠</span>
         </div>
         <div class="dr-title-controls">
-          <input id="drActiveTitle" type="text" placeholder="Untitled session" aria-label="Conversation title" />
+          <input id="drActiveTitle" type="text" placeholder="Session name" aria-label="Conversation title" />
           <button id="drRenameBtn" class="ghost" title="Rename session">Rename</button>
         </div>
       </div>
@@ -277,7 +275,7 @@
         <label class="ios-toggle" title="Always include web search">
           <input id="drForceWeb" type="checkbox" checked />
           <span class="ios-toggle-slider"></span>
-          <span class="ios-toggle-label">Always include web</span>
+          <span class="ios-toggle-label">Web</span>
         </label>
         <button id="drReset" class="ghost" title="Start new session">↺</button>
         <button id="drClose" class="ghost" title="Close">✕</button>
@@ -292,7 +290,8 @@
         </div>
         <div id="drStreamIndicator" class="dr-thinking" hidden>
           <div class="dr-thinking-spinner"></div>
-          <span>Researching your topic...</span>
+          <span>Researching</span>
+          <span class="dr-typing-dots" aria-hidden="true"><span></span><span></span><span></span></span>
         </div>
       </div>
       <div id="drEmptyState" class="dr-timeline-empty">
@@ -1194,14 +1193,20 @@
           const badges = renderDrMetadata(meta);
           div.innerHTML = `<div class="bubble">${ts}${badges ? `<div class="dr-meta">${badges}</div>` : ''}${renderLLMText(step.content || '')}${renderDrReferences(references)}</div>`;
         } else {
-          const pending = step.pending ? `
-            <div class="dr-thinking-inline">
-              <div class="dr-thinking-spinner"></div>
-              <span>Researching your topic...</span>
-            </div>` : '';
-          div.innerHTML = `<div class="bubble">${ts}<p>${escapeHtml(step.content || '')}</p>${pending}</div>`;
+          div.innerHTML = `<div class="bubble">${ts}<p>${escapeHtml(step.content || '')}</p></div>`;
         }
         frag.appendChild(div);
+        if (step.pending) {
+          const pending = document.createElement('div');
+          pending.className = 'dr-msg dr-msg-pending';
+          pending.innerHTML = `
+            <div class="dr-thinking-inline">
+              <div class="dr-thinking-spinner"></div>
+              <span>Researching</span>
+              <span class="dr-typing-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+            </div>`;
+          frag.appendChild(pending);
+        }
       });
       chat.appendChild(frag);
       chat.scrollTop = chat.scrollHeight;

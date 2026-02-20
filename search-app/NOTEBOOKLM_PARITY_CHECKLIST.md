@@ -18,7 +18,7 @@ This document distills the active NotebookLM-style goals, highlights what alread
 | Web Link Reliability | URLs returned from Deep Research now run through `normalizeUrl()` so protocol-less DuckDuckGo links render correctly. | ✅ |
 | Force-Web Control | UI toggle wired through `/api/deep-research/ask` → `deep_research.ask()` → `decide_web_and_contexts()` so users can guarantee web crawling (set or unset per prompt). | ✅ |
 | Status Messaging | `drWebStatus` copy clarifies whether the latest answer pulled public web or stayed local. | ✅ |
-| Follow-up Chips | Follow-up question prompts render as clickable chips that insert into the composer. | ✅ |
+| Follow-up Chips | Follow-up question prompts render as clickable chips that auto-send the suggestion. | ✅ |
 | DR Formatting | Ordered lists and code fences render cleanly in the DR response bubble. | ✅ |
 
 ### 3. Upcoming (NotebookLM Parity Targets)
@@ -33,7 +33,7 @@ This document distills the active NotebookLM-style goals, highlights what alread
 ### 4. Validation / QA Notes
 
 - ✅ `tests/test_agentic_research.py` confirms `force_web` flows through the agent and honors low-budget skips (with `PYTHONPATH` including repo + `search-app`).
-- ⚠️ Manual smoke test still recommended: open Deep Research modal, ask a question twice (with and without toggle) to verify the UI status string flips accordingly, chips insert text, and sections stay collapsed by default.
+- ⚠️ Manual smoke test still recommended: open Deep Research modal, ask a question twice (with and without toggle) to verify the UI status string flips accordingly, chips auto-send follow-ups, and sections stay collapsed by default.
 - ⚠️ Track FastAPI lifespan warning when app boots; plan a follow-up refactor to the new lifespan handlers.
 
 ### 5. Next Steps Checklist

@@ -239,24 +239,79 @@ def _rank_local_refs_with_recency(local_hits: List[ChunkHit]) -> List[ChunkHit]:
     return sorted(local_hits, key=score, reverse=True)
 
 
-def _generate_followup_questions(question: str, context_preview: str, max_questions: int) -> List[str]:
+def _normalize_text(value: str) -> str:
+    return re.sub(r"[^a-z0-9\s]", " ", (value or "").lower()).strip()
+
+
+def _tokenize(value: str) -> List[str]:
+    return [tok for tok in _normalize_text(value).split() if len(tok) > 1]
+
+
+def _jaccard_similarity(left: str, right: str) -> float:
+    lset = set(_tokenize(left))
+    rset = set(_tokenize(right))
+    if not lset or not rset:
+        return 0.0
+    return len(lset & rset) / len(lset | rset)
+
+
+def _filter_followup_questions(
+    questions: List[str],
+    question: str,
+    conversation_snippet: str,
+    relevance_min: float,
+) -> List[str]:
+    if not questions:
+        return []
+    q_norm = _normalize_text(question)
+    convo_norm = _normalize_text(conversation_snippet)
+    seen = set()
+    filtered: List[str] = []
+    for item in questions:
+        cand = item.strip()
+        if not cand:
+            continue
+        norm = _normalize_text(cand)
+        if not norm or norm in seen:
+            continue
+        if norm == q_norm:
+            continue
+        similarity = _jaccard_similarity(norm, q_norm)
+        convo_similarity = _jaccard_similarity(norm, convo_norm) if convo_norm else 0.0
+        if similarity < relevance_min and convo_similarity < relevance_min:
+            continue
+        seen.add(norm)
+        filtered.append(cand)
+    return filtered
+
+
+def _generate_followup_questions(
+    question: str,
+    context_preview: str,
+    max_questions: int,
+    conversation_snippet: str = "",
+) -> List[str]:
     if max_questions <= 0:
         return []
     try:
         from .llm import chat as llm_chat
+        convo_block = f"Conversation so far:\n{conversation_snippet.strip()}\n\n" if conversation_snippet else ""
         prompt = (
-            "Generate short follow-up questions that would clarify ambiguous intent or missing details. "
-            "Return a numbered list of up to "
+            "Based on the conversation so far, ask clarifying follow-up questions that would help answer the user’s current request. "
+            "Keep them short, specific, and tied to the user’s intent. Return a numbered list of up to "
             f"{max_questions} questions.\n\n"
-            f"Question: {question}\n"
+            f"{convo_block}"
+            f"Current question: {question}\n"
             f"Context preview: {context_preview.strip()}"
         )
-        raw = (llm_chat(prompt, "", max_tokens=120, temperature=0.2) or "").strip()
+        raw = (llm_chat(prompt, "", max_tokens=140, temperature=0.2) or "").strip()
         if not raw:
             return []
         lines = [re.sub(r"^\d+\.\s*", "", ln).strip() for ln in raw.splitlines() if ln.strip()]
         questions = [ln for ln in lines if ln.endswith("?") or len(ln) > 6]
-        return questions[:max_questions]
+        relevance_min = float(settings.deep_research_followup_relevance_min or 0.0)
+        filtered = _filter_followup_questions(questions, question, conversation_snippet, relevance_min)
+        return filtered[:max_questions]
     except Exception:
         return []
 
@@ -537,6 +592,7 @@ def ask(
                 message,
                 preview,
                 max_questions=int(settings.deep_research_followup_max_questions or 2),
+                conversation_snippet=recent_snippet,
             )
 
     st.messages.append(Message("assistant", answer))

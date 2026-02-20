@@ -1091,6 +1091,16 @@ async def get_search_config(request: Request):
     }
 
 
+@app.get("/api/deep-research-config")
+async def get_deep_research_config(request: Request):
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    return {
+        "followup_autosend": bool(settings.deep_research_followup_autosend),
+    }
+
+
 @app.post("/api/search-config")
 async def set_search_config(request: Request, payload: Dict[str, Any]):
     user = await get_current_user(request)

@@ -77,6 +77,9 @@ Edit search-app/.env.example and copy to .env. Key fields:
   - DB_STORE_EMBEDDINGS=true|false (if pgvector path is used and you want to persist vectors in Postgres)
 - OpenSearch (serving): OPENSEARCH_HOST, OPENSEARCH_INDEX, OPENSEARCH_USER/PASSWORD, OPENSEARCH_TIMEOUT/RETRIES/VERIFY_CERTS, OPENSEARCH_DUAL_WRITE
 - Valkey (cache): VALKEY_HOST, VALKEY_PORT, VALKEY_PASSWORD, VALKEY_DB, VALKEY_TLS, CACHE_TTL_SECONDS
+- Deep Research follow-ups:
+  - DEEP_RESEARCH_FOLLOWUP_AUTOSEND (default true) auto-sends follow-up chips when clicked; set false to insert text only
+  - DEEP_RESEARCH_FOLLOWUP_RELEVANCE_MIN (0-1 float, default 0.08) filters follow-ups by similarity to the current question or recent conversation; increase for stricter filtering
 - OCI GenAI (optional LLM): region, endpoint, compartment, model id, and auth (config file or API key envs)
 
 
@@ -166,6 +169,9 @@ Then update `search-app/.env` with the outputs and run the app.
 
 ## 12) Change Log (this refactor)
 
+- 2026-02-21: Documented new Deep Research follow-up settings:
+  - DEEP_RESEARCH_FOLLOWUP_AUTOSEND (auto-send chips)
+  - DEEP_RESEARCH_FOLLOWUP_RELEVANCE_MIN (relevance threshold with tuning guidance)
 - Added multi-tenant auth and spaces: users, spaces, user_activity tables; citext extension
 - Implemented session cookie auth; Login/Register/Logout; /api/me, /api/spaces, /api/spaces/default
 - Rebranded UI to SPACE-AI and added login/register + space selection/creation
@@ -185,7 +191,7 @@ Then update `search-app/.env` with the outputs and run the app.
 - Added Dockerfile for app and root docker-compose.yml (binds 0.0.0.0, mounts storage, maps port)
 - Added Kubernetes manifests: search-app/k8s (Deployment/Service/ConfigMap) with resource requests/limits, probes, and env integration
 - Documentation: Root README.md and search-app/README.md updated with cloud-init packages/commands and deployment strategies for Bare VM, Docker, and Kubernetes
-- Deep Research UI formatting fixes: ordered lists render with proper numbering, code fences render as blocks, and follow-up questions appear as clickable chips
+- Deep Research UI formatting fixes: ordered lists render with proper numbering, code fences render as blocks, and follow-up questions appear as auto-send chips
 - Added CLI helper (reindexcli) to reindex OpenSearch from Postgres for a user/space/doc
 
 

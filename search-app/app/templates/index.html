@@ -976,6 +976,7 @@
       steps: [],
       notebook: [],
       isSending: false,
+      followupAutoSend: true,
     };
 
     function drGetDrawer(which) {
@@ -1649,9 +1650,16 @@
       if (!chip || !drEls.message) return;
       const text = (chip.textContent || '').trim();
       if (!text) return;
-      const current = (drEls.message.value || '').trim();
-      drEls.message.value = current ? `${current}\n${text}` : text;
-      drEls.message.focus();
+      if (drState.isSending) return;
+      if (drState.followupAutoSend) {
+        drEls.message.value = text;
+        drEls.message.focus();
+        drHandleSend();
+      } else {
+        const current = (drEls.message.value || '').trim();
+        drEls.message.value = current ? `${current}\n${text}` : text;
+        drEls.message.focus();
+      }
     });
     document.addEventListener('click', (e) => {
       if (!drEls.menuPanel || drEls.menuPanel.hidden) return;
@@ -1733,6 +1741,17 @@
     if (loadCfgBtn) loadCfgBtn.addEventListener('click', () => loadSearchConfig());
     const saveCfgBtn = document.getElementById('saveCfgBtn');
     if (saveCfgBtn) saveCfgBtn.addEventListener('click', () => saveSearchConfig());
+
+    async function loadDeepResearchConfig() {
+      try {
+        const cfg = await api('/api/deep-research-config');
+        if (cfg && typeof cfg.followup_autosend === 'boolean') {
+          drState.followupAutoSend = cfg.followup_autosend;
+        }
+      } catch (e) {
+        // ignore (likely 401 before login)
+      }
+    }
 
     // Knowledge Base logic
     async function fetchDocUrl(docId) {
@@ -2242,6 +2261,7 @@
       await initUser();
       await loadProviders();
       await loadSearchConfig();
+      await loadDeepResearchConfig();
       await loadUploadConfig();
       if (state && state.user) { try { await loadKB(); } catch (e) {} }
       setupCollapsible('kbToggle', 'kbContent');

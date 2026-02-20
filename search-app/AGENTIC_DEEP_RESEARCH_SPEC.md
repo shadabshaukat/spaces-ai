@@ -37,7 +37,7 @@ This document describes the target workflow for a **true agentic Deep Research m
 | **Reference ranking** | ✅ Added | Local refs ranked by distance/score |
 | **Per‑source confidence** | ✅ Added | Local/Web/URL confidence summary |
 | **Recency‑aware ranking** | ✅ Added | Recency boost with configurable half‑life |
-| **Follow‑up question prompts** | ✅ Added | Returned when confidence is low; surfaced as chips in DR UI |
+| **Follow‑up question prompts** | ✅ Added | Returned when confidence is low; conversation-aware clarifying prompts surfaced as auto-send chips |
 | References output | ✅ Available | Local chunks + web refs |
 | Clean non‑redirect web links | ✅ Available | DuckDuckGo normalized |
 
@@ -97,7 +97,7 @@ Use LLM to list missing concepts not covered by retrieved evidence.
 - **Per‑source confidence** (local/web/url) in DR metadata.
 - **Local reference ranking** by distance/score.
 - **Recency‑aware ranking** with configurable half‑life.
-- **Follow‑up question prompts** when confidence is low (rendered as clickable UI chips).
+- **Follow‑up question prompts** when confidence is low (conversation-aware clarifying prompts rendered as auto-send UI chips).
 - **Deep Research renderer** supports code fences and ordered lists.
 - **OpenSearch recency weighting** via function_score decay on `created_at`.
 
@@ -120,6 +120,8 @@ These controls tune the agentic workflow (see `.env.example` for full annotation
 - `DEEP_RESEARCH_FOLLOWUP_ENABLE`: enable follow‑up prompts.
 - `DEEP_RESEARCH_FOLLOWUP_THRESHOLD`: confidence below this triggers follow‑ups.
 - `DEEP_RESEARCH_FOLLOWUP_MAX_QUESTIONS`: cap follow‑up questions returned.
+- `DEEP_RESEARCH_FOLLOWUP_AUTOSEND`: auto-send follow-up chips on click (false inserts text only).
+- `DEEP_RESEARCH_FOLLOWUP_RELEVANCE_MIN`: minimum Jaccard similarity (0–1) to the user question or conversation to keep a follow-up; raise to filter more aggressively.
 
 ---
 
@@ -176,7 +178,7 @@ These controls tune the agentic workflow (see `.env.example` for full annotation
 ### Implemented DR UI behaviors
 - Ordered list numbering uses browser `<ol>` numbering (fixes 1/1/1 issue).
 - Code fences render as `<pre><code>` blocks with optional language trimmed.
-- Follow-up questions render as clickable chips that insert text into the composer.
+- Follow-up questions render as clickable chips that auto-send the suggested prompt back to `/api/deep-research/ask`.
 
 ---
 

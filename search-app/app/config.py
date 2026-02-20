@@ -162,6 +162,8 @@ class Settings:
     deep_research_followup_enable: bool = _get_bool("DEEP_RESEARCH_FOLLOWUP_ENABLE", True)
     deep_research_followup_threshold: float = float(os.getenv("DEEP_RESEARCH_FOLLOWUP_THRESHOLD", "0.4"))
     deep_research_followup_max_questions: int = int(os.getenv("DEEP_RESEARCH_FOLLOWUP_MAX_QUESTIONS", "2"))
+    deep_research_followup_autosend: bool = _get_bool("DEEP_RESEARCH_FOLLOWUP_AUTOSEND", True)
+    deep_research_followup_relevance_min: float = float(os.getenv("DEEP_RESEARCH_FOLLOWUP_RELEVANCE_MIN", "0.08"))
 
     # MCP server credentials (optional)
     mcp_admin_user: Optional[str] = os.getenv("MCP_ADMIN_USER")

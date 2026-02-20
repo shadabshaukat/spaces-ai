@@ -138,6 +138,8 @@ Key environment variables (see .env.example for full list):
   - DEEP_RESEARCH_WEB_SEARCH_PROVIDER=serpapi|bing|none (see `agentic_research.py` for adapters)
   - DEEP_RESEARCH_CONFIDENCE_BASELINE (0-1 float) lets you shift minimum displayed confidence
   - DEEP_RESEARCH_WEB_TIMEOUT_SECONDS caps web fetch attempts per sub-query
+  - DEEP_RESEARCH_FOLLOWUP_AUTOSEND (default true) auto-sends follow-up chips on click; set false to insert text only
+  - DEEP_RESEARCH_FOLLOWUP_RELEVANCE_MIN (0-1 float, default 0.08) filters follow-ups by Jaccard similarity to the current question or recent conversation; raise to be stricter
 - LLM Providers:
   - LLM_PROVIDER=oci|openai|bedrock|ollama
   - OCI: standard OCI Generative AI envs
@@ -233,12 +235,12 @@ Deep Research is an opt-in mode surfaced in the UI modal and `/api/deep-research
    - `web_attempted` boolean.
    - `elapsed_seconds` for the full pipeline.
    - `references` covering both local chunk IDs and web citations (title, URL, snippet).
-   - `followup_questions` surfaced as clickable chips in the UI.
+- `followup_questions` surfaced as clickable chips in the UI (auto-send follow-ups back to Deep Research).
 
 ### Deep Research UI enhancements
 - Ordered lists render with native numbering (fixes 1/1/1 bug).
 - Code fences render as formatted `<pre><code>` blocks.
-- Follow-up questions render as clickable chips that insert into the composer.
+- Follow-up questions render as clickable chips that auto-send the suggested prompt.
 
 ### Frontend indicators
 

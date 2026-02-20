@@ -89,7 +89,7 @@ Repo structure and roles
 
     - Search experience with a clean hero-like landing, search bar, settings (mode/top_k/auto-search debounce), result list with badges for distance/rank, and an Answer panel that shows LLM vs context-only mode.
     - References panel (for RAG) lists top sources with optional link to Object Storage URL if present in metadata.
-    - Deep Research renderer supports ordered lists, formatted code fences, and follow-up chips that insert into the composer.
+    - Deep Research renderer supports ordered lists, formatted code fences, and follow-up chips that auto-send clarifying questions.
     - Upload experience supports drag & drop folders/files, directory selection, per-file progress bars with concurrency (4), retries/backoff, and shows per-file processed summary when server responds.
 
   - app/auth.py: BasicAuthMiddleware protecting root and API/docs. Defaults in .env.example are admin/letmein; change these.

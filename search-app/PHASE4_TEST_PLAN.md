@@ -43,7 +43,7 @@ Validate that Deep Research mode behaves agentically: planning sub-queries, sele
      - Web badge toggles when `web_attempted=true`.
      - Local references list document IDs/chunk indices; web references display titles/URLs.
      - Ordered lists display sequential numbering and code fences render as formatted blocks.
-     - Follow-up questions appear as chips that insert text into the composer.
+    - Follow-up questions appear as chips that auto-send the suggested prompt.
 
 7. **Caching + conversation continuity**
    - Ask multiple follow-up questions within the same conversation.

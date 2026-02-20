@@ -12,7 +12,7 @@ This document tracks the features required to bring SpacesAI’s Deep Research a
    - Keep the narrative / agent replies on the left while dedicating the right pane to “Sources.”  
    - Provide Local vs Web filters, quick actions (add to notebook, cite, summarize), and consistent color schemes.
 
-   _Recent updates_: DR responses now render ordered lists, code fences, and follow-up chips in the existing modal; these should carry forward into the dual-pane layout.
+   _Recent updates_: DR responses now render ordered lists, code fences, and auto-send follow-up chips in the existing modal; these should carry forward into the dual-pane layout.
 
 3. **Plan View & Sub-Question Management**  
    - Surface the agent’s auto-generated plan similar to NotebookLM’s “Outline.”  

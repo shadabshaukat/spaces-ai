@@ -275,7 +275,7 @@
         <button id="drSessionsToggle" class="ghost pill" title="Browse sessions">Sessions</button>
         <button id="drNotebookToggle" class="ghost pill" title="Open notebook">Notebook</button>
         <label class="ios-toggle" title="Always include web search">
-          <input id="drForceWeb" type="checkbox" />
+          <input id="drForceWeb" type="checkbox" checked />
           <span class="ios-toggle-slider"></span>
           <span class="ios-toggle-label">Always include web</span>
         </label>
@@ -292,7 +292,7 @@
         </div>
         <div id="drStreamIndicator" class="dr-thinking" hidden>
           <div class="dr-thinking-spinner"></div>
-          <span>Streaming answer…</span>
+          <span>Researching your topic...</span>
         </div>
       </div>
       <div id="drEmptyState" class="dr-timeline-empty">
@@ -1034,6 +1034,32 @@
       drEls.streamIndicator.hidden = !active;
     }
 
+    function drGenerateSessionTitle() {
+      const email = state.user?.email || 'session';
+      const prefix = email.split('@')[0] || 'session';
+      const hash = Math.random().toString(36).slice(2, 8);
+      return `${prefix}-${hash}`;
+    }
+
+    async function drAutoSaveSessionTitle() {
+      if (!drState.conversationId || !drEls.titleInput) return;
+      let title = drEls.titleInput.value.trim();
+      if (!title) {
+        title = drGenerateSessionTitle();
+        drEls.titleInput.value = title;
+      }
+      try {
+        await api(`/api/deep-research/conversations/${encodeURIComponent(drState.conversationId)}/title`, {
+          method: 'POST',
+          body: { title },
+        });
+        await drFetchConversations();
+        drRenderConversations();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
     function drUpdateWebStatus(webAttempted) {
       if (!drEls.webStatus) return;
       if (webAttempted) {
@@ -1052,7 +1078,8 @@
         parts.push(`<span class="badge">Confidence ${(meta.confidence * 100).toFixed(0)}%</span>`);
       }
       if (typeof meta.elapsed_seconds === 'number') {
-        parts.push(`<span class="badge badge-soft">${meta.elapsed_seconds}s</span>`);
+        const secs = Number(meta.elapsed_seconds);
+        parts.push(`<span class="badge badge-soft">${Number.isFinite(secs) ? secs.toFixed(2) : meta.elapsed_seconds}s</span>`);
       }
       if (meta.web_attempted) {
         parts.push('<span class="badge badge-web">Web search triggered</span>');
@@ -1167,7 +1194,12 @@
           const badges = renderDrMetadata(meta);
           div.innerHTML = `<div class="bubble">${ts}${badges ? `<div class="dr-meta">${badges}</div>` : ''}${renderLLMText(step.content || '')}${renderDrReferences(references)}</div>`;
         } else {
-          div.innerHTML = `<div class="bubble">${ts}<p>${escapeHtml(step.content || '')}</p></div>`;
+          const pending = step.pending ? `
+            <div class="dr-thinking-inline">
+              <div class="dr-thinking-spinner"></div>
+              <span>Researching your topic...</span>
+            </div>` : '';
+          div.innerHTML = `<div class="bubble">${ts}<p>${escapeHtml(step.content || '')}</p>${pending}</div>`;
         }
         frag.appendChild(div);
       });
@@ -1332,6 +1364,9 @@
       drEls.backdrop.classList.add('open');
       drEls.modal.hidden = false;
       drEls.modal.classList.add('open');
+      if (drEls.forceWeb && typeof drEls.forceWeb.checked === 'boolean') {
+        drEls.forceWeb.checked = true;
+      }
       drState.open = true;
       drHideAllDrawers();
       drEls.message?.focus();
@@ -1348,6 +1383,7 @@
       drState.open = false;
       drSetStreamIndicator(false);
       drHideAllDrawers();
+      drAutoSaveSessionTitle();
     }
 
     function drExtractUrlsFromText(raw) {
@@ -1372,13 +1408,16 @@
       if (!text) return;
       drEls.message.value = '';
       const urls = drExtractUrlsFromText(text);
-      const tmpStep = { role: 'user', content: text, created_at: new Date().toISOString() };
+      const tmpStep = { role: 'user', content: text, created_at: new Date().toISOString(), pending: true };
       drRenderTimeline([...drState.steps, tmpStep]);
       drState.isSending = true;
       drSetStreamIndicator(true);
       try {
         const cid = await drEnsureConversationId();
         if (!cid) throw new Error('No conversation');
+        if (drEls.titleInput && !drEls.titleInput.value.trim()) {
+          drEls.titleInput.value = drGenerateSessionTitle();
+        }
         const provider = document.getElementById('provider')?.value || undefined;
         const body = {
           conversation_id: cid,
@@ -1390,6 +1429,7 @@
         if (urls.length) body.urls = urls;
         const resp = await api('/api/deep-research/ask', { method: 'POST', body });
         drUpdateWebStatus(Boolean(resp.web_attempted));
+        await drAutoSaveSessionTitle();
         await drFetchConversations();
         await drLoadConversationDetail(cid);
       } catch (e) {
@@ -1428,6 +1468,10 @@
         drPersistConversationId(cid);
         await drFetchConversations();
         await drSelectConversation(cid);
+        if (drEls.titleInput) {
+          drEls.titleInput.value = drGenerateSessionTitle();
+          await drAutoSaveSessionTitle();
+        }
         showToast('New session ready');
       } catch (e) {
         console.error(e);
@@ -1501,6 +1545,7 @@
         drHandleRename();
       }
     });
+    drEls.titleInput?.addEventListener('blur', () => drAutoSaveSessionTitle());
     drEls.notebookForm?.addEventListener('submit', drHandleNotebookSubmit);
     drEls.notebookClear?.addEventListener('click', () => {
       if (drEls.notebookTitle) drEls.notebookTitle.value = '';
@@ -2120,6 +2165,10 @@
       if (state && state.user) { try { await loadKB(); } catch (e) {} }
       setupCollapsible('kbToggle', 'kbContent');
       setupCollapsible('uploadToggle', 'uploadContent');
+    });
+
+    window.addEventListener('beforeunload', () => {
+      if (drState.open) drAutoSaveSessionTitle();
     });
   </script>
 </body>

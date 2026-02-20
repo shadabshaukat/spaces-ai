@@ -236,25 +236,6 @@ def ask(
     except Exception:
         pass
 
-    st.messages.append(Message("assistant", answer))
-    st.trim(keep=20)
-    _save_state(st)
-
-    try:
-        store_append_step(
-            conversation_id=conversation_id,
-            role="assistant",
-            content=answer,
-            context_refs=meta.get("references") if 'meta' in locals() else None,
-            metadata={
-                "confidence": confidence,
-                "web_attempted": web_attempted,
-                "elapsed_seconds": time.monotonic() - start_ts,
-            },
-        )
-    except Exception:
-        logger.exception("Failed to persist DR assistant step")
-
     # Prepare references (top few)
     refs: List[Dict[str, object]] = []
     local_hits = hits_all[:min(len(hits_all), max(5, int(settings.deep_research_local_top_k or 15)))]
@@ -296,6 +277,25 @@ def ask(
             })
     except Exception:
         pass
+
+    st.messages.append(Message("assistant", answer))
+    st.trim(keep=20)
+    _save_state(st)
+
+    try:
+        store_append_step(
+            conversation_id=conversation_id,
+            role="assistant",
+            content=answer,
+            context_refs=refs,
+            metadata={
+                "confidence": confidence,
+                "web_attempted": web_attempted,
+                "elapsed_seconds": round(time.monotonic() - start_ts, 2),
+            },
+        )
+    except Exception:
+        logger.exception("Failed to persist DR assistant step")
 
     return {
         "conversation_id": conversation_id,

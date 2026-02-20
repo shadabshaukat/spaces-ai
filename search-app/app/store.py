@@ -432,6 +432,8 @@ def ingest_file_path(file_path: str, user_id: int, space_id: Optional[int] = Non
         raise ValueError("No textual content extracted from file")
     embeddings = embed_texts(chunks)
 
+    created_at = datetime.utcnow().isoformat()
+
     doc_metadata: Dict[str, Any] = dict(metadata or {})
 
     with get_conn() as conn:
@@ -460,6 +462,7 @@ def ingest_file_path(file_path: str, user_id: int, space_id: Optional[int] = Non
                 file_name=Path(file_path).name,
                 source_path=file_path,
                 file_type=source_type,
+                created_at=created_at,
             )
             logger.info("OpenSearch indexed doc_id=%s chunks=%s", doc_id, len(chunks))
             if settings.enable_image_storage and source_type == "image":

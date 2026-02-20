@@ -40,6 +40,7 @@ Repo structure and roles
       - GET /api/doc-summary?doc_id=: doc/file summary and chunk count.
       - POST /api/upload (multipart files[]): saves file(s) and ingests (extract, chunk, embed, store). Returns per-file doc_id and chunk count. If Storage backend includes OCI, uploads a copy to Object Storage and stores object_url in document metadata.
       - POST /api/search: accepts {query, mode: semantic|fulltext|hybrid|rag, top_k}. For rag, returns answer + hits + references (file name/type, chunk anchor, and object URL when present).
+      - POST /api/admin/reindex: reindex OpenSearch (doc/space/all) with created_at recency weighting.
       - GET/POST /api/llm-debug and POST /api/llm-test: connectivity and response-shape diagnostics for OCI GenAI or OpenAI.
       - GET /api/llm-config: masked snapshot of LLM-related configuration.
 
@@ -82,12 +83,13 @@ Repo structure and roles
     - save_upload(): writes local file under storage/uploads/YYYY/MM/DD/HHMMSS/ (or temp when oci-only), optionally uploads to OCI Object Storage (using either config-file or API key env auth), returns (local_path, object_url|None).
     - save_upload_stream(): supports streaming to OCI (UploadManager.upload_stream) and local copy for ingestion; not currently wired into the /api/upload endpoint.
     - insert_document(), insert_chunks() using executemany with vector literal casting (::vector).
-    - ingest_file_path(): read/extract text, chunk, embed, and persist in a transaction; returns document_id and number of chunks.
+    - ingest_file_path(): read/extract text, chunk, embed, and persist in a transaction; returns document_id and number of chunks. Dual-write to OpenSearch includes `created_at` for recency-aware scoring.
 
   - Jinja UI: app/templates/index.html and static/style.css
 
     - Search experience with a clean hero-like landing, search bar, settings (mode/top_k/auto-search debounce), result list with badges for distance/rank, and an Answer panel that shows LLM vs context-only mode.
     - References panel (for RAG) lists top sources with optional link to Object Storage URL if present in metadata.
+    - Deep Research renderer supports ordered lists, formatted code fences, and follow-up chips that insert into the composer.
     - Upload experience supports drag & drop folders/files, directory selection, per-file progress bars with concurrency (4), retries/backoff, and shows per-file processed summary when server responds.
 
   - app/auth.py: BasicAuthMiddleware protecting root and API/docs. Defaults in .env.example are admin/letmein; change these.
@@ -126,6 +128,7 @@ Configuration and deployment
     - LLM_PROVIDER: oci or openai + credentials (OCI: region + endpoint + compartment + model id).
 
   - Run: ./run.sh or uv sync --extra pdf && uv run searchapp (available at [](http://0.0.0.0:8000)<http://0.0.0.0:8000>).
+  - Reindex OpenSearch with CLI: `uv run reindexcli --email you@example.com` (optional `--doc-id` or `--space-id`).
 
 - Infrastructure:
 

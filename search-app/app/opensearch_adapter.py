@@ -19,7 +19,7 @@ class OpenSearchAdapter:
     - Bulk indexes chunk docs with vectors
     - Performs vector (KNN), BM25, and hybrid search
     Mapping fields:
-      - doc_id (long), chunk_index (integer), text (text), file_name (keyword), source_path (keyword), file_type (keyword), user_id (long), space_id (long), vector (knn_vector)
+      - doc_id (long), chunk_index (integer), text (text), file_name (keyword), source_path (keyword), file_type (keyword), user_id (long), space_id (long), created_at (date), vector (knn_vector)
     """
 
     def __init__(self) -> None:
@@ -78,6 +78,7 @@ class OpenSearchAdapter:
                     "file_type": {"type": "keyword"},
                     "user_id": {"type": "long"},
                     "space_id": {"type": "long"},
+                    "created_at": {"type": "date"},
                     "vector": {
                         "type": "knn_vector",
                         "dimension": dim,
@@ -155,6 +156,7 @@ class OpenSearchAdapter:
                      file_name: Optional[str] = None,
                      source_path: Optional[str] = None,
                      file_type: Optional[str] = None,
+                     created_at: Optional[str] = None,
                      refresh: bool = False) -> int:
         if len(chunks) != len(vectors):
             raise ValueError("chunks and vectors length mismatch for OpenSearch index")
@@ -174,6 +176,7 @@ class OpenSearchAdapter:
                 "file_type": file_type or "",
                 "user_id": int(user_id),
                 "space_id": int(space_id) if space_id is not None else None,
+                "created_at": created_at,
                 "vector": vec,
             }
             actions.append(doc)
@@ -181,6 +184,34 @@ class OpenSearchAdapter:
         if errors:
             logger.warning("OpenSearch bulk index had errors: %s", errors)
         return int(ok)
+
+    @staticmethod
+    def _build_recency_functions() -> List[Dict[str, Any]]:
+        boost = float(getattr(settings, "deep_research_recency_boost", 0.0) or 0.0)
+        if boost <= 0:
+            return []
+        half_life_days = float(getattr(settings, "deep_research_recency_half_life_days", 30.0) or 30.0)
+        scale_days = max(1.0, half_life_days)
+        return [
+            {
+                "gauss": {"created_at": {"origin": "now", "scale": f"{scale_days}d", "decay": 0.5}},
+                "weight": boost,
+            }
+        ]
+
+    @staticmethod
+    def _wrap_with_recency(query: Dict[str, Any]) -> Dict[str, Any]:
+        functions = OpenSearchAdapter._build_recency_functions()
+        if not functions:
+            return query
+        return {
+            "function_score": {
+                "query": query,
+                "functions": functions,
+                "boost_mode": "sum",
+                "score_mode": "sum",
+            }
+        }
 
     def index_image_asset(self, *, user_id: int, space_id: Optional[int], doc_id: int, image_id: int, file_path: str, thumbnail_path: str, tags: list[str], caption: str, vector: Optional[List[float]], refresh: bool = False) -> None:
         self.ensure_image_index()
@@ -280,32 +311,35 @@ class OpenSearchAdapter:
         # Variant A: top-level knn (Lucene style)
         body_a: Dict[str, Any] = {"size": int(top_k), "knn": dict(knn_obj)}
         if filters:
-            body_a["query"] = {"bool": {"filter": filters}}
+            base_query = {"bool": {"filter": filters}}
         else:
-            body_a["query"] = {"match_all": {}}
+            base_query = {"match_all": {}}
+        body_a["query"] = self._wrap_with_recency(base_query)
         variants.append(("top_level_knn", body_a))
         # Variant B: top-level knn as array of objects
         body_b: Dict[str, Any] = {"size": int(top_k), "knn": [dict(knn_obj)]}
         if filters:
-            body_b["query"] = {"bool": {"filter": filters}}
+            base_query = {"bool": {"filter": filters}}
         else:
-            body_b["query"] = {"match_all": {}}
+            base_query = {"match_all": {}}
+        body_b["query"] = self._wrap_with_recency(base_query)
         variants.append(("top_level_knn_array", body_b))
         # Variant C: query-level knn inside bool.must (array form)
+        query_c = {
+            "bool": {
+                "must": [{"knn": {"field": "vector", "query_vector": vector, "k": int(top_k)}}],
+                "filter": filters or []
+            }
+        }
         body_c: Dict[str, Any] = {
             "size": int(top_k),
-            "query": {
-                "bool": {
-                    "must": [{"knn": {"field": "vector", "query_vector": vector, "k": int(top_k)}}],
-                    "filter": filters or []
-                }
-            }
+            "query": self._wrap_with_recency(query_c)
         }
         variants.append(("query_level_bool_must", body_c))
         # Variant D: query-level knn (object under query)
         body_d: Dict[str, Any] = {
             "size": int(top_k),
-            "query": {"knn": {"field": "vector", "query_vector": vector, "k": int(top_k)}}
+            "query": self._wrap_with_recency({"knn": {"field": "vector", "query_vector": vector, "k": int(top_k)}})
         }
         variants.append(("query_level_knn", body_d))
         # Attempt each variant
@@ -325,14 +359,15 @@ class OpenSearchAdapter:
 
     def search_bm25(self, *, query: str, top_k: int, user_id: Optional[int], space_id: Optional[int]) -> List[Dict[str, Any]]:
         os_client = self.client()
+        base_query = {
+            "bool": {
+                "filter": self._filters(user_id, space_id),
+                "must": [{"match": {"text": query}}],
+            }
+        }
         body = {
             "size": top_k,
-            "query": {
-                "bool": {
-                    "filter": self._filters(user_id, space_id),
-                    "must": [{"match": {"text": query}}],
-                }
-            }
+            "query": self._wrap_with_recency(base_query),
         }
         res = os_client.search(index=self.index, body=body)
         return res.get("hits", {}).get("hits", [])

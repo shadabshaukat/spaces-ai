@@ -233,6 +233,25 @@ button:hover { filter: brightness(0.98); }
   display: grid;
   gap: 4px;
 }
+.dr-followup-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.dr-followup-chip {
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #1f2937;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.dr-followup-chip:hover {
+  border-color: #a5b4fc;
+  background: #eef2ff;
+}
 
 .dr-msg.me .bubble { background: linear-gradient(130deg, #e0f2ff, #f5faff); border-color: #bfdbfe; }
 .dr-notebook { padding: 18px; display: flex; flex-direction: column; gap: 12px; background: #ffffff; min-width: 280px; }
@@ -353,6 +372,15 @@ body.dark .dr-followup {
 }
 body.dark .dr-followup-title {
   color: #cbd5f5;
+}
+body.dark .dr-followup-chip {
+  border-color: #1f2937;
+  background: #0b1220;
+  color: #e2e8f0;
+}
+body.dark .dr-followup-chip:hover {
+  border-color: #818cf8;
+  background: rgba(99, 102, 241, 0.15);
 }
 
 

@@ -168,6 +168,17 @@ This starts the app at http://0.0.0.0:8000. Authenticate with the Basic Auth cre
 - Files are saved to `storage/uploads/YYYY/MM/DD/HHMMSS/<basename>`.
 - If `STORAGE_BACKEND` includes `oci` and `OCI_OS_BUCKET_NAME` is set, the same date/time path is uploaded to Object Storage and the URL is saved in document metadata. The UI References panel will display a clickable link when the Object Storage URL is available.
 
+### OpenSearch reindex helper
+
+When OpenSearch mappings change (for example, enabling recency scoring on `created_at`), reindex existing documents:
+
+```bash
+cd search-app
+uv run reindexcli --email you@example.com
+uv run reindexcli --email you@example.com --space-id 123
+uv run reindexcli --email you@example.com --doc-id 456 --refresh
+```
+
 ### Validating the System
 - Health: `GET /api/health` → `{ "status": "ok" }`
 - Readiness: `GET /api/ready` → checks pgvector, tsvector tables/indexes

@@ -68,12 +68,16 @@ def semantic_search(query: str, top_k: int = 10, probes: Optional[int] = None, *
             did = int(src.get("doc_id"))
             cix = int(src.get("chunk_index"))
             cid = did * 1_000_000 + cix
+            score = float(h.get("_score") or 0.0)
+            # OpenSearch _score is similarity; map to a distance-like metric for heuristics.
+            distance = 1.0 - max(0.0, min(score, 1.0)) if score > 0 else 1.0
             out.append(ChunkHit(
                 chunk_id=cid,
                 document_id=did,
                 chunk_index=cix,
                 content=src.get("text") or "",
-                distance=float(h.get("_score") or 0.0),
+                distance=distance,
+                rank=score,
             ))
         cache_set(ck, [vars(x) for x in out])
         return out

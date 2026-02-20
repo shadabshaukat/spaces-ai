@@ -6,3 +6,5 @@ All notable changes to this repository are documented in this file. Keep entries
 - Documented new Deep Research follow-up settings:
   - `DEEP_RESEARCH_FOLLOWUP_AUTOSEND` (auto-send chips on click)
   - `DEEP_RESEARCH_FOLLOWUP_RELEVANCE_MIN` (relevance threshold with tuning guidance)
+- Fixed Deep Research local-source visibility by preserving space_id in doc_id reindexing.
+- Normalized OpenSearch _score handling for Deep Research confidence heuristics.

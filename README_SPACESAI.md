@@ -172,6 +172,7 @@ Then update `search-app/.env` with the outputs and run the app.
 - 2026-02-21: Documented new Deep Research follow-up settings:
   - DEEP_RESEARCH_FOLLOWUP_AUTOSEND (auto-send chips)
   - DEEP_RESEARCH_FOLLOWUP_RELEVANCE_MIN (relevance threshold with tuning guidance)
+- 2026-02-21: Fixed Deep Research local-source visibility by preserving space_id during doc reindexing; OpenSearch score normalization improves confidence heuristics.
 - Added multi-tenant auth and spaces: users, spaces, user_activity tables; citext extension
 - Implemented session cookie auth; Login/Register/Logout; /api/me, /api/spaces, /api/spaces/default
 - Rebranded UI to SPACE-AI and added login/register + space selection/creation
@@ -214,6 +215,36 @@ Then update `search-app/.env` with the outputs and run the app.
 - To develop locally: `uv sync --extra pdf --extra office --extra vision --extra audio && uv run searchapp`
 - If you enable OpenSearch recency weighting, run `uv run reindexcli --email <user>` to backfill created_at for existing chunks
 - To integrate Terraform: update variables and add opensearch.tf/cache.tf, then plan/apply
+
+## 15) Reindexing Examples (OpenSearch)
+
+Use these after mapping or recency changes, or if local sources aren’t showing in Deep Research.
+
+Reindex a single document:
+```
+cd search-app
+uv run reindexcli --email you@example.com --doc-id 123
+```
+
+Reindex a specific space:
+```
+cd search-app
+uv run reindexcli --email you@example.com --space-id 42
+```
+
+Reindex all spaces for a user:
+```
+cd search-app
+uv run reindexcli --email you@example.com
+```
+
+Reindex all users (run per user email):
+```
+# Example loop (bash)
+for email in user1@example.com user2@example.com; do
+  uv run reindexcli --email "$email"
+done
+```
 
 
 ---

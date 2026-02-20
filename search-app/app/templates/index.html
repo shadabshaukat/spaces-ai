@@ -266,6 +266,7 @@
         </div>
         <div class="dr-title-controls">
           <input id="drActiveTitle" type="text" placeholder="Session name" aria-label="Conversation title" />
+          <button id="drSessionRefresh" class="ghost dr-session-refresh" title="Start a new session">↻</button>
           <button id="drRenameBtn" class="ghost dr-rename" title="Rename session">Rename</button>
         </div>
       </div>
@@ -292,11 +293,6 @@
           <p class="pill-badge pill-source">Research mode</p>
           <h3>Ask or paste references to investigate deeper</h3>
           <p id="drHeroStatus" class="muted">Sessions auto-save per space. URLs can be included directly inside your question.</p>
-        </div>
-        <div id="drStreamIndicator" class="dr-thinking" hidden>
-          <div class="dr-thinking-spinner"></div>
-          <span>Researching</span>
-          <span class="dr-typing-dots" aria-hidden="true"><span></span><span></span><span></span></span>
         </div>
       </div>
       <div id="drEmptyState" class="dr-timeline-empty">
@@ -935,6 +931,7 @@
       forceWeb: document.getElementById('drForceWeb'),
       titleInput: document.getElementById('drActiveTitle'),
       renameBtn: document.getElementById('drRenameBtn'),
+      refreshBtn: document.getElementById('drSessionRefresh'),
       updatedAt: document.getElementById('drUpdatedAt'),
       timeline: document.getElementById('drTimeline'),
       emptyState: document.getElementById('drEmptyState'),
@@ -1219,10 +1216,8 @@
           const pending = document.createElement('div');
           pending.className = 'dr-msg dr-msg-pending';
           pending.innerHTML = `
-            <div class="dr-thinking-inline">
-              <div class="dr-thinking-spinner"></div>
-              <span>Researching</span>
-              <span class="dr-typing-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+            <div class="dr-thinking-inline" aria-live="polite">
+              <div class="dr-thinking-spinner" aria-hidden="true"></div>
             </div>`;
           frag.appendChild(pending);
         }
@@ -1564,6 +1559,9 @@
     drEls.reset?.addEventListener('click', () => drHandleReset());
     drEls.newSession?.addEventListener('click', () => drHandleNewSession());
     drEls.renameBtn?.addEventListener('click', () => drHandleRename());
+    drEls.refreshBtn?.addEventListener('click', () => {
+      drHandleReset();
+    });
     drEls.titleInput?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();

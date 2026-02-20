@@ -122,6 +122,24 @@ class SmartResearchAgent:
             results.append(WebHit(title=title, url=href, snippet=snippet))
             if len(results) >= limit:
                 break
+        if results:
+            return results
+        # Fallback to DuckDuckGo lite HTML if standard page yields no hits
+        lite_url = "https://duckduckgo.com/lite/"
+        resp = requests.get(lite_url, params=params, headers=headers, timeout=min(8, max(3, self.time_remaining())))
+        resp.raise_for_status()
+        lite = BeautifulSoup(resp.text, "html.parser")
+        for a in lite.select("a.result-link"):
+            title = (a.get_text(strip=True) or "(untitled)")
+            raw_href = a.get("href") or ""
+            href = _extract_real_url(_normalize_href(raw_href))
+            snippet_el = a.find_next("div", class_="result-snippet")
+            snippet = snippet_el.get_text(" ", strip=True) if snippet_el else ""
+            if not href:
+                continue
+            results.append(WebHit(title=title, url=href, snippet=snippet))
+            if len(results) >= limit:
+                break
         return results
 
     def maybe_fetch_web(self, query: str) -> List[WebHit]:

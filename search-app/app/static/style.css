@@ -115,6 +115,7 @@ button:hover { filter: brightness(0.98); }
 .dr-header-actions .pill { border-radius: 999px; padding: 6px 10px; font-weight: 600; }
 .dr-title-controls input { height: 34px; padding: 6px 10px; border-radius: 999px; border: 1px solid #e5e7eb; background: #fff; font-size: 13px; min-width: 180px; }
 .dr-title-controls .ghost { padding: 6px 10px; font-size: 12px; }
+.dr-session-refresh { width: 32px; height: 32px; padding: 0; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; }
 .dr-header-actions .ghost { padding: 6px 10px; font-size: 12px; }
 .dr-header-actions .pill:hover { border-color: #cbd5f5; }
 .dr-header-actions .ios-toggle { margin-left: 6px; }
@@ -245,7 +246,7 @@ button:hover { filter: brightness(0.98); }
   align-items: center;
   gap: 8px;
   margin: 2px 0 6px;
-  padding: 6px 12px;
+  padding: 6px 10px;
   border-radius: 999px;
   border: 1px solid #e5e7eb;
   background: #fff;

@@ -77,9 +77,44 @@ class SmartResearchAgent:
         soup = BeautifulSoup(resp.text, "html.parser")
         results: List[WebHit] = []
         limit = limit or self.web_top_k
+        def _normalize_href(raw: str) -> str:
+            if not raw:
+                return ""
+            if raw.startswith("//"):
+                return "https:" + raw
+            if raw.startswith("/"):
+                return "https://duckduckgo.com" + raw
+            return raw
+
+        def _extract_real_url(raw: str) -> str:
+            if not raw:
+                return ""
+            if raw.startswith("/l/"):
+                try:
+                    from urllib.parse import urlparse, parse_qs
+                    parsed = urlparse(raw)
+                    params = parse_qs(parsed.query)
+                    cand = params.get("uddg") or params.get("u")
+                    if cand and cand[0]:
+                        return cand[0]
+                except Exception:
+                    return raw
+            if raw.startswith("https://duckduckgo.com/l/"):
+                try:
+                    from urllib.parse import urlparse, parse_qs
+                    parsed = urlparse(raw)
+                    params = parse_qs(parsed.query)
+                    cand = params.get("uddg") or params.get("u")
+                    if cand and cand[0]:
+                        return cand[0]
+                except Exception:
+                    return raw
+            return raw
+
         for a in soup.select("a.result__a"):
             title = (a.get_text(strip=True) or "(untitled)")
-            href = a.get("href") or ""
+            raw_href = a.get("href") or ""
+            href = _extract_real_url(_normalize_href(raw_href))
             snippet_el = a.find_next("a", class_="result__snippet")
             snippet = snippet_el.get_text(" ", strip=True) if snippet_el else ""
             if not href:

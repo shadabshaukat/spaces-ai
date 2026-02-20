@@ -266,18 +266,23 @@
         </div>
         <div class="dr-title-controls">
           <input id="drActiveTitle" type="text" placeholder="Session name" aria-label="Conversation title" />
-          <button id="drRenameBtn" class="ghost" title="Rename session">Rename</button>
+          <button id="drRenameBtn" class="ghost dr-rename" title="Rename session">Rename</button>
         </div>
       </div>
       <div class="dr-header-actions">
-        <button id="drSessionsToggle" class="ghost pill" title="Browse sessions">Sessions</button>
-        <button id="drNotebookToggle" class="ghost pill" title="Open notebook">Notebook</button>
         <label class="ios-toggle" title="Always include web search">
           <input id="drForceWeb" type="checkbox" checked />
           <span class="ios-toggle-slider"></span>
           <span class="ios-toggle-label">Web</span>
         </label>
-        <button id="drReset" class="ghost" title="Start new session">↺</button>
+        <div class="dr-menu">
+          <button id="drMenuBtn" class="ghost pill" title="Actions" aria-haspopup="true" aria-expanded="false">⋯</button>
+          <div id="drMenu" class="dr-menu-panel" role="menu" hidden>
+            <button id="drMenuSessions" class="ghost" role="menuitem">Sessions</button>
+            <button id="drMenuNotebook" class="ghost" role="menuitem">Notebook</button>
+            <button id="drMenuReset" class="ghost" role="menuitem">New session</button>
+          </div>
+        </div>
         <button id="drClose" class="ghost" title="Close">✕</button>
       </div>
     </div>
@@ -950,6 +955,11 @@
       notebookList: document.getElementById('drNotebookList'),
       notebookEmpty: document.getElementById('drNotebookEmpty'),
       notebookRefresh: document.getElementById('drNotebookRefresh'),
+      menuBtn: document.getElementById('drMenuBtn'),
+      menuPanel: document.getElementById('drMenu'),
+      menuSessions: document.getElementById('drMenuSessions'),
+      menuNotebook: document.getElementById('drMenuNotebook'),
+      menuReset: document.getElementById('drMenuReset'),
     };
 
     const drState = {
@@ -990,6 +1000,15 @@
         drEls.drawerBackdrop.classList.remove('open');
         drEls.drawerBackdrop.hidden = true;
       }
+    }
+
+    function drToggleMenu(forceState) {
+      if (!drEls.menuPanel || !drEls.menuBtn) return;
+      const willOpen = typeof forceState === 'boolean'
+        ? forceState
+        : drEls.menuPanel.hidden;
+      drEls.menuPanel.hidden = !willOpen;
+      drEls.menuBtn.setAttribute('aria-expanded', String(willOpen));
     }
 
     function drToggleDrawer(which) {
@@ -1388,6 +1407,7 @@
       drState.open = false;
       drSetStreamIndicator(false);
       drHideAllDrawers();
+      drToggleMenu(false);
       drAutoSaveSessionTitle();
     }
 
@@ -1551,6 +1571,12 @@
       }
     });
     drEls.titleInput?.addEventListener('blur', () => drAutoSaveSessionTitle());
+    drEls.titleInput?.addEventListener('focus', () => {
+      drEls.renameBtn?.classList.add('visible');
+    });
+    drEls.titleInput?.addEventListener('blur', () => {
+      drEls.renameBtn?.classList.remove('visible');
+    });
     drEls.notebookForm?.addEventListener('submit', drHandleNotebookSubmit);
     drEls.notebookClear?.addEventListener('click', () => {
       if (drEls.notebookTitle) drEls.notebookTitle.value = '';
@@ -1581,6 +1607,28 @@
     drEls.newSessionDrawerBtn?.addEventListener('click', () => {
       drHandleNewSession();
       drHideDrawer('sessions');
+    });
+
+    drEls.menuBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      drToggleMenu();
+    });
+    drEls.menuSessions?.addEventListener('click', () => {
+      drToggleMenu(false);
+      drToggleDrawer('sessions');
+    });
+    drEls.menuNotebook?.addEventListener('click', () => {
+      drToggleMenu(false);
+      drToggleDrawer('notebook');
+    });
+    drEls.menuReset?.addEventListener('click', () => {
+      drToggleMenu(false);
+      drHandleReset();
+    });
+    document.addEventListener('click', (e) => {
+      if (!drEls.menuPanel || drEls.menuPanel.hidden) return;
+      if (drEls.menuPanel.contains(e.target) || drEls.menuBtn?.contains(e.target)) return;
+      drToggleMenu(false);
     });
 
     document.getElementById('mode').addEventListener('change', () => {

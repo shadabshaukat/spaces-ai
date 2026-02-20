@@ -43,6 +43,13 @@ from .runtime_config import (
 )
 from .users import create_user, authenticate_user, list_spaces, get_default_space_id, create_space, set_default_space
 from .deep_research import start_conversation as dr_start, ask as dr_ask
+from .deep_research_store import (
+    list_conversations as dr_list_conversations,
+    get_conversation_detail as dr_get_conversation_detail,
+    update_conversation_title as dr_update_conversation_title,
+    add_notebook_entry as dr_add_notebook_entry,
+    delete_notebook_entry as dr_delete_notebook_entry,
+)
 from .vision_embeddings import (
     embed_image_paths,
     embed_image_texts,
@@ -871,6 +878,94 @@ async def api_dr_ask(request: Request, payload: Dict[str, Any]):
     except Exception as e:
         logger.exception("DR ask failed: %s", e)
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.get("/api/deep-research/conversations")
+async def api_dr_conversations(request: Request, space_id: int | None = None):
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    uid = int(user.get("user_id") or user.get("id"))
+    try:
+        items = dr_list_conversations(uid, int(space_id) if space_id is not None else None)
+        return {"conversations": items}
+    except Exception as e:
+        logger.exception("DR conversations list failed: %s", e)
+        return JSONResponse(status_code=500, content={"error": "failed to list conversations"})
+
+
+@app.get("/api/deep-research/conversations/{conversation_id}")
+async def api_dr_conversation_detail(request: Request, conversation_id: str):
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    uid = int(user.get("user_id") or user.get("id"))
+    try:
+        detail = dr_get_conversation_detail(uid, conversation_id)
+        return detail
+    except PermissionError:
+        return JSONResponse(status_code=404, content={"error": "conversation not found"})
+    except Exception as e:
+        logger.exception("DR conversation detail failed: %s", e)
+        return JSONResponse(status_code=500, content={"error": "failed to load conversation"})
+
+
+@app.post("/api/deep-research/conversations/{conversation_id}/title")
+async def api_dr_conversation_title(request: Request, conversation_id: str, payload: Dict[str, Any]):
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    uid = int(user.get("user_id") or user.get("id"))
+    title = (payload or {}).get("title")
+    if not title or not str(title).strip():
+        return JSONResponse(status_code=400, content={"error": "title required"})
+    try:
+        dr_update_conversation_title(uid, conversation_id, str(title).strip())
+        return {"ok": True}
+    except PermissionError:
+        return JSONResponse(status_code=404, content={"error": "conversation not found"})
+    except Exception as e:
+        logger.exception("DR conversation title update failed: %s", e)
+        return JSONResponse(status_code=500, content={"error": "failed to update title"})
+
+
+@app.post("/api/deep-research/notebook/{conversation_id}")
+async def api_dr_notebook_add(request: Request, conversation_id: str, payload: Dict[str, Any]):
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    uid = int(user.get("user_id") or user.get("id"))
+    title = (payload or {}).get("title") or "Notebook entry"
+    content = (payload or {}).get("content")
+    source = (payload or {}).get("source")
+    if not content or not str(content).strip():
+        return JSONResponse(status_code=400, content={"error": "content required"})
+    try:
+        entry = dr_add_notebook_entry(uid, conversation_id, str(title).strip(), str(content).strip(), source if isinstance(source, dict) else None)
+        return entry
+    except PermissionError:
+        return JSONResponse(status_code=404, content={"error": "conversation not found"})
+    except Exception as e:
+        logger.exception("DR notebook add failed: %s", e)
+        return JSONResponse(status_code=500, content={"error": "failed to add entry"})
+
+
+@app.delete("/api/deep-research/notebook/{entry_id}")
+async def api_dr_notebook_delete(request: Request, entry_id: int):
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    uid = int(user.get("user_id") or user.get("id"))
+    try:
+        deleted = dr_delete_notebook_entry(uid, int(entry_id))
+        if not deleted:
+            return JSONResponse(status_code=404, content={"error": "entry not found"})
+        return {"ok": True}
+    except PermissionError:
+        return JSONResponse(status_code=404, content={"error": "entry not found"})
+    except Exception as e:
+        logger.exception("DR notebook delete failed: %s", e)
+        return JSONResponse(status_code=500, content={"error": "failed to delete entry"})
 
 
 @app.post("/api/llm-debug")

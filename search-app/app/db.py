@@ -274,6 +274,69 @@ def init_db(s: Settings = settings) -> None:
                 """
             )
 
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS deep_research_conversations (
+                    conversation_id TEXT PRIMARY KEY,
+                    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    space_id BIGINT REFERENCES spaces(id) ON DELETE SET NULL,
+                    title TEXT,
+                    created_at TIMESTAMPTZ DEFAULT now(),
+                    updated_at TIMESTAMPTZ DEFAULT now()
+                );
+                """
+            )
+
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_dr_convo_user_space
+                ON deep_research_conversations(user_id, space_id, updated_at DESC);
+                """
+            )
+
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS deep_research_steps (
+                    id BIGSERIAL PRIMARY KEY,
+                    conversation_id TEXT NOT NULL REFERENCES deep_research_conversations(conversation_id) ON DELETE CASCADE,
+                    step_index INT NOT NULL,
+                    role TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    context_refs JSONB DEFAULT '[]'::jsonb,
+                    metadata JSONB DEFAULT '{}'::jsonb,
+                    created_at TIMESTAMPTZ DEFAULT now()
+                );
+                """
+            )
+
+            cur.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_dr_steps_convo_idx
+                ON deep_research_steps(conversation_id, step_index);
+                """
+            )
+
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS deep_research_notebook_entries (
+                    id BIGSERIAL PRIMARY KEY,
+                    conversation_id TEXT NOT NULL REFERENCES deep_research_conversations(conversation_id) ON DELETE CASCADE,
+                    title TEXT,
+                    content TEXT NOT NULL,
+                    source JSONB DEFAULT '{}'::jsonb,
+                    created_at TIMESTAMPTZ DEFAULT now(),
+                    updated_at TIMESTAMPTZ DEFAULT now()
+                );
+                """
+            )
+
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_dr_notebook_convo_time
+                ON deep_research_notebook_entries(conversation_id, created_at DESC);
+                """
+            )
+
         logger.info("Database initialized with vector dim=%s, metric=%s, lists=%s", dim, metric, s.pgvector_lists)
 
 

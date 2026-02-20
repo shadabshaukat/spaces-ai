@@ -11,6 +11,10 @@ from .db import get_conn
 
 from .config import settings
 from .search import hybrid_search, ChunkHit
+from .deep_research_store import (
+    ensure_conversation as store_ensure_conversation,
+    append_step as store_append_step,
+)
 from .external_sources import ingest_external_urls, retrieve_external_contexts
 from .agentic_research import decide_web_and_contexts
 from .valkey_cache import get_json as cache_get, set_json as cache_set
@@ -67,6 +71,7 @@ def _save_state(state: DRState) -> None:
 
 def start_conversation(user_id: int, space_id: Optional[int]) -> str:
     cid = uuid.uuid4().hex[:12]
+    store_ensure_conversation(user_id, space_id, cid, None)
     st = DRState(user_id=user_id, space_id=space_id, conversation_id=cid, messages=[
         Message("system", "You are Deep Research mode for SpacesAI. You work step-by-step: plan, retrieve, analyze, synthesize. Always ground answers in the user's knowledge base for this space. If something isn't in the KB, clearly say so.")
     ])
@@ -156,6 +161,7 @@ def ask(
 
     if urls:
         try:
+            store_ensure_conversation(user_id, space_id, conversation_id, None)
             ingest_external_urls(
                 user_id=user_id,
                 space_id=space_id,
@@ -167,6 +173,7 @@ def ask(
             logger.warning("External URL ingestion failed: %s", exc)
 
     # RETRIEVE for each subq
+    store_ensure_conversation(user_id, space_id, conversation_id, None)
     contexts: List[str] = []
     hits_all: List[ChunkHit] = []
     local_top_k = max(15, int(settings.deep_research_local_top_k or 15))
@@ -187,7 +194,7 @@ def ask(
         user_id=user_id,
         space_id=space_id,
         conversation_id=conversation_id,
-        query=message,
+        query=retrieval_seed,
     )
     if extra_contexts:
         contexts.extend(extra_contexts)
@@ -205,15 +212,48 @@ def ask(
     draft = _synthesize(message, contexts, provider_override, conv_context=recent_snippet)
     answer = draft or "".join(contexts)[:1200]
 
+    try:
+        store_append_step(
+            conversation_id=conversation_id,
+            role="user",
+            content=message,
+            context_refs=None,
+            metadata={"seed": retrieval_seed},
+        )
+    except Exception:
+        logger.exception("Failed to persist DR user step")
+
     # LIGHT REFINE
     if draft and len(hits_all) > 0:
         refined = _refine(message, draft, contexts[:3], provider_override, conv_context=recent_snippet)
         if refined:
             answer = refined
 
+    refs_payload = []
+    try:
+        for ref in (extra_contexts or []):
+            pass
+    except Exception:
+        pass
+
     st.messages.append(Message("assistant", answer))
     st.trim(keep=20)
     _save_state(st)
+
+    try:
+        store_append_step(
+            conversation_id=conversation_id,
+            role="assistant",
+            content=answer,
+            context_refs=meta.get("references") if 'meta' in locals() else None,
+            metadata={
+                "confidence": confidence,
+                "web_attempted": web_attempted,
+                "elapsed_seconds": time.monotonic() - start_ts,
+            },
+        )
+    except Exception:
+        logger.exception("Failed to persist DR assistant step")
 
     # Prepare references (top few)
     refs: List[Dict[str, object]] = []

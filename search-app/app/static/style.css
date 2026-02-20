@@ -212,6 +212,28 @@ button:hover { filter: brightness(0.98); }
 .dr-source-card[data-source="local"] { background: linear-gradient(145deg, rgba(239,246,255,0.9), #fff); }
 .dr-source-card[data-source="web"] { background: linear-gradient(145deg, rgba(255,247,237,0.9), #fff); }
 
+/* Follow-up suggestions (Deep Research) */
+.dr-followup {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px dashed #e5e7eb;
+  background: #f9fafb;
+  color: #6b7280;
+  font-size: 12px;
+}
+.dr-followup-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: #4b5563;
+}
+.dr-followup ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+
 .dr-msg.me .bubble { background: linear-gradient(130deg, #e0f2ff, #f5faff); border-color: #bfdbfe; }
 .dr-notebook { padding: 18px; display: flex; flex-direction: column; gap: 12px; background: #ffffff; min-width: 280px; }
 .dr-notebook header { display: flex; align-items: center; justify-content: space-between; }
@@ -324,6 +346,14 @@ body.dark .dr-source-card .dr-source-summary .title { color: #f8fafc; }
 body.dark .dr-source-card .dr-source-summary .sub { color: #a5b4fc; }
 body.dark .dr-source-card .snippet { color: #dbeafe; }
 body.dark .dr-sources .muted { color: #94a3b8; }
+body.dark .dr-followup {
+  border-color: #1f2937;
+  background: #0b1220;
+  color: #94a3b8;
+}
+body.dark .dr-followup-title {
+  color: #cbd5f5;
+}
 
 
 /* Collapsible toggles */

@@ -438,9 +438,9 @@
             if (/^\s*[-*]\s+/.test(ln)) {
               if (!inUl) { flushList(); out.push('<ul>'); inUl = true; }
               out.push(`<li>${escapeHtml(ln.replace(/^\s*[-*]\s+/, ''))}</li>`);
-            } else if (/^\s*\d+\.\s+/.test(ln)) {
+            } else if (/^\s*\d+[\.)\-:]\s+/.test(ln)) {
               if (!inOl) { flushList(); out.push('<ol>'); inOl = true; }
-              out.push(`<li>${escapeHtml(ln.replace(/^\s*\d+\.\s+/, ''))}</li>`);
+              out.push(`<li>${escapeHtml(ln.replace(/^\s*\d+[\.)\-:]\s+/, ''))}</li>`);
             } else if (ln.trim() === '') {
               if (inUl || inOl) {
                 continue;

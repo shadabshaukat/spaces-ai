@@ -186,15 +186,27 @@ class OpenSearchAdapter:
         return int(ok)
 
     @staticmethod
+    def _normalize_vector(vec: List[float]) -> List[float]:
+        """Ensure query vectors are floats (avoid stringified arrays reaching OpenSearch)."""
+        out: List[float] = []
+        for v in vec:
+            try:
+                out.append(float(v))
+            except (TypeError, ValueError):
+                continue
+        return out
+
+    @staticmethod
     def _build_recency_functions() -> List[Dict[str, Any]]:
         boost = float(getattr(settings, "deep_research_recency_boost", 0.0) or 0.0)
         if boost <= 0:
             return []
         half_life_days = float(getattr(settings, "deep_research_recency_half_life_days", 30.0) or 30.0)
         scale_days = max(1.0, half_life_days)
+        scale_days_int = int(round(scale_days))
         return [
             {
-                "gauss": {"created_at": {"origin": "now", "scale": f"{scale_days}d", "decay": 0.5}},
+                "gauss": {"created_at": {"origin": "now", "scale": f"{scale_days_int}d", "decay": 0.5}},
                 "weight": boost,
             }
         ]
@@ -295,6 +307,7 @@ class OpenSearchAdapter:
         os_client = self.client()
         filters = self._filters(user_id, space_id)
         engine = (os.getenv("OPENSEARCH_KNN_ENGINE", "lucene") or "lucene").lower()
+        vector = self._normalize_vector(vector)
         # Construct base KNN object
         from .config import settings as _settings
         knn_obj: Dict[str, Any] = {

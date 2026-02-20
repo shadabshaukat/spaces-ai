@@ -8,3 +8,6 @@ All notable changes to this repository are documented in this file. Keep entries
   - `DEEP_RESEARCH_FOLLOWUP_RELEVANCE_MIN` (relevance threshold with tuning guidance)
 - Fixed Deep Research local-source visibility by preserving space_id in doc_id reindexing.
 - Normalized OpenSearch _score handling for Deep Research confidence heuristics.
+- Fixed OpenSearch KNN query vector normalization to avoid string payloads in knn queries.
+- Adjusted OpenSearch recency scale formatting to avoid fractional day parse errors.
+- Fixed Deep Research ordered list rendering to display proper sequential numbering.

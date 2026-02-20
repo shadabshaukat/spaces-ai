@@ -271,62 +271,74 @@
           <button id="drRenameBtn" class="ghost" title="Rename session">Rename</button>
         </div>
       </div>
-      <div class="dr-title-controls dr-session-meta">
-        <span id="drUpdatedAt" class="muted"></span>
-        <div class="dr-header-actions">
-          <label class="ios-toggle" title="Always include web search">
-            <input id="drForceWeb" type="checkbox" />
-            <span class="ios-toggle-slider"></span>
-            <span class="ios-toggle-label">Always include web</span>
-          </label>
-          <button id="drReset" class="ghost" title="Start new session">↺</button>
-          <button id="drClose" class="ghost" title="Close">✕</button>
+      <div class="dr-header-actions">
+        <button id="drSessionsToggle" class="ghost pill" title="Browse sessions">Sessions</button>
+        <button id="drNotebookToggle" class="ghost pill" title="Open notebook">Notebook</button>
+        <label class="ios-toggle" title="Always include web search">
+          <input id="drForceWeb" type="checkbox" />
+          <span class="ios-toggle-slider"></span>
+          <span class="ios-toggle-label">Always include web</span>
+        </label>
+        <button id="drReset" class="ghost" title="Start new session">↺</button>
+        <button id="drClose" class="ghost" title="Close">✕</button>
+      </div>
+    </div>
+    <div class="dr-main">
+      <div class="dr-main-hero" id="drHero">
+        <div>
+          <p class="pill-badge pill-source">Research mode</p>
+          <h3>Ask or paste references to investigate deeper</h3>
+          <p id="drHeroStatus" class="muted">Sessions auto-save per space. URLs can be included directly inside your question.</p>
+        </div>
+        <div id="drStreamIndicator" class="dr-thinking" hidden>
+          <div class="dr-thinking-spinner"></div>
+          <span>Streaming answer…</span>
+        </div>
+      </div>
+      <div id="drEmptyState" class="dr-timeline-empty">
+        <h3>No conversation yet</h3>
+        <p>Type a question to create your knowledge timeline.</p>
+        <button id="drNewSession" class="ghost">Start fresh</button>
+      </div>
+      <div id="drTimeline" class="dr-chat" aria-live="polite"></div>
+      <div class="dr-composer">
+        <textarea id="drMessage" rows="3" placeholder="Ask a question, add bullet points, or paste URLs inline…"></textarea>
+        <div class="dr-composer-actions">
+          <div class="dr-composer-left">
+            <button id="drSessionsToggleSecondary" class="ghost text-link" type="button">Sessions</button>
+            <button id="drNotebookToggleSecondary" class="ghost text-link" type="button">Notebook</button>
+          </div>
+          <div class="dr-composer-right">
+            <span id="drWebStatus" class="muted"></span>
+            <button id="drSend" class="primary">Send</button>
+          </div>
         </div>
       </div>
     </div>
-    <div class="dr-body">
-      <aside class="dr-sidebar">
-        <div class="dr-sidebar-head">
-          <div>
-            <div class="dr-sidebar-title">Sessions</div>
-            <div class="muted" id="drSessionHint">Resume your last research per space</div>
-          </div>
-          <button id="drNewSession" class="ghost" title="New session">＋</button>
+    <aside id="drSessionsDrawer" class="dr-drawer" data-drawer="sessions" aria-label="Deep research sessions">
+      <div class="dr-drawer-head">
+        <div>
+          <strong>Sessions</strong>
+          <p class="muted" id="drSessionHint">Resume or branch your research</p>
         </div>
+        <button class="ghost" data-dr-drawer-close>&times;</button>
+      </div>
+      <div class="dr-drawer-body">
+        <button id="drNewSessionDrawer" class="ghost fullwidth">＋ New session</button>
         <div class="dr-convo-list" id="drConvoList">
           <div class="muted">Loading sessions…</div>
         </div>
-      </aside>
-      <section class="dr-main">
-        <div class="dr-main-hero" id="drHero">
-          <h3>NotebookLM-style Deep Research</h3>
-          <p id="drHeroStatus" class="muted">Ask a question to begin. Sessions auto-save per space.</p>
-          <div id="drStreamIndicator" class="dr-thinking" hidden>
-            <div class="dr-thinking-spinner"></div>
-            <span>Streaming answer…</span>
-          </div>
-        </div>
-        <div id="drEmptyState" class="dr-timeline-empty">
-          <h3>No conversation yet</h3>
-          <p>Ask a question or start a new session to see the full knowledge timeline.</p>
-        </div>
-        <div id="drTimeline" class="dr-chat" aria-live="polite"></div>
-        <div class="dr-input">
-          <div class="dr-input-fields">
-            <input id="drMessage" type="text" placeholder="Ask a question… (Shift+Enter for newline)" autocomplete="off" />
-            <input id="drUrls" type="text" placeholder="Optional: comma-separated URLs to crawl" autocomplete="off" />
-          </div>
-          <button id="drSend" class="primary">Send</button>
-        </div>
-        <div class="dr-web-toggle">
-          <span id="drWebStatus" class="muted"></span>
-        </div>
-      </section>
-      <aside class="dr-notebook">
-        <header>
-          <div class="dr-notebook-title">Notebook Pins</div>
+      </div>
+    </aside>
+    <aside id="drNotebookDrawer" class="dr-drawer" data-drawer="notebook" aria-label="Deep research notebook">
+      <div class="dr-drawer-head">
+        <strong>Notebook Pins</strong>
+        <div class="drawer-head-actions">
           <button id="drNotebookRefresh" class="ghost" title="Refresh notebook">↻</button>
-        </header>
+          <button class="ghost" data-dr-drawer-close>&times;</button>
+        </div>
+      </div>
+      <div class="dr-drawer-body">
         <form id="drNotebookForm" class="dr-notebook-form">
           <input id="drNotebookTitle" type="text" placeholder="Note title" />
           <textarea id="drNotebookContent" rows="3" placeholder="What insight do you want to pin?"></textarea>
@@ -337,8 +349,9 @@
         </form>
         <div id="drNotebookEmpty" class="muted">No notebook entries yet.</div>
         <div id="drNotebookList" class="dr-notebook-list"></div>
-      </aside>
-    </div>
+      </div>
+    </aside>
+    <div id="drDrawerBackdrop" class="dr-drawer-backdrop" hidden></div>
   </div>
 
   <script>
@@ -903,22 +916,14 @@
       resetImageResults();
     }
 
-    const imageClearBtn = document.getElementById('imageClearBtn');
-    if (imageClearBtn) imageClearBtn.addEventListener('click', () => clearImageSearch());
-
-    // Deep Research UI
     const drEls = {
       modal: document.getElementById('drModal'),
       backdrop: document.getElementById('drBackdrop'),
       message: document.getElementById('drMessage'),
-      urls: document.getElementById('drUrls'),
       send: document.getElementById('drSend'),
       close: document.getElementById('drClose'),
       reset: document.getElementById('drReset'),
       newSession: document.getElementById('drNewSession'),
-      convoList: document.getElementById('drConvoList'),
-      timeline: document.getElementById('drTimeline'),
-      emptyState: document.getElementById('drEmptyState'),
       hero: document.getElementById('drHero'),
       heroStatus: document.getElementById('drHeroStatus'),
       streamIndicator: document.getElementById('drStreamIndicator'),
@@ -927,6 +932,18 @@
       titleInput: document.getElementById('drActiveTitle'),
       renameBtn: document.getElementById('drRenameBtn'),
       updatedAt: document.getElementById('drUpdatedAt'),
+      timeline: document.getElementById('drTimeline'),
+      emptyState: document.getElementById('drEmptyState'),
+      convoList: document.getElementById('drConvoList'),
+      sessionsToggle: document.getElementById('drSessionsToggle'),
+      notebookToggle: document.getElementById('drNotebookToggle'),
+      sessionsToggleSecondary: document.getElementById('drSessionsToggleSecondary'),
+      notebookToggleSecondary: document.getElementById('drNotebookToggleSecondary'),
+      sessionsDrawer: document.getElementById('drSessionsDrawer'),
+      notebookDrawer: document.getElementById('drNotebookDrawer'),
+      drawerBackdrop: document.getElementById('drDrawerBackdrop'),
+      drawerCloseButtons: document.querySelectorAll('[data-dr-drawer-close]'),
+      newSessionDrawerBtn: document.getElementById('drNewSessionDrawer'),
       notebookForm: document.getElementById('drNotebookForm'),
       notebookTitle: document.getElementById('drNotebookTitle'),
       notebookContent: document.getElementById('drNotebookContent'),
@@ -944,6 +961,45 @@
       notebook: [],
       isSending: false,
     };
+
+    function drGetDrawer(which) {
+      if (which === 'sessions') return drEls.sessionsDrawer;
+      if (which === 'notebook') return drEls.notebookDrawer;
+      return null;
+    }
+
+    function drShowDrawer(which) {
+      const drawer = drGetDrawer(which);
+      if (!drawer) return;
+      drawer.classList.add('open');
+      if (drEls.drawerBackdrop) {
+        drEls.drawerBackdrop.hidden = false;
+        drEls.drawerBackdrop.classList.add('open');
+      }
+    }
+
+    function drHideDrawer(which) {
+      const drawer = drGetDrawer(which);
+      if (!drawer) return;
+      drawer.classList.remove('open');
+    }
+
+    function drHideAllDrawers() {
+      drHideDrawer('sessions');
+      drHideDrawer('notebook');
+      if (drEls.drawerBackdrop) {
+        drEls.drawerBackdrop.classList.remove('open');
+        drEls.drawerBackdrop.hidden = true;
+      }
+    }
+
+    function drToggleDrawer(which) {
+      const drawer = drGetDrawer(which);
+      if (!drawer) return;
+      const willOpen = !drawer.classList.contains('open');
+      drHideAllDrawers();
+      if (willOpen) drShowDrawer(which);
+    }
 
     function drStorageKey(spaceId) {
       return `dr:space:${spaceId || '_'}`;
@@ -1273,8 +1329,11 @@
       }
       if (!drEls.modal || !drEls.backdrop) return;
       drEls.backdrop.hidden = false;
+      drEls.backdrop.classList.add('open');
       drEls.modal.hidden = false;
+      drEls.modal.classList.add('open');
       drState.open = true;
+      drHideAllDrawers();
       drEls.message?.focus();
       drSetHeroStatus('Loading sessions…');
       await drBootstrap();
@@ -1282,15 +1341,28 @@
 
     function drCloseModal() {
       if (!drEls.modal || !drEls.backdrop) return;
+      drEls.backdrop.classList.remove('open');
       drEls.backdrop.hidden = true;
+      drEls.modal.classList.remove('open');
       drEls.modal.hidden = true;
       drState.open = false;
       drSetStreamIndicator(false);
+      drHideAllDrawers();
     }
 
-    function drParseUrls(raw) {
+    function drExtractUrlsFromText(raw) {
       if (!raw) return [];
-      return raw.split(',').map((url) => url.trim()).filter(Boolean);
+      const urlRegex = /https?:\/\/[^\s)]+/gi;
+      const matches = raw.match(urlRegex) || [];
+      // Deduplicate while preserving order
+      const seen = new Set();
+      const urls = [];
+      for (const url of matches) {
+        if (seen.has(url)) continue;
+        seen.add(url);
+        urls.push(url);
+      }
+      return urls;
     }
 
     async function drHandleSend() {
@@ -1299,7 +1371,7 @@
       const text = (drEls.message?.value || '').trim();
       if (!text) return;
       drEls.message.value = '';
-      const urls = drParseUrls(drEls.urls?.value || '');
+      const urls = drExtractUrlsFromText(text);
       const tmpStep = { role: 'user', content: text, created_at: new Date().toISOString() };
       drRenderTimeline([...drState.steps, tmpStep]);
       drState.isSending = true;
@@ -1320,7 +1392,6 @@
         drUpdateWebStatus(Boolean(resp.web_attempted));
         await drFetchConversations();
         await drLoadConversationDetail(cid);
-        if (drEls.urls) drEls.urls.value = '';
       } catch (e) {
         console.error(e);
         showToast('Failed to send research question');
@@ -1445,6 +1516,21 @@
     drEls.notebookList?.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-dr-delete-note]');
       if (btn) drDeleteNotebookEntry(btn.getAttribute('data-dr-delete-note'));
+    });
+
+    [drEls.sessionsToggle, drEls.sessionsToggleSecondary].forEach((btn) => {
+      btn?.addEventListener('click', () => drToggleDrawer('sessions'));
+    });
+    [drEls.notebookToggle, drEls.notebookToggleSecondary].forEach((btn) => {
+      btn?.addEventListener('click', () => drToggleDrawer('notebook'));
+    });
+    drEls.drawerCloseButtons?.forEach((btn) => {
+      btn.addEventListener('click', () => drHideAllDrawers());
+    });
+    drEls.drawerBackdrop?.addEventListener('click', () => drHideAllDrawers());
+    drEls.newSessionDrawerBtn?.addEventListener('click', () => {
+      drHandleNewSession();
+      drHideDrawer('sessions');
     });
 
     document.getElementById('mode').addEventListener('change', () => {

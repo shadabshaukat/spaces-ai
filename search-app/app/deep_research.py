@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import logging
+import math
 import re
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 
 from .db import get_conn
 
@@ -93,6 +94,173 @@ def _extract_subqueries(question: str) -> List[str]:
     return [q]
 
 
+def _coverage_metrics(hits: List[ChunkHit]) -> Tuple[int, int, float]:
+    if not hits:
+        return 0, 0, 0.0
+    unique_docs = len({h.document_id for h in hits if h.document_id is not None})
+    distances = [h.distance for h in hits if h.distance is not None]
+    best_distance = min(distances) if distances else 0.0
+    return len(hits), unique_docs, float(best_distance or 0.0)
+
+
+def _is_local_weak(hits: List[ChunkHit]) -> bool:
+    count, unique_docs, _ = _coverage_metrics(hits)
+    return count < 4 or unique_docs < 2
+
+
+def _rewrite_for_search(question: str, recent_context: str) -> Optional[str]:
+    try:
+        from .llm import chat as llm_chat
+        prompt = (
+            "Rewrite the user question into a concise web search query. "
+            "Use 6-12 words, drop filler, keep proper nouns. "
+            "Return only the query text.\n\n"
+            f"Question: {question}\n"
+            f"Context: {recent_context.strip()}"
+        )
+        rewritten = (llm_chat(prompt, "", max_tokens=64, temperature=0.2) or "").strip()
+        return rewritten.splitlines()[0].strip() if rewritten else None
+    except Exception:
+        return None
+
+
+def _identify_missing_concepts(question: str, context_preview: str) -> List[str]:
+    try:
+        from .llm import chat as llm_chat
+        prompt = (
+            "Given the question and the available context preview, list missing concepts "
+            "or subtopics that should be researched. Return a short comma-separated list.\n\n"
+            f"Question: {question}\n"
+            f"Context preview: {context_preview.strip()}"
+        )
+        raw = (llm_chat(prompt, "", max_tokens=80, temperature=0.2) or "").strip()
+        if not raw:
+            return []
+        parts = [p.strip(" -•\t") for p in re.split(r"[\n,]", raw) if p.strip()]
+        return parts[:6]
+    except Exception:
+        return []
+
+
+def _group_context_blocks(
+    *,
+    local_contexts: List[str],
+    url_contexts: List[str],
+    web_contexts: List[str],
+    missing_concepts: List[str],
+) -> Tuple[str, str]:
+    blocks: List[str] = []
+    preview_parts: List[str] = []
+    if local_contexts:
+        local_block = "\n\n".join(local_contexts)
+        blocks.append("=== LOCAL KB EVIDENCE ===\n" + local_block)
+        preview_parts.append(local_contexts[0])
+    if url_contexts:
+        url_block = "\n\n".join(url_contexts)
+        blocks.append("=== USER URL EVIDENCE ===\n" + url_block)
+        preview_parts.append(url_contexts[0])
+    if web_contexts:
+        web_block = "\n\n".join(web_contexts)
+        blocks.append("=== WEB EVIDENCE ===\n" + web_block)
+        preview_parts.append(web_contexts[0])
+    if missing_concepts:
+        missing_block = "\n".join(f"- {m}" for m in missing_concepts)
+        blocks.append("=== MISSING CONCEPTS ===\n" + missing_block)
+    full_ctx = "\n\n".join(blocks) if blocks else "(No relevant context found in your knowledge base.)"
+    preview = "\n\n".join(preview_parts)[:1200]
+    return full_ctx, preview
+
+
+def _compute_source_confidence(local_hits: List[ChunkHit], web_hits: List[object], url_contexts: List[str]) -> Dict[str, float]:
+    local_count = len(local_hits)
+    local_docs = len({h.document_id for h in local_hits if h.document_id is not None})
+    local_score = min(1.0, 0.1 + 0.08 * local_count + 0.12 * local_docs)
+    web_score = min(1.0, 0.2 + 0.1 * len(web_hits)) if web_hits else 0.0
+    url_score = min(1.0, 0.2 + 0.12 * len(url_contexts)) if url_contexts else 0.0
+    return {
+        "local": round(local_score, 2),
+        "web": round(web_score, 2),
+        "url": round(url_score, 2),
+    }
+
+
+def _rank_local_refs(local_hits: List[ChunkHit]) -> List[ChunkHit]:
+    def score(hit: ChunkHit) -> float:
+        if hit.distance is not None:
+            return -float(hit.distance)
+        if hit.rank is not None:
+            return float(hit.rank)
+        return 0.0
+
+    return sorted(local_hits, key=score, reverse=True)
+
+
+def _fetch_doc_recency_scores(hits: List[ChunkHit]) -> Dict[int, float]:
+    if not hits:
+        return {}
+    doc_ids = sorted({int(h.document_id) for h in hits if h.document_id is not None})
+    if not doc_ids:
+        return {}
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, created_at FROM documents WHERE id = ANY(%s)",
+                (doc_ids,),
+            )
+            rows = cur.fetchall()
+    now = time.time()
+    half_life = max(float(settings.deep_research_recency_half_life_days or 0), 1.0) * 86400.0
+    scores: Dict[int, float] = {}
+    for doc_id, created_at in rows:
+        if not created_at:
+            scores[int(doc_id)] = 0.0
+            continue
+        age_seconds = max(0.0, now - created_at.timestamp())
+        decay = math.exp(-math.log(2) * age_seconds / half_life)
+        scores[int(doc_id)] = float(decay)
+    return scores
+
+
+def _rank_local_refs_with_recency(local_hits: List[ChunkHit]) -> List[ChunkHit]:
+    if not local_hits:
+        return []
+    recency_scores = _fetch_doc_recency_scores(local_hits)
+    boost = max(0.0, float(settings.deep_research_recency_boost or 0.0))
+
+    def score(hit: ChunkHit) -> float:
+        base = 0.0
+        if hit.distance is not None:
+            base = -float(hit.distance)
+        elif hit.rank is not None:
+            base = float(hit.rank)
+        recency = recency_scores.get(int(hit.document_id), 0.0)
+        return base + boost * recency
+
+    return sorted(local_hits, key=score, reverse=True)
+
+
+def _generate_followup_questions(question: str, context_preview: str, max_questions: int) -> List[str]:
+    if max_questions <= 0:
+        return []
+    try:
+        from .llm import chat as llm_chat
+        prompt = (
+            "Generate short follow-up questions that would clarify ambiguous intent or missing details. "
+            "Return a numbered list of up to "
+            f"{max_questions} questions.\n\n"
+            f"Question: {question}\n"
+            f"Context preview: {context_preview.strip()}"
+        )
+        raw = (llm_chat(prompt, "", max_tokens=120, temperature=0.2) or "").strip()
+        if not raw:
+            return []
+        lines = [re.sub(r"^\d+\.\s*", "", ln).strip() for ln in raw.splitlines() if ln.strip()]
+        questions = [ln for ln in lines if ln.endswith("?") or len(ln) > 6]
+        return questions[:max_questions]
+    except Exception:
+        return []
+
+
 def _synthesize(question: str, contexts: List[str], provider_override: Optional[str], conv_context: Optional[str] = None) -> Optional[str]:
     try:
         from .llm import chat as llm_chat
@@ -141,6 +309,10 @@ def ask(
 ) -> Dict[str, object]:
     start_ts = time.monotonic()
     max_budget = max(float(settings.deep_research_timeout_seconds or 0), 15.0)
+    retry_loops = max(0, int(settings.deep_research_retry_loops or 0))
+    confidence_floor = float(settings.deep_research_confidence_threshold or 0.0)
+    missing_loops = max(0, int(settings.deep_research_missing_concept_loops or 0))
+    missing_top_k = max(1, int(settings.deep_research_missing_concept_top_k or 6))
 
     def _remaining_budget() -> float:
         elapsed = time.monotonic() - start_ts
@@ -174,7 +346,7 @@ def ask(
 
     # RETRIEVE for each subq
     store_ensure_conversation(user_id, space_id, conversation_id, None)
-    contexts: List[str] = []
+    local_contexts: List[str] = []
     hits_all: List[ChunkHit] = []
     local_top_k = max(15, int(settings.deep_research_local_top_k or 15))
     for sq in subqs:
@@ -182,35 +354,105 @@ def ask(
             hits = hybrid_search(sq, top_k=local_top_k, user_id=user_id, space_id=space_id)
             hits_all.extend(hits)
             if hits:
-                contexts.append("\n\n".join(h.content for h in hits))
+                local_contexts.append("\n\n".join(h.content for h in hits))
         except Exception as e:
             logger.warning("DR retrieve failed for %r: %s", sq, e)
 
-    # If no hits at all, answer from zero context
-    if not contexts:
-        contexts.append("(No relevant context found in your knowledge base.)")
+    # If local coverage is weak, rewrite query and run a second local pass
+    rewritten_query = None
+    if _is_local_weak(hits_all):
+        rewritten_query = _rewrite_for_search(message, recent_snippet or "")
+        if rewritten_query:
+            try:
+                hits = hybrid_search(rewritten_query, top_k=local_top_k, user_id=user_id, space_id=space_id)
+                hits_all.extend(hits)
+                if hits:
+                    local_contexts.append("\n\n".join(h.content for h in hits))
+            except Exception as e:
+                logger.warning("DR rewritten retrieve failed for %r: %s", rewritten_query, e)
 
-    extra_contexts = retrieve_external_contexts(
+    # If no hits at all, answer from zero context
+    if not local_contexts:
+        local_contexts.append("(No relevant context found in your knowledge base.)")
+
+    url_contexts = retrieve_external_contexts(
         user_id=user_id,
         space_id=space_id,
         conversation_id=conversation_id,
         query=retrieval_seed,
     )
-    if extra_contexts:
-        contexts.extend(extra_contexts)
+    if not url_contexts:
+        url_contexts = []
 
-    contexts, web_hits, confidence, web_attempted = decide_web_and_contexts(
-        message,
-        hits_all,
-        contexts,
-        max_seconds=_remaining_budget(),
-        web_top_k=max(15, int(settings.deep_research_web_top_k or 15)),
-        force_web=force_web,
+    search_query = rewritten_query or message
+    web_hits: List[object] = []
+    web_contexts: List[str] = []
+    confidence = 0.0
+    web_attempted = False
+    for attempt in range(retry_loops + 1):
+        combined = list(local_contexts) + list(url_contexts)
+        contexts, web_hits, confidence, web_attempted = decide_web_and_contexts(
+            search_query,
+            hits_all,
+            combined,
+            max_seconds=_remaining_budget(),
+            web_top_k=max(15, int(settings.deep_research_web_top_k or 15)),
+            force_web=force_web or attempt > 0,
+        )
+        web_contexts = [c for c in contexts if c.startswith("Web result:")]
+
+        # Identify missing concepts to guide synthesis
+        if _is_local_weak(hits_all):
+            full_context, preview = _group_context_blocks(
+                local_contexts=local_contexts,
+                url_contexts=url_contexts,
+                web_contexts=web_contexts,
+                missing_concepts=[],
+            )
+            missing = _identify_missing_concepts(message, preview)
+            if missing:
+                local_contexts.append("Missing concepts to cover: " + ", ".join(missing))
+
+        if confidence >= confidence_floor and contexts:
+            break
+        if attempt < retry_loops:
+            search_query = _rewrite_for_search(message, recent_snippet or "") or search_query
+
+    # Missing-concept loop: retry retrieval using missing concepts as prompts
+    missing_concepts: List[str] = []
+    for _ in range(missing_loops):
+        full_context, preview = _group_context_blocks(
+            local_contexts=local_contexts,
+            url_contexts=url_contexts,
+            web_contexts=web_contexts,
+            missing_concepts=missing_concepts,
+        )
+        new_missing = _identify_missing_concepts(message, preview)
+        new_missing = [m for m in new_missing if m not in missing_concepts]
+        if not new_missing:
+            break
+        missing_concepts.extend(new_missing)
+        for concept in new_missing[:missing_top_k]:
+            if _remaining_budget() <= 2:
+                break
+            try:
+                hits = hybrid_search(concept, top_k=max(8, local_top_k // 2), user_id=user_id, space_id=space_id)
+                hits_all.extend(hits)
+                if hits:
+                    local_contexts.append("\n\n".join(h.content for h in hits))
+            except Exception as e:
+                logger.warning("DR missing concept retrieve failed for %r: %s", concept, e)
+
+    full_context, _ = _group_context_blocks(
+        local_contexts=local_contexts,
+        url_contexts=url_contexts,
+        web_contexts=web_contexts,
+        missing_concepts=missing_concepts,
     )
 
     # SYNTHESIZE
-    draft = _synthesize(message, contexts, provider_override, conv_context=recent_snippet)
-    answer = draft or "".join(contexts)[:1200]
+    draft = _synthesize(message, [full_context], provider_override, conv_context=recent_snippet)
+    answer = draft or full_context[:1200]
 
     try:
         store_append_step(
@@ -225,20 +467,20 @@ def ask(
 
     # LIGHT REFINE
     if draft and len(hits_all) > 0:
-        refined = _refine(message, draft, contexts[:3], provider_override, conv_context=recent_snippet)
+        refined = _refine(message, draft, [full_context], provider_override, conv_context=recent_snippet)
         if refined:
             answer = refined
 
     refs_payload = []
     try:
-        for ref in (extra_contexts or []):
+        for ref in url_contexts or []:
             pass
     except Exception:
         pass
 
     # Prepare references (top few)
     refs: List[Dict[str, object]] = []
-    local_hits = hits_all[:min(len(hits_all), max(5, int(settings.deep_research_local_top_k or 15)))]
+    local_hits = _rank_local_refs_with_recency(hits_all)[:min(len(hits_all), max(5, int(settings.deep_research_local_top_k or 15)))]
     doc_meta: Dict[int, Dict[str, object]] = {}
     if local_hits:
         doc_ids = sorted({int(h.document_id) for h in local_hits})
@@ -266,6 +508,12 @@ def ask(
                 "excerpt": h.content,
                 "rank": idx,
             })
+        for idx, ctx in enumerate(url_contexts[:max(3, len(url_contexts))], start=1):
+            refs.append({
+                "source": "url",
+                "snippet": ctx[:480],
+                "rank": idx,
+            })
         web_limit = max(5, int(settings.deep_research_web_top_k or 15))
         for idx, hit in enumerate(web_hits[:web_limit], start=1):
             refs.append({
@@ -277,6 +525,19 @@ def ask(
             })
     except Exception:
         pass
+
+    source_confidence = _compute_source_confidence(local_hits, web_hits, url_contexts)
+
+    followups: List[str] = []
+    if settings.deep_research_followup_enable:
+        should_prompt = confidence < float(settings.deep_research_followup_threshold or 0.0)
+        if should_prompt:
+            preview = full_context[:1200]
+            followups = _generate_followup_questions(
+                message,
+                preview,
+                max_questions=int(settings.deep_research_followup_max_questions or 2),
+            )
 
     st.messages.append(Message("assistant", answer))
     st.trim(keep=20)
@@ -290,6 +551,8 @@ def ask(
             context_refs=refs,
             metadata={
                 "confidence": confidence,
+                "source_confidence": source_confidence,
+                "followup_questions": followups,
                 "web_attempted": web_attempted,
                 "elapsed_seconds": round(time.monotonic() - start_ts, 2),
             },
@@ -303,6 +566,8 @@ def ask(
         "message_count": len(st.messages),
         "references": refs,
         "confidence": confidence,
+        "source_confidence": source_confidence,
+        "followup_questions": followups,
         "web_attempted": web_attempted,
         "elapsed_seconds": round(time.monotonic() - start_ts, 2),
     }

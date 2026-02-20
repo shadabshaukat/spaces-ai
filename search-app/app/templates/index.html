@@ -1104,6 +1104,16 @@
       return parts.join('');
     }
 
+    function renderFollowupQuestions(questions) {
+      if (!Array.isArray(questions) || !questions.length) return '';
+      const items = questions.map(q => `<li>${escapeHtml(q)}</li>`).join('');
+      return `
+        <div class="dr-followup">
+          <div class="dr-followup-title">Suggested follow-up questions</div>
+          <ul>${items}</ul>
+        </div>`;
+    }
+
     function normalizeUrl(raw) {
       if (!raw || typeof raw !== 'string') return '#';
       const trimmed = raw.trim();
@@ -1207,7 +1217,8 @@
           const references = step.context_refs && step.context_refs.length ? step.context_refs : step.metadata?.references;
           const meta = step.metadata || {};
           const badges = renderDrMetadata(meta);
-          div.innerHTML = `<div class="bubble">${ts}${badges ? `<div class="dr-meta">${badges}</div>` : ''}${renderLLMText(step.content || '')}${renderDrReferences(references)}</div>`;
+          const followups = renderFollowupQuestions(meta.followup_questions || []);
+          div.innerHTML = `<div class="bubble">${ts}${badges ? `<div class="dr-meta">${badges}</div>` : ''}${renderLLMText(step.content || '')}${followups}${renderDrReferences(references)}</div>`;
         } else {
           div.innerHTML = `<div class="bubble">${ts}<p>${escapeHtml(step.content || '')}</p></div>`;
         }

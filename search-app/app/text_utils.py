@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import logging
 from dataclasses import dataclass
 from typing import List, Tuple
 import csv
@@ -11,6 +12,8 @@ from bs4 import BeautifulSoup
 from pypdf import PdfReader
 from docx import Document
 from .config import settings
+
+logger = logging.getLogger(__name__)
 
 
 # Prefer keeping paragraph boundaries; avoid collapsing all newlines into spaces
@@ -359,12 +362,14 @@ def extract_text_from_image(path: str) -> str:
         from PIL import Image  # type: ignore
         import pytesseract  # type: ignore
     except Exception as e:
-        raise ValueError("Image OCR requires optional dependencies pillow and pytesseract") from e
+        logger.warning("Image OCR unavailable; continuing without extracted text: %s", e)
+        return ""
     img = Image.open(path)
     try:
         txt = pytesseract.image_to_string(img)
     except Exception as e:
-        raise ValueError(f"OCR failed: {e}") from e
+        logger.warning("OCR failed for image %s: %s", path, e)
+        return ""
     return _normalize_whitespace_preserve_paragraphs(txt or "")
 
 

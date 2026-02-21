@@ -4,13 +4,17 @@
 Run the following SQL statements manually (psql) to drop all SpacesAI tables:
 
 ```sql
-DROP TABLE IF EXISTS document_tables CASCADE;
-DROP TABLE IF EXISTS image_assets CASCADE;
-DROP TABLE IF EXISTS user_activity CASCADE;
-DROP TABLE IF EXISTS chunks CASCADE;
-DROP TABLE IF EXISTS documents CASCADE;
-DROP TABLE IF EXISTS spaces CASCADE;
-DROP TABLE IF EXISTS users CASCADE;
+ DROP TABLE IF EXISTS chunks                         CASCADE;
+ DROP TABLE IF EXISTS conversation_external_docs     CASCADE;
+ DROP TABLE IF EXISTS deep_research_conversations    CASCADE;
+ DROP TABLE IF EXISTS deep_research_notebook_entries CASCADE;
+ DROP TABLE IF EXISTS deep_research_steps            CASCADE;
+ DROP TABLE IF EXISTS document_tables                CASCADE;
+ DROP TABLE IF EXISTS documents                      CASCADE;
+ DROP TABLE IF EXISTS image_assets                   CASCADE;
+ DROP TABLE IF EXISTS spaces                         CASCADE;
+ DROP TABLE IF EXISTS user_activity                  CASCADE;
+ DROP TABLE IF EXISTS users                          CASCADE;
 ```
 
 ## OpenSearch

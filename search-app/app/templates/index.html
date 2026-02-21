@@ -913,9 +913,7 @@
         if (item.object_url || item.thumbnail_object_url) meta.push('<span class="badge badge-remote">Remote</span>');
         const docId = item.doc_id != null ? Number(item.doc_id) : null;
         const primaryHref = item.file_url || (docId != null ? `/api/doc-download?doc_id=${encodeURIComponent(docId)}` : '');
-        const remoteHref = item.object_url ? escapeHtml(item.object_url) : null;
         const sourceLink = primaryHref ? `<a class="ghost" href="${escapeHtml(primaryHref)}" target="_blank" rel="noopener">Open document</a>` : '';
-        const remoteLink = remoteHref ? `<a class="ghost" href="${remoteHref}" target="_blank" rel="noopener">Object copy</a>` : '';
         return `
           <div class="image-card ${size}">
             <button class="image-card-thumb" type="button" data-image-full="${escapeHtml(fullImage)}" data-image-caption="${caption}">
@@ -926,7 +924,7 @@
               <div class="image-card-meta">${meta.join('')}</div>
               <p class="image-card-caption">${caption}</p>
               <div class="image-card-tags">${tagBadges || '<span class="muted">No tags</span>'}</div>
-              <div class="image-card-actions">${sourceLink}${remoteLink}</div>
+              <div class="image-card-actions">${sourceLink}</div>
             </div>
           </div>`;
       }).join('');
@@ -1421,7 +1419,7 @@
             <span>${entry.created_at ? new Date(entry.created_at).toLocaleString() : ''}</span>
             <div class="note-actions">
               <button type="button" class="ghost" data-dr-delete-note="${entry.entry_id}">Delete</button>
-            </div>
+            
           </div>
         `;
         frag.appendChild(card);
@@ -2013,14 +2011,13 @@
               const remote = (img.object_url || img.thumbnail_object_url) ? '<span class="badge badge-remote">Remote</span>' : '';
               const fileUrl = img.file_url || (doc.id ? `/api/doc-download?doc_id=${doc.id}` : '');
               const downloadLink = fileUrl ? `<a class="ghost" href="${escapeHtml(fileUrl)}" target="_blank" rel="noopener">Open document</a>` : '';
-              const objectLink = img.object_url ? `<a class="ghost" href="${escapeHtml(img.object_url)}" target="_blank" rel="noopener">Object copy</a>` : '';
               return `
                 <div class="kb-image-card">
                   <div class="kb-image-thumb">${thumb ? `<img src="${thumb}" alt="thumbnail for doc ${doc.id}" loading="lazy" />` : '<div class="thumb-placeholder">No preview</div>'}</div>
                   <div class="kb-image-body">
                     <div class="kb-image-caption">${caption} ${remote}</div>
                     <div class="kb-image-tags">${tags || '<span class="muted">No tags</span>'}</div>
-                    <div class="kb-image-actions">${downloadLink}${objectLink}</div>
+                    <div class="kb-image-actions">${downloadLink}</div>
                   </div>
                 </div>`;
             }).join('');
@@ -2039,7 +2036,7 @@
                   <div class="kb-doc-actions">
                     ${downloadAction}
                     <button class="ghost" data-delete-doc-id="${doc.id}">Delete</button>
-                  </div>
+                    
                 </div>
                 ${metaHtml}
                 <div class="kb-doc-body">

@@ -126,6 +126,8 @@ class OpenSearchAdapter:
                     "thumbnail_path": {"type": "keyword"},
                     "tags": {"type": "keyword"},
                     "caption": {"type": "text"},
+                    "caption_full": {"type": "text"},
+                    "ocr_text": {"type": "text"},
                     "vector": {
                         "type": "knn_vector",
                         "dimension": dim,
@@ -225,7 +227,7 @@ class OpenSearchAdapter:
             }
         }
 
-    def index_image_asset(self, *, user_id: int, space_id: Optional[int], doc_id: int, image_id: int, file_path: str, thumbnail_path: str, tags: list[str], caption: str, vector: Optional[List[float]], refresh: bool = False) -> None:
+    def index_image_asset(self, *, user_id: int, space_id: Optional[int], doc_id: int, image_id: int, file_path: str, thumbnail_path: str, tags: list[str], caption: str, ocr_text: str | None, vector: Optional[List[float]], refresh: bool = False) -> None:
         self.ensure_image_index()
         if vector is None:
             logger.debug("Skipping image vector index because embedding missing (doc_id=%s image_id=%s)", doc_id, image_id)
@@ -240,6 +242,8 @@ class OpenSearchAdapter:
             "thumbnail_path": thumbnail_path,
             "tags": tags,
             "caption": caption,
+            "caption_full": caption,
+            "ocr_text": ocr_text or "",
             "vector": vector,
         }
         os_client.index(index=settings.image_index_name, id=f"{doc_id}:{image_id}", body=doc, refresh=refresh)
@@ -272,7 +276,14 @@ class OpenSearchAdapter:
         if query:
             query_part = {
                 "bool": {
-                    "must": [{"multi_match": {"query": query, "fields": ["caption^2", "tags"]}}],
+                    "must": [
+                        {
+                            "multi_match": {
+                                "query": query,
+                                "fields": ["caption_full^3", "caption^2", "ocr_text^2", "tags"],
+                            }
+                        }
+                    ],
                     "filter": filters,
                 }
             }
@@ -305,7 +316,17 @@ class OpenSearchAdapter:
             }
             body = {
                 "size": int(top_k),
-                "query": knn_query,
+                "query": {
+                    "function_score": {
+                        "query": knn_query,
+                        "boost_mode": "sum",
+                        "score_mode": "sum",
+                        "functions": [
+                            {"weight": settings.image_search_vector_weight},
+                            {"filter": query_part, "weight": settings.image_search_text_weight},
+                        ],
+                    }
+                },
             }
             res = os_client.search(index=settings.image_index_name, body=body)
             return res.get("hits", {}).get("hits", [])
@@ -328,7 +349,17 @@ class OpenSearchAdapter:
                 knn_query["knn"]["filter"] = {"bool": {"filter": filters}}
             body = {
                 "size": int(top_k),
-                "query": knn_query,
+                "query": {
+                    "function_score": {
+                        "query": knn_query,
+                        "boost_mode": "sum",
+                        "score_mode": "sum",
+                        "functions": [
+                            {"weight": settings.image_search_vector_weight},
+                            {"filter": query_part, "weight": settings.image_search_text_weight},
+                        ],
+                    }
+                },
             }
             res = os_client.search(index=settings.image_index_name, body=body)
             return res.get("hits", {}).get("hits", [])
@@ -353,7 +384,17 @@ class OpenSearchAdapter:
                 f"/{settings.image_index_name}/_knn_search",
                 body=knn_body,
             )
-            return res.get("hits", {}).get("hits", [])
+            hits = res.get("hits", {}).get("hits", [])
+            if not query:
+                return hits
+            text_hits = os_client.search(index=settings.image_index_name, body={"size": int(top_k), "query": query_part}).get("hits", {}).get("hits", [])
+            combined = hits + text_hits
+            seen = {}
+            for h in combined:
+                h_id = h.get("_id") or h.get("_source", {}).get("image_id")
+                if h_id not in seen:
+                    seen[h_id] = h
+            return list(seen.values())[: int(top_k)]
         except Exception as e:
             last_err = e
             logger.warning("OpenSearch image _knn_search failed: %s", e)

@@ -45,6 +45,6 @@ done
 
 export DEBUG_LOGGING="$DEBUG_LOGGING_VALUE"
 
-# Install dependencies including optional PDF/Office/Vision/Image extras for robust multimodal ingest
-uv sync --extra pdf --extra office --extra vision --extra audio --extra image
+# Install dependencies including optional PDF/Office/Vision/Image/Caption extras for robust multimodal ingest
+uv sync --extra pdf --extra office --extra vision --extra audio --extra image --extra caption
 uv run searchapp

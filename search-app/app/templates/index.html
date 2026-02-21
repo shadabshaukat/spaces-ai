@@ -1960,6 +1960,11 @@
             const created = formatDateLabel(doc.created_at);
             if (created) metaChips.push(`<span class="badge badge-soft">${escapeHtml(created)}</span>`);
             if (doc.metadata && doc.metadata.object_url) metaChips.push('<span class="badge badge-remote">Remote</span>');
+            if (doc.image_embedding_status === 'stored') {
+              metaChips.push('<span class="badge badge-soft">Image embedding stored</span>');
+            } else if (doc.image_embedding_status === 'missing') {
+              metaChips.push('<span class="badge badge-warn">Image embedding missing</span>');
+            }
             const metaHtml = metaChips.length ? `<div class="kb-doc-meta">${metaChips.join('')}</div>` : '';
 
             const docImages = Array.isArray(doc.images) ? doc.images : [];
@@ -2350,14 +2355,15 @@
                       const row = item.querySelector('.progress-row span');
                       if (row && msg.length) row.textContent = `${row.textContent} — processed (${msg.join(', ')})`;
                       if (docId != null && embeddingBadge) {
-                        const diag = await checkImageEmbeddingStatus(docId);
-                        if (diag && diag.postgres) {
-                          const ok = diag.postgres.embedding === true;
-                          embeddingBadge.hidden = false;
-                          embeddingBadge.textContent = ok ? 'Image embedding stored' : 'Image embedding missing';
-                          embeddingBadge.classList.toggle('badge-soft', ok);
-                          embeddingBadge.classList.toggle('badge-warn', !ok);
-                        }
+                        checkImageEmbeddingStatus(docId).then((diag) => {
+                          if (diag && diag.postgres) {
+                            const ok = diag.postgres.embedding === true;
+                            embeddingBadge.hidden = false;
+                            embeddingBadge.textContent = ok ? 'Image embedding stored' : 'Image embedding missing';
+                            embeddingBadge.classList.toggle('badge-soft', ok);
+                            embeddingBadge.classList.toggle('badge-warn', !ok);
+                          }
+                        });
                       }
                     }
                   } catch {}

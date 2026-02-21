@@ -64,6 +64,7 @@ button:hover { filter: brightness(0.98); }
 .hit-content { font-size: 14px; margin-bottom: 6px; }
 .badge { display: inline-block; background: #eef2ff; color: #1e3a8a; padding: 2px 6px; border-radius: 999px; font-size: 11px; margin-left: 6px; }
 .badge-soft { background: #f3f4f6; color: #374151; }
+.badge-warn { background: #fee2e2; color: #b91c1c; }
 .badge-web { background: #fef3c7; color: #92400e; }
 .badge-local { background: #dcfce7; color: #065f46; }
 .badge-remote { background: #e0f2fe; color: #075985; }

@@ -521,6 +521,13 @@ def _process_image_asset(
             logger.warning("Vision model unavailable while embedding image %s: %s", file_path, exc)
         except Exception as exc:
             logger.warning("Failed to embed image %s: %s", file_path, exc)
+    if vec is None:
+        logger.warning(
+            "Image embedding missing for doc_id=%s file=%s ready=%s",
+            doc_id,
+            file_path,
+            ready,
+        )
 
     oci_object = metadata.get("object_url")
     oci_thumb_url = None

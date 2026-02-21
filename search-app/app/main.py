@@ -122,6 +122,14 @@ def _augment_image_payload(doc_id: int, image: Dict[str, Any], metadata: Dict[st
     return payload
 
 
+def _image_embedding_status_from_doc(meta: Dict[str, Any] | None, images: List[Dict[str, Any]]) -> str | None:
+    if not images:
+        return None
+    if isinstance(meta, dict) and meta.get("image_warning"):
+        return "missing"
+    return "stored"
+
+
 def _normalize_tags(raw: Any) -> List[str]:
     tags: List[str] = []
     if raw is None:
@@ -464,14 +472,21 @@ async def upload(request: Request, files: List[UploadFile] = File(...), space_id
             if oci_url:
                 meta["object_url"] = oci_url
             ing = ingest_file_path(local_path, user_id=uid, space_id=sid, title=title_no_ext, metadata=meta)
-            results.append({
+            result_entry: Dict[str, Any] = {
                 "filename": title,
                 "title": title_no_ext,
                 "document_id": ing.document_id,
                 "chunks": ing.num_chunks,
                 "object_url": oci_url,
                 "status": "ok",
-            })
+            }
+            if ext in IMAGE_EXTS:
+                try:
+                    diag = await api_image_search_diagnostics(request, doc_id=int(ing.document_id))
+                    result_entry["image_diagnostics"] = diag
+                except Exception:
+                    logger.exception("Upload diagnostics failed for doc_id=%s", ing.document_id)
+            results.append(result_entry)
             is_image = ext in IMAGE_EXTS
             if is_image:
                 bump_revision("image", uid, sid)
@@ -1537,6 +1552,7 @@ async def api_kb(request: Request, limit: int = 200, offset: int = 0, space_id: 
                     doc_id = int(r[0])
                     metadata = meta_by_doc.get(doc_id) or {}
                     doc_images = [_augment_image_payload(doc_id, img, metadata) for img in image_map.get(doc_id, [])]
+                    image_embedding_status = _image_embedding_status_from_doc(metadata, doc_images)
                     preview_url = doc_images[0].get("thumbnail_url") if doc_images else None
                     if not preview_url and isinstance(metadata, dict):
                         preview_url = metadata.get("thumbnail_object_url")
@@ -1551,6 +1567,7 @@ async def api_kb(request: Request, limit: int = 200, offset: int = 0, space_id: 
                             "chunk_count": chunk_counts.get(doc_id, 0),
                             "metadata": metadata,
                             "images": doc_images,
+                            "image_embedding_status": image_embedding_status,
                             "thumbnail_preview_url": preview_url,
                         }
                     )

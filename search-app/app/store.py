@@ -446,9 +446,13 @@ def ingest_file_path(file_path: str, user_id: int, space_id: Optional[int] = Non
                 if img_meta_updates:
                     doc_metadata.update(img_meta_updates)
                     _update_document_metadata(conn, doc_id, doc_metadata)
+            except VisionModelUnavailable as exc:
+                logger.warning("Vision model unavailable for image doc_id=%s: %s", doc_id, exc)
+                doc_metadata["image_warning"] = str(exc)
+                _update_document_metadata(conn, doc_id, doc_metadata)
             except Exception:
                 logger.exception("Image asset processing failed for doc_id=%s", doc_id)
-                raise
+                # Do not fail ingestion for images; continue without embeddings.
 
     try:
         if settings.search_backend == "opensearch" and settings.opensearch_dual_write:
@@ -484,9 +488,10 @@ def _process_image_asset(
 ) -> Dict[str, Any]:
     ready, detail = vision_dependencies_ready()
     if not ready:
-        raise VisionModelUnavailable(detail or "Vision dependencies not available")
+        logger.warning("Vision dependencies unavailable for image asset: %s", detail or "missing dependencies")
     if Image is None:
-        raise RuntimeError("Pillow not available for image metadata")
+        logger.warning("Pillow unavailable; skipping image asset processing for doc_id=%s", doc_id)
+        return {}
     with Image.open(file_path) as img:
         width, height = img.size
         rgb_img = img.convert("RGB")
@@ -503,8 +508,15 @@ def _process_image_asset(
 
     tags, caption = _derive_image_tags_caption(thumb_img, file_path, metadata)
 
-    emb = embed_image_paths([file_path])
-    vec = emb[0] if emb else None
+    vec = None
+    if ready:
+        try:
+            emb = embed_image_paths([file_path])
+            vec = emb[0] if emb else None
+        except VisionModelUnavailable as exc:
+            logger.warning("Vision model unavailable while embedding image %s: %s", file_path, exc)
+        except Exception as exc:
+            logger.warning("Failed to embed image %s: %s", file_path, exc)
 
     oci_object = metadata.get("object_url")
     oci_thumb_url = None

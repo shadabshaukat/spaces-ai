@@ -256,6 +256,12 @@
   </main>
 
   <div id="toast" class="toast" hidden></div>
+  <div id="imagePreviewBackdrop" class="modal-backdrop" hidden></div>
+  <div id="imagePreviewModal" class="image-preview-modal" hidden role="dialog" aria-modal="true" aria-label="Image preview">
+    <button id="imagePreviewClose" class="ghost" type="button" aria-label="Close image preview">✕</button>
+    <img id="imagePreviewImg" alt="" />
+    <div id="imagePreviewCaption" class="muted"></div>
+  </div>
 
   <div id="drBackdrop" class="dr-backdrop" hidden></div>
   <div id="drModal" class="dr-modal" hidden aria-modal="true" role="dialog">
@@ -782,6 +788,11 @@
     const imageResultsGrid = document.getElementById('imageResultsGrid');
     const imageEmptyState = document.getElementById('imageResultsEmpty');
     const imageLoading = document.getElementById('imageSearchLoading');
+    const imagePreviewBackdrop = document.getElementById('imagePreviewBackdrop');
+    const imagePreviewModal = document.getElementById('imagePreviewModal');
+    const imagePreviewImg = document.getElementById('imagePreviewImg');
+    const imagePreviewCaption = document.getElementById('imagePreviewCaption');
+    const imagePreviewClose = document.getElementById('imagePreviewClose');
     const unifiedModeState = {
       active: 'text',
       imageHasResults: false,
@@ -858,6 +869,8 @@
         const rawThumb = item.thumbnail_url || item.thumbnail_object_url || item.thumbnail_path || item.file_path || '';
         const thumb = rawThumb ? escapeHtml(rawThumb) : '';
         const caption = escapeHtml(item.caption || 'Untitled image');
+        const imageId = item.image_id != null ? String(item.image_id) : '';
+        const fullImage = imageId ? `/api/image-assets/${encodeURIComponent(imageId)}` : (item.object_url || item.file_path || '');
         const tags = Array.isArray(item.tags) ? item.tags : [];
         const tagBadges = tags.map(t => `<span class="badge badge-soft">${escapeHtml(t)}</span>`).join('');
         const meta = [];
@@ -874,7 +887,9 @@
         const remoteLink = remoteHref ? `<a class="ghost" href="${remoteHref}" target="_blank" rel="noopener">Object copy</a>` : '';
         return `
           <div class="image-card ${size}">
-            <div class="image-card-thumb">${thumb ? `<img src="${thumb}" alt="result ${item.rank || ''}" loading="lazy" />` : '<div class="thumb-placeholder">No preview</div>'}</div>
+            <button class="image-card-thumb" type="button" data-image-full="${escapeHtml(fullImage)}" data-image-caption="${caption}">
+              ${thumb ? `<img src="${thumb}" alt="result ${item.rank || ''}" loading="lazy" />` : '<div class="thumb-placeholder">No preview</div>'}
+            </button>
             <div class="image-card-body">
               <div class="image-card-meta">${meta.join('')}</div>
               <p class="image-card-caption">${caption}</p>
@@ -884,6 +899,28 @@
           </div>`;
       }).join('');
       imageResultsGrid.innerHTML = cards;
+    }
+
+    function openImagePreview(src, caption) {
+      if (!imagePreviewModal || !imagePreviewBackdrop || !imagePreviewImg) return;
+      if (!src) return;
+      imagePreviewImg.src = src;
+      imagePreviewImg.alt = caption || 'Image preview';
+      if (imagePreviewCaption) imagePreviewCaption.textContent = caption || '';
+      imagePreviewBackdrop.hidden = false;
+      imagePreviewModal.hidden = false;
+      imagePreviewBackdrop.classList.add('open');
+      imagePreviewModal.classList.add('open');
+    }
+
+    function closeImagePreview() {
+      if (!imagePreviewModal || !imagePreviewBackdrop || !imagePreviewImg) return;
+      imagePreviewModal.classList.remove('open');
+      imagePreviewBackdrop.classList.remove('open');
+      imagePreviewModal.hidden = true;
+      imagePreviewBackdrop.hidden = true;
+      imagePreviewImg.src = '';
+      if (imagePreviewCaption) imagePreviewCaption.textContent = '';
     }
 
     async function doImageSearch() {
@@ -950,6 +987,22 @@
       if (imageFileEl) imageFileEl.value = '';
       resetImageResults();
     }
+
+    imageResultsGrid?.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-image-full]');
+      if (!btn) return;
+      const src = btn.getAttribute('data-image-full') || '';
+      const caption = btn.getAttribute('data-image-caption') || '';
+      openImagePreview(src, caption);
+    });
+
+    imagePreviewClose?.addEventListener('click', closeImagePreview);
+    imagePreviewBackdrop?.addEventListener('click', closeImagePreview);
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && imagePreviewModal && !imagePreviewModal.hidden) {
+        closeImagePreview();
+      }
+    });
 
     const drEls = {
       modal: document.getElementById('drModal'),

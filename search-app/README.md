@@ -16,7 +16,7 @@ This README covers application setup, configuration, endpoints, Deep Research wo
 - Multi-tenant auth with session cookies; private Spaces
 - Upload → robust extractors (PDF/HTML/TXT/DOCX/PPTX/XLSX/CSV/MD/JSON/Images OCR/Audio+Video transcription + image embeddings/captions)
 - Chunking + embeddings; dual-write to OpenSearch for retrieval
-- Retrieval: semantic (KNN), fulltext (BM25), hybrid (RRF), **image search** (OpenCLIP + pgvector/OpenSearch)
+- Retrieval: semantic (KNN), fulltext (BM25), hybrid (RRF), **image search** (OpenCLIP + pgvector/OpenSearch) with thumbnail grid + modal preview
 - Deep Research mode with agentic planning, selective web lookups, confidence scoring, and rich reference metadata
 - Recency-aware OpenSearch scoring via `created_at` decay
 - RAG over the selected Space with unified, pluggable LLM providers
@@ -105,6 +105,32 @@ cp .env.example .env
 ```bash
 uv sync --extra pdf --extra office --extra vision --extra audio --extra image
 uv run searchapp
+```
+
+### Image Search (Beta)
+- Upload images (PNG/JPG/TIFF/BMP/GIF) to create OpenCLIP embeddings and thumbnails.
+- Use the Image Search tab with a natural-language query or reference image.
+- Click any result thumbnail to open a full-size preview modal.
+- Works with PostgreSQL pgvector or OpenSearch image index (based on `SEARCH_BACKEND`).
+
+```text
+Image ingestion + search flow
+
+Upload
+  ├─ Local file (UPLOAD_DIR) ───────┐
+  ├─ Optional OCI object storage ─┐ │
+  └─ Postgres image_assets (metadata + vector)
+                        │
+                        ├─ If SEARCH_BACKEND=opensearch → OpenSearch index (spacesai_images)
+                        └─ If SEARCH_BACKEND=pgvector  → Postgres pgvector search
+
+Query
+  ├─ Text/ref → OpenCLIP embedding
+  └─ Search vectors in OpenSearch or Postgres (based on backend)
+
+Results
+  ├─ Thumbnails via /api/image-assets/{id}/thumbnail
+  └─ Full image via /api/image-assets/{id}
 ```
 
 Open http://0.0.0.0:8000
@@ -263,6 +289,7 @@ Authentication for most endpoints is via session cookies acquired by /api/regist
   - POST /api/upload (multipart files[]; optional form space_id)
   - POST /api/search { query, mode: semantic|fulltext|hybrid|rag, top_k, space_id?, llm_provider? }
   - POST /api/image-search { query?, tags?, top_k?, vector?, space_id? }
+  - GET  /api/image-search/config
   - GET  /api/doc-summary?doc_id=
   - GET  /api/chunks-preview?doc_id=&limit=
 

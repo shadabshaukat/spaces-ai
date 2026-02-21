@@ -803,6 +803,33 @@ async def api_image_search(request: Request):
     return {"results": results, "count": len(results)}
 
 
+@app.get("/api/image-search/config")
+async def api_image_search_config(request: Request):
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    backend = settings.search_backend
+    storage_backend = settings.storage_backend
+    use_opensearch = backend == "opensearch" and bool(settings.opensearch_host)
+    return {
+        "search_backend": backend,
+        "storage_backend": storage_backend,
+        "enable_image_storage": bool(settings.enable_image_storage),
+        "image_vectors_read_from": "opensearch" if use_opensearch else "postgres",
+        "image_vectors_stored_in": {
+            "postgres": True,
+            "opensearch": bool(settings.opensearch_host) if backend == "opensearch" else False,
+        },
+        "image_files_stored_in": {
+            "local": storage_backend in {"local", "both"},
+            "oci": storage_backend in {"oci", "both"} and settings.oci_os_upload_enabled,
+        },
+        "image_index": settings.image_index_name,
+        "image_embed_model": settings.image_embed_model,
+        "image_embed_dim": settings.image_embed_dim,
+    }
+
+
 @app.post("/api/llm-test")
 async def llm_test(payload: Dict[str, Any] | None = None):
     """
@@ -1504,6 +1531,44 @@ async def api_image_thumbnail(request: Request, image_id: int):
             return RedirectResponse(remote, status_code=307)
 
     return JSONResponse(status_code=404, content={"error": "thumbnail unavailable"})
+
+
+@app.get("/api/image-assets/{image_id}")
+async def api_image_asset(request: Request, image_id: int):
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    uid = int(user.get("user_id") or user.get("id"))
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT ia.file_path, ia.document_id, d.user_id, COALESCE(d.metadata,'{}'::jsonb)
+                FROM image_assets ia
+                JOIN documents d ON d.id = ia.document_id
+                WHERE ia.id = %s
+                """,
+                (int(image_id),),
+            )
+            row = cur.fetchone()
+    if not row:
+        return JSONResponse(status_code=404, content={"error": "not found"})
+    file_rel, doc_id, owner_id, metadata = row
+    if int(owner_id) != uid:
+        return JSONResponse(status_code=404, content={"error": "not found"})
+
+    path = _resolve_asset_path(file_rel)
+    if path and path.exists():
+        media_type = mimetypes.guess_type(str(path))[0] or "image/jpeg"
+        return FileResponse(str(path), media_type=media_type)
+
+    meta = metadata or {}
+    if isinstance(meta, dict):
+        remote = meta.get("object_url")
+        if remote:
+            return RedirectResponse(remote, status_code=307)
+
+    return JSONResponse(status_code=404, content={"error": "image unavailable"})
 
 
 @app.get("/api/doc-url")

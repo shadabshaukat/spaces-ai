@@ -58,7 +58,7 @@
         <section id="unifiedSearchPanel" class="search-panel" role="region" aria-label="Search workspace">
           <div class="search-tabs" role="tablist" aria-label="Search mode">
             <button id="searchModeText" class="search-tab active" role="tab" aria-selected="true">Text Search</button>
-            <button id="searchModeImage" class="search-tab" role="tab" aria-selected="false">Image Search <span class="beta-tag">Beta</span></button>
+            <button id="searchModeImage" class="search-tab" role="tab" aria-selected="false">Image Search</button>
           </div>
           <div class="searchbar">
             <input id="searchInput" class="search-input" type="text" placeholder="Search documents…" autocomplete="off" />
@@ -161,7 +161,7 @@
                   <button id="imageClearBtn" class="ghost" type="button">Clear image inputs</button>
                 </div>
               </div>
-          <div class="muted"><strong>Beta:</strong> Image search is experimental—combine descriptive text, tags, or a reference upload to improve similarity results.</div>
+          <div class="muted">Tip: combine descriptive text, tags, or a reference upload to improve similarity results.</div>
             </div>
           </div>
         </section>
@@ -899,7 +899,8 @@
         return `
           <div class="image-card ${size}">
             <button class="image-card-thumb" type="button" data-image-full="${escapeHtml(fullImage)}" data-image-caption="${caption}">
-              ${thumb ? `<img src="${thumb}" alt="result ${item.rank || ''}" loading="lazy" />` : '<div class="thumb-placeholder">No preview</div>'}
+              ${thumb ? `<img src="${thumb}" alt="result ${item.rank || ''}" loading="lazy" onerror="this.closest('.image-card-thumb').classList.add('no-thumb')" />` : '<div class="thumb-placeholder">No preview</div>'}
+              <div class="image-thumb-overlay">View</div>
             </button>
             <div class="image-card-body">
               <div class="image-card-meta">${meta.join('')}</div>
@@ -2350,7 +2351,6 @@
                       const docId = res.document_id || res.documentId;
                       const chunks = res.chunks || res.num_chunks;
                       const msg = [];
-                      if (docId != null) msg.push(`doc ${docId}`);
                       if (chunks != null) msg.push(`${chunks} chunks`);
                       const row = item.querySelector('.progress-row span');
                       if (row && msg.length) row.textContent = `${row.textContent} — processed (${msg.join(', ')})`;

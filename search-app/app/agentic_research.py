@@ -48,6 +48,8 @@ class SmartResearchAgent:
         if not hits:
             return True
         unique_docs = len({h.document_id for h in hits if h.document_id is not None})
+        if unique_docs < 2 or len(hits) < 4:
+            return True
         coverage = min(len(hits) / 8.0, 1.0)
         diversity = min(unique_docs / 5.0, 1.0)
         distance_scores = []
@@ -62,6 +64,8 @@ class SmartResearchAgent:
                 semantic_quality = 1.0
             else:
                 semantic_quality = max(0.0, min(1.0, 1.0 - best))
+        if semantic_quality and semantic_quality < 0.35:
+            return True
         heuristic = 0.35 * coverage + 0.35 * diversity + 0.3 * semantic_quality
         logger.debug("DR heuristic coverage=%s diversity=%s semantic=%s total=%s", coverage, diversity, semantic_quality, heuristic)
         return heuristic < 0.55

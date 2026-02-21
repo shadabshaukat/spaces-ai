@@ -253,6 +253,10 @@ class OpenSearchAdapter:
 
         knn_part = None
         if vector is not None:
+            vector = self._normalize_vector(vector)
+            if not vector:
+                vector = None
+        if vector is not None:
             knn_part = {
                 "field": "vector",
                 "query_vector": vector,

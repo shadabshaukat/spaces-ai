@@ -294,6 +294,11 @@ def _image_search_postgres(*, vector: Optional[List[float]], query: Optional[str
     if not settings.enable_image_storage:
         return []
 
+    if vector is not None:
+        vector = [float(v) for v in vector if isinstance(v, (int, float))]
+        if not vector:
+            vector = None
+
     where = []
     filter_params: List[Any] = []
     if user_id is not None:
@@ -308,6 +313,8 @@ def _image_search_postgres(*, vector: Optional[List[float]], query: Optional[str
     if query and vector is None:
         where.append("ia.caption ILIKE %s")
         filter_params.append(f"%{query}%")
+    if vector is not None:
+        where.append("ia.embedding IS NOT NULL")
 
     order_clause = "ia.created_at DESC"
     distance_expr = "NULL::double precision AS distance"

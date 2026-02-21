@@ -309,6 +309,10 @@
             <button id="drNotebookToggleSecondary" class="ghost text-link" type="button">Notebook</button>
           </div>
           <div class="dr-composer-right">
+            <span id="drIngestStatus" class="dr-ingest-status" hidden>
+              <span class="dr-ingest-spinner" aria-hidden="true"></span>
+              <span class="dr-ingest-text">Ingesting URLs…</span>
+            </span>
             <span id="drWebStatus" class="muted"></span>
             <button id="drSend" class="primary">Send</button>
           </div>
@@ -352,6 +356,23 @@
       </div>
     </aside>
     <div id="drDrawerBackdrop" class="dr-drawer-backdrop" hidden></div>
+  </div>
+  <div id="drFollowupBackdrop" class="dr-followup-backdrop" hidden></div>
+  <div id="drFollowupModal" class="dr-followup-modal" hidden role="dialog" aria-modal="true" aria-label="Answer follow-up">
+    <div class="dr-followup-head">
+      <strong>Answer follow-up</strong>
+      <button id="drFollowupClose" class="ghost" title="Close">✕</button>
+    </div>
+    <div class="dr-followup-body">
+      <p class="muted">Follow-up question</p>
+      <div id="drFollowupQuestion" class="dr-followup-question"></div>
+      <label for="drFollowupAnswer">Your response</label>
+      <textarea id="drFollowupAnswer" rows="4" placeholder="Type your response…"></textarea>
+    </div>
+    <div class="dr-followup-actions">
+      <button id="drFollowupCancel" class="ghost">Cancel</button>
+      <button id="drFollowupSend" class="primary">Send response</button>
+    </div>
   </div>
 
   <script>
@@ -938,6 +959,7 @@
       heroStatus: document.getElementById('drHeroStatus'),
       streamIndicator: document.getElementById('drStreamIndicator'),
       webStatus: document.getElementById('drWebStatus'),
+      ingestStatus: document.getElementById('drIngestStatus'),
       forceWeb: document.getElementById('drForceWeb'),
       titleInput: document.getElementById('drActiveTitle'),
       renameBtn: document.getElementById('drRenameBtn'),
@@ -967,6 +989,13 @@
       menuSessions: document.getElementById('drMenuSessions'),
       menuNotebook: document.getElementById('drMenuNotebook'),
       menuReset: document.getElementById('drMenuReset'),
+      followupBackdrop: document.getElementById('drFollowupBackdrop'),
+      followupModal: document.getElementById('drFollowupModal'),
+      followupQuestion: document.getElementById('drFollowupQuestion'),
+      followupAnswer: document.getElementById('drFollowupAnswer'),
+      followupSend: document.getElementById('drFollowupSend'),
+      followupCancel: document.getElementById('drFollowupCancel'),
+      followupClose: document.getElementById('drFollowupClose'),
     };
 
     const drState = {
@@ -977,6 +1006,7 @@
       notebook: [],
       isSending: false,
       followupAutoSend: true,
+      pendingFollowup: null,
     };
 
     function drGetDrawer(which) {
@@ -1058,6 +1088,11 @@
     function drSetStreamIndicator(active) {
       if (!drEls.streamIndicator) return;
       drEls.streamIndicator.hidden = !active;
+    }
+
+    function drSetIngesting(active) {
+      if (!drEls.ingestStatus) return;
+      drEls.ingestStatus.hidden = !active;
     }
 
     function drGenerateSessionTitle() {
@@ -1288,13 +1323,11 @@
         const div = document.createElement('div');
         div.className = 'dr-convo-card' + (convo.conversation_id === drState.conversationId ? ' active' : '');
         div.dataset.drConversation = convo.conversation_id;
-        const title = convo.title || 'Untitled session';
         const snippetRaw = (convo.first_question || '').trim();
-        const snippet = snippetRaw.length > 120 ? `${snippetRaw.slice(0, 120)}…` : snippetRaw;
+        const snippet = snippetRaw.length > 140 ? `${snippetRaw.slice(0, 140)}…` : snippetRaw;
         const updated = convo.updated_at ? new Date(convo.updated_at).toLocaleString() : '';
         div.innerHTML = `
-          <div class="title">${escapeHtml(title)}</div>
-          ${snippet ? `<div class="snippet">${escapeHtml(snippet)}</div>` : ''}
+          <div class="snippet">${escapeHtml(snippet || 'No question yet')}</div>
           <div class="meta">
             <span>${convo.step_count || 0} steps</span>
             ${updated ? `<span>${escapeHtml(updated)}</span>` : ''}
@@ -1303,6 +1336,69 @@
         frag.appendChild(div);
       });
       drEls.convoList.appendChild(frag);
+    }
+
+    function drOpenFollowupModal(question) {
+      if (!drEls.followupModal || !drEls.followupBackdrop) return;
+      drState.pendingFollowup = question;
+      if (drEls.followupQuestion) drEls.followupQuestion.textContent = question || '';
+      if (drEls.followupAnswer) drEls.followupAnswer.value = '';
+      drEls.followupBackdrop.hidden = false;
+      drEls.followupModal.hidden = false;
+      drEls.followupBackdrop.classList.add('open');
+      drEls.followupModal.classList.add('open');
+      drEls.followupAnswer?.focus();
+    }
+
+    function drCloseFollowupModal() {
+      if (!drEls.followupModal || !drEls.followupBackdrop) return;
+      drEls.followupBackdrop.classList.remove('open');
+      drEls.followupModal.classList.remove('open');
+      drEls.followupBackdrop.hidden = true;
+      drEls.followupModal.hidden = true;
+      drState.pendingFollowup = null;
+    }
+
+    async function drSubmitMessage(text) {
+      if (!text || drState.isSending) return;
+      drState.isSending = true;
+      drSetStreamIndicator(true);
+      drSetIngesting(false);
+      const tmpStep = { role: 'user', content: text, created_at: new Date().toISOString(), pending: true };
+      drRenderTimeline([...drState.steps, tmpStep]);
+      try {
+        const cid = await drEnsureConversationId();
+        if (!cid) throw new Error('No conversation');
+        if (drEls.titleInput && !drEls.titleInput.value.trim()) {
+          drEls.titleInput.value = drGenerateSessionTitle();
+        }
+        const provider = document.getElementById('provider')?.value || undefined;
+        const body = {
+          conversation_id: cid,
+          message: text,
+          space_id: state.spaceId,
+          llm_provider: provider,
+          force_web: drEls.forceWeb?.checked || false,
+        };
+        const urls = drExtractUrlsFromText(text);
+        if (urls.length) {
+          body.urls = urls;
+          drSetIngesting(true);
+        }
+        const resp = await api('/api/deep-research/ask', { method: 'POST', body });
+        drUpdateWebStatus(Boolean(resp.web_attempted));
+        await drAutoSaveSessionTitle();
+        await drFetchConversations();
+        await drLoadConversationDetail(cid);
+      } catch (e) {
+        console.error(e);
+        showToast('Failed to send research question');
+        await drLoadConversationDetail(drState.conversationId);
+      } finally {
+        drState.isSending = false;
+        drSetStreamIndicator(false);
+        drSetIngesting(false);
+      }
     }
 
     async function drStartConversation() {
@@ -1452,39 +1548,7 @@
       const text = (drEls.message?.value || '').trim();
       if (!text) return;
       drEls.message.value = '';
-      const urls = drExtractUrlsFromText(text);
-      const tmpStep = { role: 'user', content: text, created_at: new Date().toISOString(), pending: true };
-      drRenderTimeline([...drState.steps, tmpStep]);
-      drState.isSending = true;
-      drSetStreamIndicator(true);
-      try {
-        const cid = await drEnsureConversationId();
-        if (!cid) throw new Error('No conversation');
-        if (drEls.titleInput && !drEls.titleInput.value.trim()) {
-          drEls.titleInput.value = drGenerateSessionTitle();
-        }
-        const provider = document.getElementById('provider')?.value || undefined;
-        const body = {
-          conversation_id: cid,
-          message: text,
-          space_id: state.spaceId,
-          llm_provider: provider,
-          force_web: drEls.forceWeb?.checked || false,
-        };
-        if (urls.length) body.urls = urls;
-        const resp = await api('/api/deep-research/ask', { method: 'POST', body });
-        drUpdateWebStatus(Boolean(resp.web_attempted));
-        await drAutoSaveSessionTitle();
-        await drFetchConversations();
-        await drLoadConversationDetail(cid);
-      } catch (e) {
-        console.error(e);
-        showToast('Failed to send research question');
-        await drLoadConversationDetail(drState.conversationId);
-      } finally {
-        drState.isSending = false;
-        drSetStreamIndicator(false);
-      }
+      await drSubmitMessage(text);
     }
 
     async function drHandleRename() {
@@ -1654,16 +1718,20 @@
       const text = (chip.textContent || '').trim();
       if (!text) return;
       if (drState.isSending) return;
-      if (drState.followupAutoSend) {
-        drEls.message.value = text;
-        drEls.message.focus();
-        drHandleSend();
-      } else {
-        const current = (drEls.message.value || '').trim();
-        drEls.message.value = current ? `${current}\n${text}` : text;
-        drEls.message.focus();
-      }
+      drOpenFollowupModal(text);
     });
+    drEls.followupSend?.addEventListener('click', async () => {
+      const question = drState.pendingFollowup || '';
+      const answer = (drEls.followupAnswer?.value || '').trim();
+      if (!question) { showToast('No follow-up selected'); return; }
+      if (!answer) { showToast('Please add your response'); return; }
+      drCloseFollowupModal();
+      const combined = `Follow-up question: ${question}\nUser response: ${answer}`;
+      await drSubmitMessage(combined);
+    });
+    drEls.followupCancel?.addEventListener('click', () => drCloseFollowupModal());
+    drEls.followupClose?.addEventListener('click', () => drCloseFollowupModal());
+    drEls.followupBackdrop?.addEventListener('click', () => drCloseFollowupModal());
     document.addEventListener('click', (e) => {
       if (!drEls.menuPanel || drEls.menuPanel.hidden) return;
       if (drEls.menuPanel.contains(e.target) || drEls.menuBtn?.contains(e.target)) return;

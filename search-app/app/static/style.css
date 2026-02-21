@@ -108,6 +108,62 @@ button:hover { filter: brightness(0.98); }
 .dr-main-hero { padding: 20px 24px 12px; border-bottom: 1px solid #edf1f7; }
 .dr-main-hero h3 { margin: 0 0 4px 0; font-size: 18px; }
 .dr-main-hero p { margin: 0; font-size: 14px; color: #6b7280; }
+.dr-pipeline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.dr-pipeline-pill {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  color: #6b7280;
+  background: #fff;
+  transition: all 0.2s ease;
+}
+.dr-pipeline-pill.active {
+  color: #1f2937;
+  border-color: #6366f1;
+  background: #eef2ff;
+  box-shadow: 0 0 0 2px rgba(99,102,241,0.15);
+}
+.dr-source-ticker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  font-size: 12px;
+  color: #6b7280;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: all 0.3s ease;
+}
+.dr-source-ticker.active {
+  opacity: 1;
+  transform: translateY(0);
+}
+.dr-source-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: linear-gradient(90deg, #4f46e5, #06b6d4);
+  box-shadow: 0 0 8px rgba(79,70,229,0.4);
+  animation: dr-ticker-pulse 1.4s ease-in-out infinite;
+}
+.dr-source-text {
+  max-width: 360px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .dr-timeline-empty { padding: 40px; text-align: center; color: #6b7280; }
 .dr-timeline-empty h3 { margin-top: 0; color: #111827; }
 .dr-title { display: flex; flex: 1; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
@@ -178,9 +234,16 @@ body.dark .dr-composer textarea { background-color: #0b1220; }
 body.dark .dr-composer textarea:focus { background-color: #0e1530; }
 body.dark .dr-composer textarea::before { opacity: 0.55; }
 body.dark .dr-ingest-status { color: #a5b4fc; }
+body.dark .dr-pipeline-pill { border-color: #1f2937; background: #0b1220; color: #94a3b8; }
+body.dark .dr-pipeline-pill.active { border-color: #818cf8; background: rgba(99,102,241,0.2); color: #e5e7eb; }
+body.dark .dr-source-ticker { background: #0b1220; border-color: #1f2937; color: #a5b4fc; }
 
 @keyframes dr-rainbow {
   to { transform: rotate(360deg); }
+}
+@keyframes dr-ticker-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.7; }
+  50% { transform: scale(1.4); opacity: 1; }
 }
 .dr-composer-actions { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
 .dr-composer-left { display: flex; gap: 10px; flex-wrap: wrap; }

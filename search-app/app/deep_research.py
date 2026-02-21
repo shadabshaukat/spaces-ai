@@ -321,8 +321,13 @@ def _synthesize(question: str, contexts: List[str], provider_override: Optional[
         from .llm import chat as llm_chat
         aggregated = "\n\n".join(contexts)[:16000]
         cc = (conv_context or "").strip()
+        guardrails = (
+            "You must ground every claim in the provided context. "
+            "If the context is insufficient, explicitly say what is missing and avoid speculation. "
+            "Cite the relevant evidence by referring to the section labels (LOCAL KB, USER URL, WEB)."
+        )
         # Prepend recent conversation context to retrieval context so LLM continues the same topic
-        full_ctx = (("Conversation so far:\n" + cc + "\n\n") if cc else "") + aggregated
+        full_ctx = (("Conversation so far:\n" + cc + "\n\n") if cc else "") + guardrails + "\n\n" + aggregated
         return llm_chat(
             question,
             full_ctx,
@@ -341,11 +346,16 @@ def _refine(question: str, draft: str, contexts: List[str], provider_override: O
         cc = (conv_context or "").strip()[:1200]
         ctx_blob = "\n\n".join(contexts)[:15000]
         conversation_block = f"Conversation so far (truncated):\n{cc}\n\n" if cc else ""
+        guardrails = (
+            "Ground each statement in the provided context. "
+            "If evidence is missing or conflicting, say so clearly rather than guessing. "
+            "Prefer concise, factual language."
+        )
         prompt = (
             "Please refine and improve the following draft answer using the provided context and conversation so far.\n\n"
             f"Question: {question}\n\n"
             f"{conversation_block}"
-            f"Draft Answer:\n{draft}\n\nContext:\n{ctx_blob}\n\n"
+            f"Draft Answer:\n{draft}\n\n{guardrails}\n\nContext:\n{ctx_blob}\n\n"
             "Return a concise, well-structured answer grounded in the context and consistent with the conversation."
         )
         return llm_chat(prompt, "", provider_override=provider_override, max_tokens=900, temperature=0.2)

@@ -146,8 +146,8 @@
                 <div class="row no-grow">
                   <label class="block" for="imageThumbSize">Preview size</label>
                   <select id="imageThumbSize">
-                    <option value="small">Small</option>
-                    <option value="medium" selected>Medium</option>
+                    <option value="small" selected>Small</option>
+                    <option value="medium">Medium</option>
                     <option value="large">Large</option>
                   </select>
                 </div>
@@ -841,6 +841,11 @@
 
     function triggerUnifiedSearch() {
       if (unifiedModeState.active === 'image') {
+        clearTextResults();
+      } else {
+        resetImageResults();
+      }
+      if (unifiedModeState.active === 'image') {
         doImageSearch();
       } else {
         doSearch();
@@ -857,6 +862,21 @@
         searchTimer = setTimeout(() => doSearch().catch(console.error), delay);
       }
     });
+
+    function clearTextResults() {
+      const ans = document.getElementById('answer');
+      const answerRow = document.getElementById('answerRow');
+      const resultsRow = document.getElementById('resultsRow');
+      const refsEl = document.getElementById('refs');
+      const refsLabel = document.getElementById('refsLabel');
+      const hits = document.getElementById('results');
+      if (ans) ans.textContent = '';
+      if (hits) hits.innerHTML = '';
+      if (refsEl) refsEl.innerHTML = '';
+      if (answerRow) answerRow.hidden = true;
+      if (resultsRow) resultsRow.hidden = true;
+      if (refsLabel) refsLabel.style.display = 'none';
+    }
 
     function resetImageResults() {
       imageResultsGrid.innerHTML = '';

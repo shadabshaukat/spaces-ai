@@ -103,7 +103,11 @@ def _relative_upload_path(abs_path: str) -> Path:
     try:
         rel = Path(abs_path).resolve().relative_to(base)
     except Exception:
-        rel = Path(Path(abs_path).name)
+        tmp_base = (Path(settings.data_dir) / "tmp_uploads").resolve()
+        try:
+            rel = Path(abs_path).resolve().relative_to(tmp_base)
+        except Exception:
+            rel = Path(Path(abs_path).name)
     return rel
 
 

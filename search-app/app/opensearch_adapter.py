@@ -280,32 +280,57 @@ class OpenSearchAdapter:
             query_part = {"bool": {"filter": filters or [], "must": [{"match_all": {}}]}}
 
         body: Dict[str, Any]
-        if knn_part is not None:
-            engine = (os.getenv("OPENSEARCH_KNN_ENGINE", "lucene") or "lucene").lower()
-            if engine == "lucene":
-                body = {
-                    "size": int(top_k),
-                    "query": {
-                        "bool": {
-                            "must": [{"knn": knn_part}],
-                            "filter": filters or [],
-                        }
-                    },
-                }
-            else:
-                body = {
-                    "size": int(top_k),
-                    "query": query_part,
-                    "knn": knn_part,
-                }
-        else:
+        if knn_part is None:
             body = {
                 "size": int(top_k),
                 "query": query_part,
             }
+            res = os_client.search(index=settings.image_index_name, body=body)
+            return res.get("hits", {}).get("hits", [])
 
-        res = os_client.search(index=settings.image_index_name, body=body)
-        return res.get("hits", {}).get("hits", [])
+        engine = (os.getenv("OPENSEARCH_KNN_ENGINE", "lucene") or "lucene").lower()
+        variants: List[Dict[str, Any]] = []
+        # Variant A: lucene-style top-level knn
+        body_a: Dict[str, Any] = {"size": int(top_k), "knn": dict(knn_part)}
+        if query_part:
+            body_a["query"] = query_part
+        variants.append(body_a)
+        # Variant B: top-level knn as array
+        body_b: Dict[str, Any] = {"size": int(top_k), "knn": [dict(knn_part)]}
+        if query_part:
+            body_b["query"] = query_part
+        variants.append(body_b)
+        # Variant C: query-level knn inside bool.must
+        body_c: Dict[str, Any] = {
+            "size": int(top_k),
+            "query": {
+                "bool": {
+                    "must": [{"knn": knn_part}],
+                    "filter": filters or [],
+                }
+            },
+        }
+        variants.append(body_c)
+        # Variant D: non-lucene clusters expect query+knn as sibling
+        if engine != "lucene":
+            body_d: Dict[str, Any] = {
+                "size": int(top_k),
+                "query": query_part,
+                "knn": knn_part,
+            }
+            variants.append(body_d)
+
+        last_err: Optional[Exception] = None
+        for body in variants:
+            try:
+                res = os_client.search(index=settings.image_index_name, body=body)
+                return res.get("hits", {}).get("hits", [])
+            except Exception as e:
+                last_err = e
+                logger.warning("OpenSearch image KNN variant failed: %s", e)
+                continue
+        logger.warning("OpenSearch image KNN failed for all variants (%s)", last_err)
+        return []
 
     def search_vector(self, *, query: str, vector: List[float], top_k: int, user_id: Optional[int], space_id: Optional[int]) -> List[Dict[str, Any]]:
         os_client = self.client()

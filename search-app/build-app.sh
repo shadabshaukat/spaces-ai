@@ -13,8 +13,8 @@ if ! command -v uv >/dev/null 2>&1; then
   export PATH="$HOME/.local/bin:$PATH"
 fi
 
-# Sync dependencies with extras for PDF/Office/Vision/Audio/Image
-uv sync --extra pdf --extra office --extra vision --extra audio --extra image
+# Sync dependencies with extras for PDF/Office/Vision/Audio/Image/Captioning
+uv sync --extra pdf --extra office --extra vision --extra audio --extra image --extra caption
 
 echo "Dependencies installed. You can run the app with:"
 echo "  ./run-app.sh (foreground)"

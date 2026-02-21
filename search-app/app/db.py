@@ -64,6 +64,7 @@ def init_db(s: Settings = settings) -> None:
             cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
             cur.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
             cur.execute("CREATE EXTENSION IF NOT EXISTS citext")
+            cur.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
 
         # Create tables
         with conn.cursor() as cur:

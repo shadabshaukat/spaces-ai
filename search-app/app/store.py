@@ -15,6 +15,7 @@ from .config import settings
 from .db import get_conn
 from .embeddings import embed_texts
 from .vision_embeddings import embed_image_paths, vision_dependencies_ready, VisionModelUnavailable
+from .image_captioning import generate_caption
 from .text_utils import ChunkParams, chunk_text, read_text_from_file
 from .pgvector_utils import to_vec_literal
 from .opensearch_adapter import OpenSearchAdapter
@@ -116,6 +117,23 @@ def _tokenize_filename(name: str) -> List[str]:
     return tokens[:8]
 
 
+def _tokenize_caption(text: str) -> List[str]:
+    tokens = [t for t in re.split(r"[^a-z0-9]+", text.lower()) if t]
+    return [t for t in tokens if len(t) > 2]
+
+
+def _extract_ocr_text(img: "Image.Image") -> str:
+    try:
+        import pytesseract  # type: ignore
+    except Exception:
+        return ""
+    try:
+        txt = pytesseract.image_to_string(img)
+    except Exception:
+        return ""
+    return (txt or "").strip()
+
+
 def _dominant_color_name(img: "Image.Image") -> str:
     if ImageStat is None:
         return "neutral"
@@ -136,7 +154,7 @@ def _dominant_color_name(img: "Image.Image") -> str:
     return best[0]
 
 
-def _derive_image_tags_caption(img: "Image.Image", file_path: str, metadata: Optional[Dict[str, Any]] = None) -> Tuple[List[str], str]:
+def _derive_image_tags_caption(img: "Image.Image", file_path: str, metadata: Optional[Dict[str, Any]] = None) -> Tuple[List[str], str, Optional[str]]:
     tags: List[str] = []
     meta = metadata or {}
     width, height = img.size
@@ -166,8 +184,8 @@ def _derive_image_tags_caption(img: "Image.Image", file_path: str, metadata: Opt
     color = _dominant_color_name(img)
     if color not in seen:
         tags.append(color)
-    caption = f"{orientation.title()} image in {color} tones, {width}x{height}px"
-    return tags, caption
+    heuristic_caption = f"{orientation.title()} image in {color} tones, {width}x{height}px"
+    return tags, heuristic_caption, None
 
 
 def _upload_to_oci(bucket_name: str, object_name: str, data: bytes, expire_seconds: int = 3600) -> Optional[str]:
@@ -553,7 +571,27 @@ def _process_image_asset(
 
     rel_thumb = str(_relative_upload_path(str(thumb_path)))
 
-    tags, caption = _derive_image_tags_caption(thumb_img, file_path, metadata)
+    tags, heuristic_caption, _ = _derive_image_tags_caption(thumb_img, file_path, metadata)
+    caption = heuristic_caption
+
+    llava_caption = generate_caption(thumb_img)
+    if llava_caption:
+        caption = llava_caption
+        caption_tokens = _tokenize_caption(llava_caption)
+        for tok in caption_tokens:
+            if tok not in tags:
+                tags.append(tok)
+        if len(tags) > settings.image_keyword_max:
+            tags = tags[: settings.image_keyword_max]
+
+    ocr_text = _extract_ocr_text(thumb_img)
+    if ocr_text:
+        ocr_tokens = _tokenize_caption(ocr_text)
+        for tok in ocr_tokens:
+            if tok not in tags:
+                tags.append(tok)
+        if len(tags) > settings.image_keyword_max:
+            tags = tags[: settings.image_keyword_max]
 
     vec = None
     if ready:
@@ -624,6 +662,7 @@ def _process_image_asset(
             thumbnail_path=rel_thumb,
             tags=tags,
             caption=caption,
+            ocr_text=ocr_text,
             vector=vec,
         )
     except Exception as e:
@@ -634,6 +673,9 @@ def _process_image_asset(
         "thumbnail_object_url": oci_thumb_url,
         "image_tags": tags,
         "image_caption": caption,
+        "image_caption_source": ("llava" if llava_caption else "heuristic"),
+        "image_caption_fallback": heuristic_caption,
+        "image_ocr_text": ocr_text,
         "image_width": width,
         "image_height": height,
     }

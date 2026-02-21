@@ -276,7 +276,7 @@ def image_search(query: Optional[str], vector: Optional[List[float]], top_k: int
 
     hits: List[Dict[str, Any]] = []
     use_opensearch = settings.search_backend == "opensearch" and bool(settings.opensearch_host)
-    if use_opensearch:
+    if settings.search_backend == "opensearch":
         adapter = OpenSearchAdapter()
         try:
             hits = adapter.search_images(vector=vector, query=query, top_k=top_k, user_id=user_id, space_id=space_id, tags=tags)
@@ -311,8 +311,8 @@ def _image_search_postgres(*, vector: Optional[List[float]], query: Optional[str
         where.append("ia.tags @> %s::jsonb")
         filter_params.append(json.dumps(tags))
     if query and vector is None:
-        where.append("ia.caption ILIKE %s")
-        filter_params.append(f"%{query}%")
+        where.append("(ia.caption ILIKE %s OR COALESCE(d.metadata->>'image_ocr_text','') ILIKE %s)")
+        filter_params.extend([f"%{query}%", f"%{query}%"])
     if vector is not None:
         where.append("ia.embedding IS NOT NULL")
 
@@ -323,19 +323,40 @@ def _image_search_postgres(*, vector: Optional[List[float]], query: Optional[str
         distance_expr = f"(ia.embedding {_vector_operator()} %s::vector) AS distance"
         vector_param = to_vec_literal(vector)
 
+    rank_expr = "0.0::double precision AS text_rank"
+    rank_params: List[Any] = []
+    if query:
+        rank_expr = (
+            "ts_rank_cd("
+            "to_tsvector('simple', COALESCE(ia.caption,'') || ' ' || COALESCE(d.metadata->>'image_ocr_text','')),
+            "
+            "plainto_tsquery('simple', %s)"
+            ") AS text_rank"
+        )
+        rank_params.append(query)
+
     sql = [
         "SELECT ia.id, ia.document_id, ia.file_path, ia.thumbnail_path, ia.caption, ia.tags, ia.width, ia.height, ia.created_at,",
-        distance_expr,
+        distance_expr + ",",
+        rank_expr,
         "FROM image_assets ia",
+        "JOIN documents d ON d.id = ia.document_id",
     ]
     if where:
         sql.append("WHERE " + " AND ".join(where))
     params: List[Any] = []
     if vector_param is not None:
         params.append(vector_param)
-        order_clause = "distance ASC"
+    params.extend(rank_params)
     params.extend(filter_params)
 
+    if vector_param is not None or query:
+        order_clause = "text_rank DESC"
+        if vector_param is not None and query:
+            order_clause = "(COALESCE(text_rank, 0) * %s + (1.0 / (1.0 + COALESCE(distance, 0))) * %s) DESC"
+            params.extend([settings.image_search_text_weight, settings.image_search_vector_weight])
+        elif vector_param is not None:
+            order_clause = "distance ASC"
     sql.append(f"ORDER BY {order_clause} LIMIT %s")
     params.append(int(top_k))
 
@@ -346,7 +367,7 @@ def _image_search_postgres(*, vector: Optional[List[float]], query: Optional[str
             cur.execute(query_str, params)
             rows = cur.fetchall()
     for row in rows:
-        image_id, doc_id, file_path, thumb_path, caption, tags_raw, width, height, created_at, distance = row
+        image_id, doc_id, file_path, thumb_path, caption, tags_raw, width, height, created_at, distance, text_rank = row
         parsed_tags: List[str]
         if isinstance(tags_raw, list):
             parsed_tags = tags_raw
@@ -367,11 +388,20 @@ def _image_search_postgres(*, vector: Optional[List[float]], query: Optional[str
             "created_at": created_at.isoformat() if created_at else None,
         }
         entry: Dict[str, Any] = {"_source": src}
+        vec_score = None
         if distance is not None:
             try:
                 dist_val = float(distance)
-                entry["_score"] = 1.0 / (1.0 + max(dist_val, 0.0))
+                vec_score = 1.0 / (1.0 + max(dist_val, 0.0))
             except Exception:
-                entry["_score"] = None
+                vec_score = None
+        try:
+            txt_score = float(text_rank or 0.0)
+        except Exception:
+            txt_score = 0.0
+        if vec_score is None and txt_score == 0.0:
+            entry["_score"] = None
+        else:
+            entry["_score"] = (settings.image_search_vector_weight * (vec_score or 0.0)) + (settings.image_search_text_weight * txt_score)
         results.append(entry)
     return results

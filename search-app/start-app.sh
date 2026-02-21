@@ -61,7 +61,7 @@ if [ ! -d ".venv" ]; then
   echo ".venv not found; running build to install dependencies..."
   ./build-app.sh
 else
-  uv sync --extra pdf --extra office --extra vision --extra audio --extra image
+  uv sync --extra pdf --extra office --extra vision --extra audio --extra image --extra caption
 fi
 
 nohup uv run searchapp > spacesai.out 2>&1 &

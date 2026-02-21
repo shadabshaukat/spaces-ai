@@ -162,7 +162,7 @@ variable "compute_nsg_ids" {
 variable "compute_boot_volume_size_in_gbs" {
   type        = number
   description = "Boot volume size (GB) for the compute instance."
-  default     = 50
+  default     = 250
 }
 
 ## Object Storage

@@ -62,12 +62,22 @@ button:hover { filter: brightness(0.98); }
 .hit-title { font-weight: 700; font-size: 14px; }
 .hit-meta { font-size: 12px; color: #6b7280; margin-bottom: 6px; }
 .hit-content { font-size: 14px; margin-bottom: 6px; }
-.badge { display: inline-block; background: #eef2ff; color: #1e3a8a; padding: 2px 6px; border-radius: 999px; font-size: 11px; margin-left: 6px; }
+.badge { display: inline-flex; align-items: center; gap: 4px; background: #eef2ff; color: #1e3a8a; padding: 2px 6px; border-radius: 999px; font-size: 11px; margin-left: 6px; }
 .badge-soft { background: #f3f4f6; color: #374151; }
 .badge-warn { background: #fee2e2; color: #b91c1c; }
 .badge-web { background: #fef3c7; color: #92400e; }
 .badge-local { background: #dcfce7; color: #065f46; }
 .badge-remote { background: #e0f2fe; color: #075985; }
+.badge-storage {
+  background: rgba(15, 23, 42, 0.06);
+  color: #334155;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+}
+.storage-icon { font-size: 12px; line-height: 1; }
 .badge-inline { margin-left: 0; margin-right: 6px; }
 .muted { color: #6b7280; font-size: 12px; }
 .toast { position: fixed; bottom: 16px; right: 16px; background: #111827; color: #fff; padding: 10px 14px; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,0.15); }
@@ -730,6 +740,11 @@ body.dark .dz-desc, body.dark .dz-hint, body.dark .dz-status, body.dark .muted {
 body.dark .dropzone.dragover { background: #0e1530; border-color: #265fa3; color: #e5e7eb; }
 body.dark .hit { background: #0e1530; border-color: #1f2937; }
 body.dark .badge { background: #122255; color: #c7d2fe; }
+body.dark .badge-storage {
+  background: rgba(148, 163, 184, 0.16);
+  color: #e2e8f0;
+  border-color: rgba(148, 163, 184, 0.3);
+}
 body.dark .search-tabs { border-color: #1f2937; background: #0b1220; }
 body.dark .search-tab { color: #94a3b8; }
 body.dark .search-tab.active { background: #2563eb; color: #fff; }

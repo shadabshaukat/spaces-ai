@@ -522,6 +522,7 @@
       spaces: [],
       spaceId: null,
       imageSearchAbort: null,
+      storageBackend: null,
     };
 
     function setLoggedInUI() {
@@ -885,6 +886,21 @@
       if (imageResultsSection) imageResultsSection.hidden = unifiedModeState.active !== 'image';
     }
 
+    function storageBadgeLabel(storageBackend) {
+      if (!storageBackend) return 'Remote';
+      const val = String(storageBackend).toLowerCase();
+      if (val === 'local') return 'Local Storage';
+      if (val === 'both') return 'Local + OCI';
+      if (val === 'oci') return 'OCI';
+      if (val === 's3') return 'S3';
+      return val.toUpperCase();
+    }
+
+    function renderStorageBadge(storageBackend) {
+      const label = storageBadgeLabel(storageBackend);
+      return `<span class="badge badge-storage"><span class="storage-icon" aria-hidden="true">🗄️</span>${label}</span>`;
+    }
+
     function renderImageResults(results) {
       imageResultsGrid.innerHTML = '';
       if (!Array.isArray(results) || !results.length) {
@@ -910,7 +926,7 @@
           meta.push(`<span class="badge">score ${score}</span>`);
         }
         if (item.rank != null) meta.push(`<span class="badge">#${item.rank}</span>`);
-        if (item.object_url || item.thumbnail_object_url) meta.push('<span class="badge badge-remote">Remote</span>');
+        if (item.object_url || item.thumbnail_object_url) meta.push(renderStorageBadge(state.storageBackend));
         const docId = item.doc_id != null ? Number(item.doc_id) : null;
         const primaryHref = item.file_url || (docId != null ? `/api/doc-download?doc_id=${encodeURIComponent(docId)}` : '');
         const sourceLink = primaryHref ? `<a class="ghost" href="${escapeHtml(primaryHref)}" target="_blank" rel="noopener">Open document</a>` : '';
@@ -1978,7 +1994,7 @@
             if (typeof doc.chunk_count === 'number') metaChips.push(`<span class="badge badge-soft">${doc.chunk_count} chunks</span>`);
             const created = formatDateLabel(doc.created_at);
             if (created) metaChips.push(`<span class="badge badge-soft">${escapeHtml(created)}</span>`);
-            if (doc.metadata && doc.metadata.object_url) metaChips.push('<span class="badge badge-remote">Remote</span>');
+            if (doc.metadata && doc.metadata.object_url) metaChips.push(renderStorageBadge(state.storageBackend));
             if (doc.image_embedding_status === 'stored') {
               metaChips.push('<span class="badge badge-soft">Image embedding stored</span>');
             } else if (doc.image_embedding_status === 'missing') {
@@ -2008,7 +2024,7 @@
               const thumb = thumbSrc ? escapeHtml(thumbSrc) : '';
               const caption = escapeHtml(img.caption || 'No caption');
               const tags = Array.isArray(img.tags) ? img.tags.map(t => `<span class="badge badge-soft">${escapeHtml(t)}</span>`).join('') : '';
-              const remote = (img.object_url || img.thumbnail_object_url) ? '<span class="badge badge-remote">Remote</span>' : '';
+              const remote = (img.object_url || img.thumbnail_object_url) ? renderStorageBadge(state.storageBackend) : '';
               const fileUrl = img.file_url || (doc.id ? `/api/doc-download?doc_id=${doc.id}` : '');
               const downloadLink = fileUrl ? `<a class="ghost" href="${escapeHtml(fileUrl)}" target="_blank" rel="noopener">Open document</a>` : '';
               return `
@@ -2129,6 +2145,7 @@
       try {
         const cfg = await api('/api/upload-config');
         if (cfg && typeof cfg === 'object') {
+          state.storageBackend = cfg.storage_backend || null;
           if (Array.isArray(cfg.allowed_extensions) && cfg.allowed_extensions.length) {
             ALLOWED_EXTS = new Set(cfg.allowed_extensions.map(e => String(e).toLowerCase()));
             const list = Array.from(ALLOWED_EXTS).map(e => e.replace(/^\./, '').toUpperCase());

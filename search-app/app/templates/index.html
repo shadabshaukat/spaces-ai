@@ -1336,7 +1336,12 @@
           pending.className = 'dr-msg dr-msg-pending';
           pending.innerHTML = `
             <div class="dr-thinking-inline" aria-live="polite">
-              <div class="dr-thinking-spinner" aria-hidden="true"></div>
+              <div class="dr-typing-dots" aria-hidden="true">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+              <span class="dr-thinking-label">Processing</span>
             </div>`;
           frag.appendChild(pending);
         }

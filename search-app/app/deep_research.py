@@ -449,7 +449,7 @@ def ask(
     if not url_contexts:
         url_contexts = []
 
-    search_query = rewritten_query or message
+    search_query = rewritten_query or retrieval_seed
     web_hits: List[object] = []
     web_contexts: List[str] = []
     confidence = 0.0
@@ -462,7 +462,7 @@ def ask(
             combined,
             max_seconds=_remaining_budget(),
             web_top_k=max(15, int(settings.deep_research_web_top_k or 15)),
-            force_web=force_web or attempt > 0,
+            force_web=force_web or attempt > 0 or _is_local_weak(hits_all),
         )
         web_contexts = [c for c in contexts if c.startswith("Web result:")]
 
@@ -478,7 +478,7 @@ def ask(
             if missing:
                 local_contexts.append("Missing concepts to cover: " + ", ".join(missing))
 
-        if confidence >= confidence_floor and contexts:
+        if confidence >= confidence_floor and contexts and (web_contexts or not _is_local_weak(hits_all)):
             break
         if attempt < retry_loops:
             search_query = _rewrite_for_search(message, recent_snippet or "") or search_query

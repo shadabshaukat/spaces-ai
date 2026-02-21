@@ -328,8 +328,7 @@ def _image_search_postgres(*, vector: Optional[List[float]], query: Optional[str
     if query:
         rank_expr = (
             "ts_rank_cd("
-            "to_tsvector('simple', COALESCE(ia.caption,'') || ' ' || COALESCE(d.metadata->>'image_ocr_text','')),
-            "
+            "to_tsvector('simple', COALESCE(ia.caption,'') || ' ' || COALESCE(d.metadata->>'image_ocr_text','')), "
             "plainto_tsquery('simple', %s)"
             ") AS text_rank"
         )

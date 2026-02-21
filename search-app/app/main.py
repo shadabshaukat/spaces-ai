@@ -830,6 +830,79 @@ async def api_image_search_config(request: Request):
     }
 
 
+@app.get("/api/image-search/diagnostics")
+async def api_image_search_diagnostics(request: Request, image_id: int | None = None, doc_id: int | None = None):
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    uid = int(user.get("user_id") or user.get("id"))
+    if image_id is None and doc_id is None:
+        return JSONResponse(status_code=400, content={"error": "provide image_id or doc_id"})
+
+    pg: Dict[str, Any] = {"exists": False, "embedding": False, "image_id": None, "doc_id": None}
+    os_res: Dict[str, Any] = {"exists": False, "image_id": None, "doc_id": None, "error": None}
+    use_opensearch = settings.search_backend == "opensearch" and bool(settings.opensearch_host)
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            if image_id is not None:
+                cur.execute(
+                    """
+                    SELECT ia.id, ia.document_id, ia.embedding IS NOT NULL
+                    FROM image_assets ia
+                    JOIN documents d ON d.id = ia.document_id
+                    WHERE ia.id = %s AND d.user_id = %s
+                    """,
+                    (int(image_id), uid),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT ia.id, ia.document_id, ia.embedding IS NOT NULL
+                    FROM image_assets ia
+                    JOIN documents d ON d.id = ia.document_id
+                    WHERE ia.document_id = %s AND d.user_id = %s
+                    ORDER BY ia.created_at DESC
+                    LIMIT 1
+                    """,
+                    (int(doc_id), uid),
+                )
+            row = cur.fetchone()
+            if row:
+                pg = {
+                    "exists": True,
+                    "embedding": bool(row[2]),
+                    "image_id": int(row[0]),
+                    "doc_id": int(row[1]),
+                }
+
+    if use_opensearch and pg.get("image_id") is not None:
+        adapter = OpenSearchAdapter()
+        try:
+            res = adapter.client().get(index=settings.image_index_name, id=f"{pg['doc_id']}:{pg['image_id']}")
+            os_res = {
+                "exists": bool(res.get("found")),
+                "image_id": pg["image_id"],
+                "doc_id": pg["doc_id"],
+                "error": None,
+            }
+        except Exception as exc:
+            os_res = {
+                "exists": False,
+                "image_id": pg.get("image_id"),
+                "doc_id": pg.get("doc_id"),
+                "error": str(exc),
+            }
+
+    return {
+        "postgres": pg,
+        "opensearch": os_res,
+        "search_backend": settings.search_backend,
+        "storage_backend": settings.storage_backend,
+        "image_index": settings.image_index_name,
+    }
+
+
 @app.post("/api/llm-test")
 async def llm_test(payload: Dict[str, Any] | None = None):
     """

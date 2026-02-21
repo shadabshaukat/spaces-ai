@@ -289,6 +289,30 @@ class OpenSearchAdapter:
             return res.get("hits", {}).get("hits", [])
 
         last_err: Optional[Exception] = None
+        # Variant A: 2.x query-level knn object (vector nested under field name)
+        try:
+            knn_inner: Dict[str, Any] = {
+                "vector": knn_part["query_vector"],
+                "k": int(top_k),
+            }
+            if knn_part.get("num_candidates") is not None:
+                knn_inner["num_candidates"] = knn_part["num_candidates"]
+            knn_query = {
+                "bool": {
+                    "must": [{"knn": {"vector": knn_inner}}],
+                    "filter": filters or [],
+                }
+            }
+            body = {
+                "size": int(top_k),
+                "query": knn_query,
+            }
+            res = os_client.search(index=settings.image_index_name, body=body)
+            return res.get("hits", {}).get("hits", [])
+        except Exception as e:
+            last_err = e
+            logger.warning("OpenSearch image KNN (2.x nested vector) failed: %s", e)
+
         # OpenSearch 3.x prefers knn query clause with optional filter
         try:
             knn_query = {
@@ -337,6 +361,18 @@ class OpenSearchAdapter:
         # Variant C: final fallbacks
         engine = (os.getenv("OPENSEARCH_KNN_ENGINE", "lucene") or "lucene").lower()
         variants: List[Dict[str, Any]] = []
+        body_c: Dict[str, Any] = {
+            "size": int(top_k),
+            "query": {
+                "bool": {
+                    "must": [{"knn": {"vector": {"vector": knn_part["query_vector"], "k": int(top_k)}}}],
+                    "filter": filters or [],
+                }
+            },
+        }
+        if knn_part.get("num_candidates") is not None:
+            body_c["query"]["bool"]["must"][0]["knn"]["vector"]["num_candidates"] = knn_part["num_candidates"]
+        variants.append(body_c)
         body_a: Dict[str, Any] = {"size": int(top_k), "knn": dict(knn_part)}
         if query_part:
             body_a["query"] = query_part

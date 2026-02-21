@@ -432,9 +432,11 @@ def ingest_file_path(file_path: str, user_id: int, space_id: Optional[int] = Non
     text, source_type = read_text_from_file(file_path)
     cp = chunk_params or ChunkParams(settings.chunk_size, settings.chunk_overlap)
     chunks = chunk_text(text, cp)
-    if not chunks:
+    embeddings: List[List[float]] = []
+    if chunks:
+        embeddings = embed_texts(chunks)
+    elif source_type != "image":
         raise ValueError("No textual content extracted from file")
-    embeddings = embed_texts(chunks)
 
     created_at = datetime.utcnow().isoformat()
 
@@ -442,9 +444,10 @@ def ingest_file_path(file_path: str, user_id: int, space_id: Optional[int] = Non
 
     with get_conn() as conn:
         doc_id = insert_document(conn, user_id, space_id, file_path, source_type, title=title, metadata=doc_metadata)
-        insert_chunks(conn, doc_id, chunks, embeddings)
+        if chunks:
+            insert_chunks(conn, doc_id, chunks, embeddings)
 
-        if settings.enable_image_storage and source_type == "image" and Image is not None:
+        if settings.enable_image_storage and source_type == "image":
             try:
                 img_meta_updates = _process_image_asset(conn, doc_id, user_id, space_id, file_path, doc_metadata)
                 if img_meta_updates:
@@ -461,18 +464,19 @@ def ingest_file_path(file_path: str, user_id: int, space_id: Optional[int] = Non
     try:
         if settings.search_backend == "opensearch" and settings.opensearch_dual_write:
             adapter = OpenSearchAdapter()
-            adapter.index_chunks(
-                user_id=user_id,
-                space_id=space_id,
-                doc_id=doc_id,
-                chunks=chunks,
-                vectors=embeddings,
-                file_name=Path(file_path).name,
-                source_path=file_path,
-                file_type=source_type,
-                created_at=created_at,
-            )
-            logger.info("OpenSearch indexed doc_id=%s chunks=%s", doc_id, len(chunks))
+            if chunks:
+                adapter.index_chunks(
+                    user_id=user_id,
+                    space_id=space_id,
+                    doc_id=doc_id,
+                    chunks=chunks,
+                    vectors=embeddings,
+                    file_name=Path(file_path).name,
+                    source_path=file_path,
+                    file_type=source_type,
+                    created_at=created_at,
+                )
+                logger.info("OpenSearch indexed doc_id=%s chunks=%s", doc_id, len(chunks))
             if settings.enable_image_storage and source_type == "image":
                 try:
                     adapter.ensure_image_index()
@@ -480,6 +484,37 @@ def ingest_file_path(file_path: str, user_id: int, space_id: Optional[int] = Non
                     logger.warning("Image index ensure failed: %s", e)
     except Exception as e:
         logger.warning("OpenSearch dual-write failed for doc_id=%s: %s", doc_id, e)
+
+    return IngestResult(document_id=doc_id, num_chunks=len(chunks))
+
+
+def _insert_basic_image_asset(
+    conn: psycopg.Connection,
+    *,
+    doc_id: int,
+    user_id: int,
+    space_id: Optional[int],
+    file_path: str,
+    rel_file: str,
+) -> int:
+    """Insert a minimal image_assets row when PIL/embeddings are unavailable."""
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO image_assets (document_id, user_id, space_id, file_path, thumbnail_path, width, height, tags, caption, embedding, embedding_model)
+        VALUES (%s, %s, %s, %s, NULL, NULL, NULL, %s, %s, NULL, %s) RETURNING id
+        """,
+        (
+            doc_id,
+            user_id,
+            space_id,
+            rel_file,
+            json.dumps([]),
+            "",
+            settings.image_embed_model,
+        ),
+    )
+    return int(cur.fetchone()[0])
 
 
 def _process_image_asset(
@@ -493,8 +528,17 @@ def _process_image_asset(
     ready, detail = vision_dependencies_ready()
     if not ready:
         logger.warning("Vision dependencies unavailable for image asset: %s", detail or "missing dependencies")
+    rel_file = str(_relative_upload_path(file_path))
     if Image is None:
-        logger.warning("Pillow unavailable; skipping image asset processing for doc_id=%s", doc_id)
+        logger.warning("Pillow unavailable; inserting minimal image asset for doc_id=%s", doc_id)
+        _insert_basic_image_asset(
+            conn,
+            doc_id=doc_id,
+            user_id=user_id,
+            space_id=space_id,
+            file_path=file_path,
+            rel_file=rel_file,
+        )
         return {}
     with Image.open(file_path) as img:
         width, height = img.size
@@ -507,7 +551,6 @@ def _process_image_asset(
     thumb_img.thumbnail((512, 512))
     thumb_img.save(thumb_path, format="JPEG", quality=80)
 
-    rel_file = str(_relative_upload_path(file_path))
     rel_thumb = str(_relative_upload_path(str(thumb_path)))
 
     tags, caption = _derive_image_tags_caption(thumb_img, file_path, metadata)

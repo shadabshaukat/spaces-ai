@@ -148,21 +148,26 @@ def _group_context_blocks(
     url_contexts: List[str],
     web_contexts: List[str],
     missing_concepts: List[str],
+    prioritize_web: bool = False,
 ) -> Tuple[str, str]:
     blocks: List[str] = []
     preview_parts: List[str] = []
-    if local_contexts:
-        local_block = "\n\n".join(local_contexts)
-        blocks.append("=== LOCAL KB EVIDENCE ===\n" + local_block)
-        preview_parts.append(local_contexts[0])
-    if url_contexts:
-        url_block = "\n\n".join(url_contexts)
-        blocks.append("=== USER URL EVIDENCE ===\n" + url_block)
-        preview_parts.append(url_contexts[0])
+    context_sections = []
     if web_contexts:
-        web_block = "\n\n".join(web_contexts)
-        blocks.append("=== WEB EVIDENCE ===\n" + web_block)
-        preview_parts.append(web_contexts[0])
+        context_sections.append(("=== WEB EVIDENCE ===\n", web_contexts))
+    if url_contexts:
+        context_sections.append(("=== USER URL EVIDENCE ===\n", url_contexts))
+    if local_contexts:
+        context_sections.append(("=== LOCAL KB EVIDENCE ===\n", local_contexts))
+
+    if not prioritize_web:
+        context_sections = list(reversed(context_sections))
+
+    for label, contexts in context_sections:
+        if contexts:
+            block = "\n\n".join(contexts)
+            blocks.append(label + block)
+            preview_parts.append(contexts[0])
     if missing_concepts:
         missing_block = "\n".join(f"- {m}" for m in missing_concepts)
         blocks.append("=== MISSING CONCEPTS ===\n" + missing_block)
@@ -465,14 +470,18 @@ def ask(
             force_web=force_web or attempt > 0 or _is_local_weak(hits_all),
         )
         web_contexts = [c for c in contexts if c.startswith("Web result:")]
+        local_weak = _is_local_weak(hits_all)
+        if local_weak and web_contexts and local_contexts == ["(No relevant context found in your knowledge base.)"]:
+            local_contexts = []
 
         # Identify missing concepts to guide synthesis
-        if _is_local_weak(hits_all):
+        if local_weak:
             full_context, preview = _group_context_blocks(
                 local_contexts=local_contexts,
                 url_contexts=url_contexts,
                 web_contexts=web_contexts,
                 missing_concepts=[],
+                prioritize_web=local_weak,
             )
             missing = _identify_missing_concepts(message, preview)
             if missing:
@@ -486,11 +495,13 @@ def ask(
     # Missing-concept loop: retry retrieval using missing concepts as prompts
     missing_concepts: List[str] = []
     for _ in range(missing_loops):
+        local_weak = _is_local_weak(hits_all)
         full_context, preview = _group_context_blocks(
             local_contexts=local_contexts,
             url_contexts=url_contexts,
             web_contexts=web_contexts,
             missing_concepts=missing_concepts,
+            prioritize_web=local_weak,
         )
         new_missing = _identify_missing_concepts(message, preview)
         new_missing = [m for m in new_missing if m not in missing_concepts]
@@ -508,11 +519,13 @@ def ask(
             except Exception as e:
                 logger.warning("DR missing concept retrieve failed for %r: %s", concept, e)
 
+    local_weak = _is_local_weak(hits_all)
     full_context, _ = _group_context_blocks(
         local_contexts=local_contexts,
         url_contexts=url_contexts,
         web_contexts=web_contexts,
         missing_concepts=missing_concepts,
+        prioritize_web=local_weak,
     )
 
     # SYNTHESIZE

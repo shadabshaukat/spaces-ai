@@ -293,12 +293,6 @@
           <p class="pill-badge pill-source">Research mode</p>
           <h3>Ask or paste references to investigate deeper</h3>
           <p id="drHeroStatus" class="muted">Sessions auto-save per space. URLs can be included directly inside your question.</p>
-          <div class="dr-pipeline" id="drPipeline">
-            <span class="dr-pipeline-pill" data-stage="plan">Plan</span>
-            <span class="dr-pipeline-pill" data-stage="retrieve">Retrieve</span>
-            <span class="dr-pipeline-pill" data-stage="analyze">Analyze</span>
-            <span class="dr-pipeline-pill" data-stage="synthesize">Synthesize</span>
-          </div>
           <div id="drSourceTicker" class="dr-source-ticker" hidden>
             <span class="dr-source-dot"></span>
             <span id="drSourceTickerText" class="dr-source-text"></span>
@@ -966,8 +960,6 @@
       reset: document.getElementById('drReset'),
       newSession: document.getElementById('drNewSession'),
       hero: document.getElementById('drHero'),
-      pipeline: document.getElementById('drPipeline'),
-      pipelinePills: document.querySelectorAll('#drPipeline .dr-pipeline-pill'),
       sourceTicker: document.getElementById('drSourceTicker'),
       sourceTickerText: document.getElementById('drSourceTickerText'),
       heroStatus: document.getElementById('drHeroStatus'),
@@ -1105,31 +1097,6 @@
       drEls.streamIndicator.hidden = !active;
     }
 
-    function drSetPipelineStage(stage) {
-      if (!drEls.pipelinePills) return;
-      drEls.pipelinePills.forEach((pill) => {
-        pill.classList.toggle('active', pill.dataset.stage === stage);
-      });
-    }
-
-    function drClearPipelineTimers() {
-      if (!drState.pipelineTimers.length) return;
-      drState.pipelineTimers.forEach((t) => clearTimeout(t));
-      drState.pipelineTimers = [];
-    }
-
-    function drStartPipelineAnimation() {
-      drClearPipelineTimers();
-      drSetPipelineStage('plan');
-      drState.pipelineTimers.push(setTimeout(() => drSetPipelineStage('retrieve'), 500));
-      drState.pipelineTimers.push(setTimeout(() => drSetPipelineStage('analyze'), 1100));
-      drState.pipelineTimers.push(setTimeout(() => drSetPipelineStage('synthesize'), 1700));
-    }
-
-    function drStopPipelineAnimation() {
-      drClearPipelineTimers();
-      drSetPipelineStage(null);
-    }
 
     function drShowSourceTicker(labels) {
       if (!drEls.sourceTicker || !drEls.sourceTickerText) return;
@@ -1341,7 +1308,6 @@
                 <span></span>
                 <span></span>
               </div>
-              <span class="dr-thinking-label">Processing</span>
             </div>`;
           frag.appendChild(pending);
         }
@@ -1431,7 +1397,7 @@
       drState.isSending = true;
       drSetStreamIndicator(true);
       drSetIngesting(false);
-      drStartPipelineAnimation();
+      drState.pipelineTimers = [];
       const tmpStep = { role: 'user', content: text, created_at: new Date().toISOString(), pending: true };
       drRenderTimeline([...drState.steps, tmpStep]);
       try {
@@ -1469,7 +1435,7 @@
         drState.isSending = false;
         drSetStreamIndicator(false);
         drSetIngesting(false);
-        drStopPipelineAnimation();
+        drState.pipelineTimers = [];
       }
     }
 

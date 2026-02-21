@@ -100,6 +100,9 @@ Use LLM to list missing concepts not covered by retrieved evidence.
 - **Follow‑up question prompts** when confidence is low (conversation-aware clarifying prompts rendered as auto-send UI chips).
 - **Deep Research renderer** supports code fences and ordered lists.
 - **OpenSearch recency weighting** via function_score decay on `created_at`.
+- **Persistence overview:** Postgres (system-of-record for users/spaces/docs/DR sessions), OpenSearch (serving layer for vectors/BM25), Valkey (cache for search/LLM/DR state), and OCI Object Storage (binary uploads with per-user prefixes).
+- **Cache scope:** DR session state is cached in Valkey with a per-user+space namespace; DB remains authoritative for conversation history.
+- **Storage fanout:** uploads are stored locally and optionally mirrored to OCI Object Storage; OpenSearch is updated via dual-write on ingestion or via reindex.
 
 ---
 
@@ -179,6 +182,7 @@ These controls tune the agentic workflow (see `.env.example` for full annotation
 - Ordered list numbering uses browser `<ol>` numbering (fixes 1/1/1 issue).
 - Code fences render as `<pre><code>` blocks with optional language trimmed.
 - Follow-up questions render as clickable chips that auto-send the suggested prompt back to `/api/deep-research/ask`.
+- Sessions list shows the conversation title plus a short snippet of the first user question for quick recall.
 
 ---
 

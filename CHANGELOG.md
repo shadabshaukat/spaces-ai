@@ -3,6 +3,8 @@
 All notable changes to this repository are documented in this file. Keep entries reverse-chronological and add the date (YYYY-MM-DD) for each change.
 
 ## 2026-02-21
+- Added Deep Research session list snippet for the first question and styled it in the sessions drawer.
+- Improved first-question follow-up suggestions when local knowledge base hits are present.
 - Documented new Deep Research follow-up settings:
   - `DEEP_RESEARCH_FOLLOWUP_AUTOSEND` (auto-send chips on click)
   - `DEEP_RESEARCH_FOLLOWUP_RELEVANCE_MIN` (relevance threshold with tuning guidance)

@@ -538,6 +538,20 @@ class OpenSearchAdapter:
         except Exception as e:
             logger.warning("OpenSearch delete_by_query failed for doc_id=%s: %s", doc_id, e)
             return 0
+
+    def delete_image_assets(self, *, doc_id: int, user_id: Optional[int] = None) -> int:
+        os_client = self.client()
+        query: Dict[str, Any]
+        if user_id is not None:
+            query = {"bool": {"filter": [{"term": {"doc_id": int(doc_id)}}, {"term": {"user_id": int(user_id)}}]}}
+        else:
+            query = {"term": {"doc_id": int(doc_id)}}
+        try:
+            res = os_client.delete_by_query(index=settings.image_index_name, body={"query": query}, refresh=True, conflicts="proceed")
+            return int(res.get("deleted", 0))
+        except Exception as e:
+            logger.warning("OpenSearch image delete_by_query failed for doc_id=%s: %s", doc_id, e)
+            return 0
     
     @staticmethod
     def _filters(user_id: Optional[int], space_id: Optional[int]) -> List[Dict[str, Any]]:

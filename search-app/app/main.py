@@ -1411,6 +1411,10 @@ async def api_admin_delete_document(request: Request, doc_id: int):
                 adapter.delete_document(doc_id=int(doc_id), user_id=uid)
             except Exception:
                 pass
+            try:
+                adapter.delete_image_assets(doc_id=int(doc_id), user_id=uid)
+            except Exception:
+                pass
     except Exception:
         pass
 

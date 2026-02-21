@@ -58,6 +58,7 @@ from .vision_embeddings import (
 )
 
 logger = logging.getLogger("searchapp")
+access_logger = logging.getLogger("searchapp.access")
 log_level = logging.DEBUG if settings.debug_logging else os.getenv("LOGLEVEL", "INFO")
 logging.basicConfig(level=log_level)
 
@@ -69,6 +70,37 @@ TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title=f"{settings.app_name}", version="0.5.0")
+
+BOT_PATH_PREFIXES = (
+    "/sysmgmt/",
+    "/php/",
+    "/js/pan/",
+    "/redfish/",
+    "/sdk/",
+    "/HNAP1",
+    "/wp-",
+    "/.env",
+    "/login",
+)
+
+
+@app.middleware("http")
+async def access_log_middleware(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path and any(path.startswith(prefix) for prefix in BOT_PATH_PREFIXES):
+        return response
+
+    client_host = request.client.host if request.client else "-"
+    method = request.method
+    status = response.status_code
+    if status == 404:
+        access_logger.debug("%s - \"%s %s\" %s", client_host, method, path, status)
+    elif status >= 500:
+        access_logger.warning("%s - \"%s %s\" %s", client_host, method, path, status)
+    else:
+        access_logger.info("%s - \"%s %s\" %s", client_host, method, path, status)
+    return response
 
 # Allowed upload types (documents + images only)
 ALLOWED_EXTS = {

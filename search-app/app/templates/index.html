@@ -228,6 +228,7 @@
               <div class="spinner small"></div>
               <span>Processing…</span>
             </div>
+            <span id="uploadEmbeddingStatus" class="badge badge-soft" style="margin-left:8px" hidden></span>
           </div>
           <button id="clearUploadBtn" class="ghost" title="Clear uploads"><span class="refresh-icon">↻</span></button>
         </div>
@@ -503,6 +504,16 @@
       if (!res.ok) throw new Error(await res.text());
       const ct = res.headers.get('content-type') || '';
       return ct.includes('application/json') ? await res.json() : await res.text();
+    }
+
+    async function checkImageEmbeddingStatus(docId) {
+      if (!docId) return null;
+      try {
+        const diag = await api(`/api/image-search/diagnostics?doc_id=${encodeURIComponent(docId)}`);
+        return diag || null;
+      } catch (e) {
+        return null;
+      }
     }
 
     // App state
@@ -2251,7 +2262,12 @@
       const loading = document.getElementById('uploadLoading');
       const list = document.getElementById('uploadList');
       const listRow = document.getElementById('uploadListRow');
+      const embeddingBadge = document.getElementById('uploadEmbeddingStatus');
       status.textContent = '';
+      if (embeddingBadge) {
+        embeddingBadge.hidden = true;
+        embeddingBadge.textContent = '';
+      }
 
       const selA = filesInput?.files ? Array.from(filesInput.files) : [];
       let allFiles = [...selA, ...droppedFiles];
@@ -2333,6 +2349,16 @@
                       if (chunks != null) msg.push(`${chunks} chunks`);
                       const row = item.querySelector('.progress-row span');
                       if (row && msg.length) row.textContent = `${row.textContent} — processed (${msg.join(', ')})`;
+                      if (docId != null && embeddingBadge) {
+                        const diag = await checkImageEmbeddingStatus(docId);
+                        if (diag && diag.postgres) {
+                          const ok = diag.postgres.embedding === true;
+                          embeddingBadge.hidden = false;
+                          embeddingBadge.textContent = ok ? 'Image embedding stored' : 'Image embedding missing';
+                          embeddingBadge.classList.toggle('badge-soft', ok);
+                          embeddingBadge.classList.toggle('badge-warn', !ok);
+                        }
+                      }
                     }
                   } catch {}
                   resolve({ file, ok: true, data });

@@ -1289,9 +1289,12 @@
         div.className = 'dr-convo-card' + (convo.conversation_id === drState.conversationId ? ' active' : '');
         div.dataset.drConversation = convo.conversation_id;
         const title = convo.title || 'Untitled session';
+        const snippetRaw = (convo.first_question || '').trim();
+        const snippet = snippetRaw.length > 120 ? `${snippetRaw.slice(0, 120)}…` : snippetRaw;
         const updated = convo.updated_at ? new Date(convo.updated_at).toLocaleString() : '';
         div.innerHTML = `
           <div class="title">${escapeHtml(title)}</div>
+          ${snippet ? `<div class="snippet">${escapeHtml(snippet)}</div>` : ''}
           <div class="meta">
             <span>${convo.step_count || 0} steps</span>
             ${updated ? `<span>${escapeHtml(updated)}</span>` : ''}

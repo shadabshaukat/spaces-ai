@@ -84,7 +84,11 @@ def list_conversations(user_id: int, space_id: Optional[int]) -> List[Dict[str, 
                 """
                 SELECT c.conversation_id, c.title, c.created_at, c.updated_at,
                        c.space_id,
-                       (SELECT COUNT(*) FROM deep_research_steps s WHERE s.conversation_id = c.conversation_id) AS steps
+                       (SELECT COUNT(*) FROM deep_research_steps s WHERE s.conversation_id = c.conversation_id) AS steps,
+                       (SELECT content FROM deep_research_steps s
+                        WHERE s.conversation_id = c.conversation_id AND s.role = 'user'
+                        ORDER BY s.step_index ASC
+                        LIMIT 1) AS first_question
                 FROM deep_research_conversations c
                 WHERE c.user_id = %s AND (%s IS NULL OR c.space_id = %s)
                 ORDER BY c.updated_at DESC
@@ -103,6 +107,7 @@ def list_conversations(user_id: int, space_id: Optional[int]) -> List[Dict[str, 
                 "updated_at": row[3].isoformat() if row[3] else None,
                 "space_id": int(row[4]) if row[4] is not None else None,
                 "step_count": int(row[5] or 0),
+                "first_question": row[6] or "",
             }
         )
     return out

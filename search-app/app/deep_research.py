@@ -586,12 +586,19 @@ def ask(
     followups: List[str] = []
     if settings.deep_research_followup_enable:
         should_prompt = confidence < float(settings.deep_research_followup_threshold or 0.0)
-        if should_prompt:
+        user_turns = len([m for m in st.messages if m.role == "user"])
+        is_first_turn = user_turns <= 1
+        has_local_hits = len(hits_all) > 0
+        allow_first_turn_prompt = is_first_turn and has_local_hits
+        if should_prompt or allow_first_turn_prompt:
             preview = full_context[:1200]
+            max_questions = int(settings.deep_research_followup_max_questions or 2)
+            if allow_first_turn_prompt and not should_prompt:
+                max_questions = min(max_questions, 1)
             followups = _generate_followup_questions(
                 message,
                 preview,
-                max_questions=int(settings.deep_research_followup_max_questions or 2),
+                max_questions=max_questions,
                 conversation_snippet=recent_snippet,
             )
 

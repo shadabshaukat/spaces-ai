@@ -31,6 +31,7 @@
           <div class="search-tabs" role="tablist" aria-label="Search mode">
             <button id="searchModeText" class="search-tab active" role="tab" aria-selected="true">Text Search</button>
             <button id="searchModeImage" class="search-tab" role="tab" aria-selected="false">Image Search</button>
+            <button id="searchModeAudio" class="search-tab" role="tab" aria-selected="false">Audio &amp; Video Search</button>
           </div>
           <div class="searchbar">
             <input id="searchInput" class="search-input" type="text" placeholder="Search documents…" autocomplete="off" />
@@ -679,7 +680,7 @@
         state.user = resp.user; state.spaces = resp.spaces || [];
         const def = (state.spaces.find(s => s.is_default) || {}).id;
         state.spaceId = def || (state.spaces[0] ? state.spaces[0].id : null);
-        populateSpaces(); setLoggedInUI(); await loadKB(); showToast('Logged in');
+        populateSpaces(); setLoggedInUI(); setActiveScreen('search'); await loadKB(); showToast('Logged in');
       } catch (e) {
         let msg = 'Login failed';
         try { const js = JSON.parse(e.message || '{}'); if (js && js.error) msg = js.error; } catch {}
@@ -886,6 +887,7 @@
     const searchBtn = document.getElementById('searchBtn');
     const textModeBtn = document.getElementById('searchModeText');
     const imageModeBtn = document.getElementById('searchModeImage');
+    const audioModeBtn = document.getElementById('searchModeAudio');
     const textSettingsPane = document.getElementById('textSettings');
     const imageSettingsPane = document.getElementById('imageSettings');
     const imageResultsSection = document.getElementById('imageResultsSection');
@@ -914,27 +916,44 @@
         textModeBtn.setAttribute('aria-selected', 'true');
         imageModeBtn.classList.remove('active');
         imageModeBtn.setAttribute('aria-selected', 'false');
+        audioModeBtn.classList.remove('active');
+        audioModeBtn.setAttribute('aria-selected', 'false');
         searchInputEl.placeholder = 'Search documents…';
         textSettingsPane.hidden = false;
         imageSettingsPane.hidden = true;
         searchBtn.textContent = 'Search';
         if (imageResultsSection) imageResultsSection.hidden = true;
-      } else {
+      } else if (nextMode === 'image') {
         imageModeBtn.classList.add('active');
         imageModeBtn.setAttribute('aria-selected', 'true');
         textModeBtn.classList.remove('active');
         textModeBtn.setAttribute('aria-selected', 'false');
+        audioModeBtn.classList.remove('active');
+        audioModeBtn.setAttribute('aria-selected', 'false');
         searchInputEl.placeholder = "Describe the image you're looking for…";
         textSettingsPane.hidden = true;
         imageSettingsPane.hidden = false;
         searchBtn.textContent = 'Find images';
         if (imageResultsSection) imageResultsSection.hidden = false;
         if (!unifiedModeState.imageHasResults) resetImageResults();
+      } else {
+        audioModeBtn.classList.add('active');
+        audioModeBtn.setAttribute('aria-selected', 'true');
+        textModeBtn.classList.remove('active');
+        textModeBtn.setAttribute('aria-selected', 'false');
+        imageModeBtn.classList.remove('active');
+        imageModeBtn.setAttribute('aria-selected', 'false');
+        searchInputEl.placeholder = 'Search audio & video…';
+        textSettingsPane.hidden = false;
+        imageSettingsPane.hidden = true;
+        searchBtn.textContent = 'Search';
+        if (imageResultsSection) imageResultsSection.hidden = true;
       }
     }
 
     textModeBtn.addEventListener('click', () => setSearchMode('text'));
     imageModeBtn.addEventListener('click', () => setSearchMode('image'));
+    audioModeBtn.addEventListener('click', () => setSearchMode('audio'));
 
     function triggerUnifiedSearch() {
       if (unifiedModeState.active === 'image') {

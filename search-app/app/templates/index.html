@@ -31,7 +31,6 @@
           <div class="search-tabs" role="tablist" aria-label="Search mode">
             <button id="searchModeText" class="search-tab active" role="tab" aria-selected="true">Text Search</button>
             <button id="searchModeImage" class="search-tab" role="tab" aria-selected="false">Image Search</button>
-            <button id="searchModeAudio" class="search-tab" role="tab" aria-selected="false">Audio &amp; Video Search</button>
           </div>
           <div class="searchbar">
             <input id="searchInput" class="search-input" type="text" placeholder="Search documents…" autocomplete="off" />
@@ -177,7 +176,7 @@
         <strong>Sign in to access your library.</strong>
         <p class="muted">Once logged in, you can review and manage your documents here.</p>
       </div>
-      <section id="kbSection" class="card card--wide" hidden>
+      <section id="kbSection" class="card card--wide card-soft" hidden>
         <button class="collapsible-toggle" id="kbToggle" aria-expanded="false"><span class="caret">▸</span> Your Knowledge Base</button>
         <div id="kbContent" hidden>
           <div class="row wrap">
@@ -207,7 +206,7 @@
         <strong>Sign in to upload files.</strong>
         <p class="muted">Uploads are tied to your active space.</p>
       </div>
-      <section id="uploadSection" class="card card--wide" hidden>
+      <section id="uploadSection" class="card card--wide card-soft" hidden>
         <button class="collapsible-toggle" id="uploadToggle" aria-expanded="false"><span class="caret">▸</span> Upload to your Space</button>
         <div id="uploadContent" hidden>
           <div class="row wrap" style="width:100%; justify-content: space-between; align-items: center;">
@@ -292,7 +291,7 @@
           </div>
         </div>
       </div>
-      <div id="accountPanel" class="card card--wide" hidden>
+      <div id="accountPanel" class="card card--wide card-soft" hidden>
         <div class="row" style="justify-content: space-between; width: 100%;">
           <div>
             <strong>Signed in</strong>
@@ -887,7 +886,7 @@
     const searchBtn = document.getElementById('searchBtn');
     const textModeBtn = document.getElementById('searchModeText');
     const imageModeBtn = document.getElementById('searchModeImage');
-    const audioModeBtn = document.getElementById('searchModeAudio');
+    const audioModeBtn = null;
     const textSettingsPane = document.getElementById('textSettings');
     const imageSettingsPane = document.getElementById('imageSettings');
     const imageResultsSection = document.getElementById('imageResultsSection');
@@ -916,8 +915,10 @@
         textModeBtn.setAttribute('aria-selected', 'true');
         imageModeBtn.classList.remove('active');
         imageModeBtn.setAttribute('aria-selected', 'false');
-        audioModeBtn.classList.remove('active');
-        audioModeBtn.setAttribute('aria-selected', 'false');
+        if (audioModeBtn) {
+          audioModeBtn.classList.remove('active');
+          audioModeBtn.setAttribute('aria-selected', 'false');
+        }
         searchInputEl.placeholder = 'Search documents…';
         textSettingsPane.hidden = false;
         imageSettingsPane.hidden = true;
@@ -928,32 +929,21 @@
         imageModeBtn.setAttribute('aria-selected', 'true');
         textModeBtn.classList.remove('active');
         textModeBtn.setAttribute('aria-selected', 'false');
-        audioModeBtn.classList.remove('active');
-        audioModeBtn.setAttribute('aria-selected', 'false');
+        if (audioModeBtn) {
+          audioModeBtn.classList.remove('active');
+          audioModeBtn.setAttribute('aria-selected', 'false');
+        }
         searchInputEl.placeholder = "Describe the image you're looking for…";
         textSettingsPane.hidden = true;
         imageSettingsPane.hidden = false;
         searchBtn.textContent = 'Search';
         if (imageResultsSection) imageResultsSection.hidden = false;
         if (!unifiedModeState.imageHasResults) resetImageResults();
-      } else {
-        audioModeBtn.classList.add('active');
-        audioModeBtn.setAttribute('aria-selected', 'true');
-        textModeBtn.classList.remove('active');
-        textModeBtn.setAttribute('aria-selected', 'false');
-        imageModeBtn.classList.remove('active');
-        imageModeBtn.setAttribute('aria-selected', 'false');
-        searchInputEl.placeholder = 'Search audio & video…';
-        textSettingsPane.hidden = false;
-        imageSettingsPane.hidden = true;
-        searchBtn.textContent = 'Search';
-        if (imageResultsSection) imageResultsSection.hidden = true;
       }
     }
 
     textModeBtn.addEventListener('click', () => setSearchMode('text'));
     imageModeBtn.addEventListener('click', () => setSearchMode('image'));
-    audioModeBtn.addEventListener('click', () => setSearchMode('audio'));
 
     function triggerUnifiedSearch() {
       if (unifiedModeState.active === 'image') {

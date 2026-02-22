@@ -177,20 +177,23 @@
         <p class="muted">Once logged in, you can review and manage your documents here.</p>
       </div>
       <section id="kbSection" class="card card--wide card-soft" hidden>
-        <button class="collapsible-toggle" id="kbToggle" aria-expanded="false"><span class="caret">▸</span> Your Knowledge Base</button>
-        <div id="kbContent" hidden>
-          <div class="row wrap">
+        <div class="kb-toolbar">
+          <div>
+            <p class="screen-kicker">Library</p>
+            <h3>Your Knowledge Base</h3>
+            <p class="muted">Review and manage your stored documents.</p>
+          </div>
+          <div class="kb-toolbar-actions">
             <button id="kbRefreshBtn" class="primary">Refresh</button>
-            <button id="kbSortBtn" class="ghost" title="Toggle sort order" style="margin-left:8px">Latest first</button>
-            <span class="leftpad"></span>
+            <button id="kbSortBtn" class="ghost" title="Toggle sort order">Latest first</button>
             <button id="kbDeleteSelectedBtn" class="ghost" title="Delete selected">Delete selected</button>
           </div>
-          <div class="row">
-            <label><input type="checkbox" id="kbSelectAll" /> Select all</label>
-          </div>
-          <div class="row">
-            <div id="kbList" class="results"></div>
-          </div>
+        </div>
+        <div class="kb-select-row">
+          <label><input type="checkbox" id="kbSelectAll" /> Select all</label>
+        </div>
+        <div class="row">
+          <div id="kbList" class="results"></div>
         </div>
       </section>
     </section>
@@ -207,39 +210,46 @@
         <p class="muted">Uploads are tied to your active space.</p>
       </div>
       <section id="uploadSection" class="card card--wide card-soft" hidden>
-        <button class="collapsible-toggle" id="uploadToggle" aria-expanded="false"><span class="caret">▸</span> Upload to your Space</button>
-        <div id="uploadContent" hidden>
-          <div class="row wrap" style="width:100%; justify-content: space-between; align-items: center;">
-            <div>
-              <button id="uploadBtn" class="primary">Upload</button>
-              <div class="loader" id="uploadLoading" hidden style="display:inline-flex; margin-left:8px;">
-                <div class="spinner small"></div>
-                <span>Processing…</span>
-              </div>
-              <span id="uploadEmbeddingStatus" class="badge badge-soft" style="margin-left:8px" hidden></span>
-            </div>
-            <button id="clearUploadBtn" class="ghost" title="Clear uploads"><span class="refresh-icon">↻</span></button>
+        <div class="upload-header">
+          <div>
+            <p class="screen-kicker">Upload</p>
+            <h3>Upload to your space</h3>
+            <p class="muted">Drop files or browse to add new knowledge.</p>
           </div>
-          <div class="row">
-            <div id="dropzone" class="dropzone">
-              <div class="dz-inner">
-                <div class="dz-header">Drag & drop files</div>
-                <div class="dz-desc">Documents: PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON • Images: PNG, JPG, JPEG, TIFF, BMP, GIF</div>
-                <div class="dz-hint" id="dzHint">Maximum 50MB per file • Maximum 100 files per batch</div>
-                <div class="dz-status" id="dzStatus">Drop files here or use the file chooser below</div>
-                <div class="dz-meta" id="uploadStorageInfo"></div>
-              </div>
-            </div>
-          </div>
-          <div class="row">
+          <button id="clearUploadBtn" class="ghost" title="Clear uploads"><span class="refresh-icon">↻</span></button>
+        </div>
+        <div class="upload-actions">
+          <div class="upload-picker">
+            <label class="upload-picker-label" for="files">
+              <span>Browse files</span>
+            </label>
             <input id="files" type="file" multiple accept=".pdf,.txt,.csv,.md,.json,.html,.htm,.docx,.pptx,.xlsx,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.gif" />
+            <span id="fileSelectionText" class="muted">No files selected.</span>
           </div>
-          <div class="row" id="uploadListRow" hidden>
-            <div id="uploadList" class="progress-list"></div>
+          <div class="upload-submit">
+            <button id="uploadBtn" class="primary">Upload</button>
+            <div class="loader" id="uploadLoading" hidden>
+              <div class="spinner small"></div>
+              <span>Processing…</span>
+            </div>
+            <span id="uploadEmbeddingStatus" class="badge badge-soft" hidden></span>
           </div>
-          <div class="row" id="uploadStatusRow" hidden>
-            <pre id="uploadStatus" class="panel"></pre>
+        </div>
+        <div class="row">
+          <div id="dropzone" class="dropzone upload-dropzone">
+            <div class="dz-inner">
+              <div class="dz-header">Drag & drop files</div>
+              <div class="dz-desc">Documents: PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON • Images: PNG, JPG, JPEG, TIFF, BMP, GIF</div>
+              <div class="dz-status" id="dzStatus">Drop files here or use the file chooser above</div>
+              <div class="dz-meta" id="uploadStorageInfo"></div>
+            </div>
           </div>
+        </div>
+        <div class="row" id="uploadListRow" hidden>
+          <div id="uploadList" class="progress-list"></div>
+        </div>
+        <div class="row" id="uploadStatusRow" hidden>
+          <pre id="uploadStatus" class="panel"></pre>
         </div>
       </section>
     </section>
@@ -313,23 +323,33 @@
 
   <nav class="bottom-nav" aria-label="Primary">
     <button class="bottom-nav__item active" type="button" data-screen-target="search">
-      <span class="bottom-nav__icon">🔍</span>
+      <span class="bottom-nav__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" role="presentation"><circle cx="11" cy="11" r="7"></circle><line x1="16" y1="16" x2="21" y2="21"></line></svg>
+      </span>
       <span>Search</span>
     </button>
     <button class="bottom-nav__item" type="button" data-screen-target="library">
-      <span class="bottom-nav__icon">📚</span>
+      <span class="bottom-nav__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" role="presentation"><rect x="4" y="5" width="6" height="14" rx="2"></rect><rect x="10" y="5" width="6" height="14" rx="2"></rect><rect x="16" y="5" width="4" height="14" rx="2"></rect></svg>
+      </span>
       <span>Library</span>
     </button>
     <button class="bottom-nav__item" type="button" data-screen-target="upload">
-      <span class="bottom-nav__icon">⬆️</span>
+      <span class="bottom-nav__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" role="presentation"><path d="M12 16V6"></path><path d="M8 10l4-4 4 4"></path><rect x="5" y="16" width="14" height="4" rx="2"></rect></svg>
+      </span>
       <span>Upload</span>
     </button>
     <button class="bottom-nav__item" type="button" data-screen-target="research" id="bottomNavResearch">
-      <span class="bottom-nav__icon">🧪</span>
+      <span class="bottom-nav__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" role="presentation"><path d="M6 3h12v4a6 6 0 0 1-6 6 6 6 0 0 1-6-6V3z"></path><path d="M10 13v4"></path><path d="M14 13v4"></path><path d="M8 21h8"></path></svg>
+      </span>
       <span>Research</span>
     </button>
     <button class="bottom-nav__item" type="button" data-screen-target="account" id="bottomNavAccount">
-      <span class="bottom-nav__icon">👤</span>
+      <span class="bottom-nav__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" role="presentation"><circle cx="12" cy="9" r="4"></circle><path d="M4 21c1.6-4 5-6 8-6s6.4 2 8 6"></path></svg>
+      </span>
       <span>Account</span>
     </button>
   </nav>
@@ -1005,14 +1025,6 @@
       const settingsBtn = document.getElementById('settingsBtn');
       if (settingsPanel && !settingsPanel.hidden) settingsPanel.hidden = true;
       if (settingsBtn) settingsBtn.setAttribute('aria-expanded', 'false');
-      const kbContent = document.getElementById('kbContent');
-      const kbToggle = document.getElementById('kbToggle');
-      if (kbContent && !kbContent.hidden) kbContent.hidden = true;
-      if (kbToggle) kbToggle.setAttribute('aria-expanded', 'false');
-      const uploadContent = document.getElementById('uploadContent');
-      const uploadToggle = document.getElementById('uploadToggle');
-      if (uploadContent && !uploadContent.hidden) uploadContent.hidden = true;
-      if (uploadToggle) uploadToggle.setAttribute('aria-expanded', 'false');
       if (state.user) {
         await initUser();
       }
@@ -2339,33 +2351,10 @@
           if (cfg.max_upload_size_mb != null) {
             MAX_BYTES = (parseInt(cfg.max_upload_size_mb, 10) || 50) * 1024 * 1024;
           }
-          const hint = document.getElementById('dzHint');
-          if (hint) hint.textContent = `Maximum ${Math.round(MAX_BYTES/1024/1024)}MB per file • Maximum ${MAX_FILES} files per batch`;
-
           const info = document.getElementById('uploadStorageInfo');
           if (info) {
-            const lines = [];
-            const backend = (cfg.storage_backend || 'local').toString().toUpperCase();
-            lines.push(`Storage backend: ${backend}`);
-            if (cfg.enable_image_storage === false) {
-              lines.push('Image ingestion disabled (vision embeddings off).');
-            }
-            if (cfg.oci) {
-              const oci = cfg.oci;
-              if (oci.upload_enabled) {
-                if (oci.ready === false) {
-                  lines.push(`⚠️ OCI uploads blocked: ${oci.detail || 'missing bucket or credentials'}`);
-                } else if (oci.ready === true) {
-                  lines.push(`OCI bucket ${(oci.bucket || '').toString()} ready for mirroring.`);
-                } else {
-                  lines.push('Validating OCI configuration…');
-                }
-              } else {
-                lines.push('OCI mirroring disabled.');
-              }
-            }
-            info.innerHTML = lines.map(line => `<div>${escapeHtml(line)}</div>`).join('');
-            info.hidden = lines.length === 0;
+            info.innerHTML = '';
+            info.hidden = true;
           }
         }
       } catch (e) {
@@ -2645,20 +2634,6 @@
       pump();
     });
 
-    // Initialize
-    function setupCollapsible(toggleId, contentId) {
-      const t = document.getElementById(toggleId);
-      const c = document.getElementById(contentId);
-      if (!t || !c) return;
-      const caret = t.querySelector('.caret');
-      t.addEventListener('click', () => {
-        const expanded = t.getAttribute('aria-expanded') === 'true';
-        t.setAttribute('aria-expanded', String(!expanded));
-        c.hidden = expanded;
-        if (caret) caret.style.transform = expanded ? 'rotate(0deg)' : 'rotate(90deg)';
-      });
-    }
-
     window.addEventListener('DOMContentLoaded', async () => {
       const files = document.getElementById('files');
       const status = document.getElementById('uploadStatus');
@@ -2676,8 +2651,6 @@
       await loadUploadConfig();
       if (state && state.user) { try { await loadKB(); } catch (e) {} }
       setActiveScreen(state.user ? 'search' : 'account');
-      setupCollapsible('kbToggle', 'kbContent');
-      setupCollapsible('uploadToggle', 'uploadContent');
     });
 
     window.addEventListener('beforeunload', () => {

@@ -98,6 +98,84 @@ html { scrollbar-gutter: stable both-edges; }
   box-shadow: 0 14px 30px rgba(15,23,42,0.08);
 }
 .card-soft .row { margin: 10px 0; }
+.kb-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.kb-toolbar h3 { margin: 0; }
+.kb-toolbar p { margin: 4px 0 0; }
+.kb-toolbar-actions {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.kb-select-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+.kb-select-row input { margin-right: 6px; }
+.upload-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.upload-header h3 { margin: 0; }
+.upload-actions {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.upload-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.upload-picker input[type="file"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  height: 0;
+  width: 0;
+}
+.upload-picker-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 18px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-weight: 600;
+  cursor: pointer;
+  width: fit-content;
+  min-width: 160px;
+  transition: box-shadow .2s ease, border-color .2s ease;
+}
+.upload-picker-label:hover { border-color: #cbd5f5; box-shadow: 0 8px 18px rgba(15,23,42,0.08); }
+.upload-submit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+.upload-submit .primary { min-width: 160px; }
+.upload-dropzone { min-height: 200px; }
+.upload-dropzone .dz-desc { text-align: center; }
+.upload-dropzone .dz-status { margin-top: 6px; }
+.upload-dropzone .dz-meta { display: none; }
 /* Hero banner */
 .hero { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; padding-top: 40px; padding-bottom: 28px; min-height: 60vh; }
 
@@ -922,6 +1000,18 @@ body.dark .hit:hover { background: #0e1530; border-color: #1f2937; }
 .bottom-nav__item.active .bottom-nav__icon { transform: scale(1.05); }
 .bottom-nav__item:hover { color: var(--text); background: rgba(37,99,235,0.08); }
 .bottom-nav__icon { font-size: 18px; }
+.bottom-nav__icon svg {
+  width: 22px;
+  height: 22px;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.bottom-nav__item.active .bottom-nav__icon svg {
+  stroke: var(--primary-strong);
+}
 
 @media (min-width: 960px) {
   .bottom-nav { position: sticky; top: 68px; height: auto; grid-template-columns: repeat(5, max-content); justify-content: center; gap: 10px; border-radius: 999px; padding: 10px 18px; margin: 0 auto 24px; width: fit-content; }
@@ -980,6 +1070,9 @@ body.dark .bottom-nav__item.active {
 .auth-card button { width: 100%; }
 .auth-card h3 { margin-top: 0; }
 .auth-card input { width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface-muted); margin-bottom: 8px; }
+.auth-card .small { margin-top: 10px; }
+.auth-card a { color: #2563eb; font-weight: 600; text-decoration: none; }
+.auth-card a:hover { text-decoration: underline; }
 .app-panel input { padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-muted); }
 .app-panel select { border-radius: 14px; }
 .app-panel .row { align-items: center; }
@@ -1011,6 +1104,10 @@ body.dark .auth-card input, body.dark .app-panel input { background: #0b1220; co
   .logo { font-size: 56px; }
   .search-tabs { width: calc(100% - 32px); border-radius: 18px; max-width: none; }
   .search-tab { flex: 1 1 0; text-align: center; }
+  .upload-actions { grid-template-columns: 1fr; align-items: stretch; }
+  .upload-submit { align-items: stretch; }
+  .upload-submit .primary { width: 100%; }
+  .upload-picker-label { width: 100%; }
 }
 
 @media (max-width: 900px) {

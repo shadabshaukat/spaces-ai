@@ -673,8 +673,8 @@ body.dark .dr-followup-chip:hover {
 
 /* Search actions under bar */
 .search-actions-row { display: flex; gap: 10px; justify-content: center; margin-top: 10px; width: 100%; max-width: 640px; margin-left: auto; margin-right: auto; }
-.search-tabs { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; margin-bottom: 16px; padding: 4px; background: var(--surface); box-shadow: 0 10px 20px rgba(15,23,42,0.06); }
-.search-tab { border: none; background: transparent; padding: 10px 20px; border-radius: 999px; font-weight: 600; color: var(--text-muted); }
+.search-tabs { display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 6px; border: 1px solid var(--border); border-radius: 999px; margin-bottom: 16px; padding: 6px; background: var(--surface); box-shadow: 0 10px 20px rgba(15,23,42,0.06); }
+.search-tab { border: none; background: transparent; padding: 8px 16px; border-radius: 999px; font-weight: 600; color: var(--text-muted); }
 .search-tab.active { background: var(--primary); color: #fff; box-shadow: 0 6px 16px rgba(37,99,235,0.25); }
 .search-tab:active { transform: scale(0.98); }
 .search-panel { width: 100%; max-width: 720px; margin: 0 auto; }
@@ -980,6 +980,8 @@ body.dark .auth-card input, body.dark .app-panel input { background: #0b1220; co
   .search-actions-row { width: calc(100% - 32px); }
   .settings { max-width: calc(100% - 32px); }
   .logo { font-size: 56px; }
+  .search-tabs { width: 100%; border-radius: 18px; }
+  .search-tab { flex: 1 1 140px; text-align: center; }
 }
 
 /* Dark mode tweaks */

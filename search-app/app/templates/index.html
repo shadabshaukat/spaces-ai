@@ -302,20 +302,28 @@
         </div>
       </div>
       <div id="accountPanel" class="card card--wide card-soft" hidden>
-        <div class="row" style="justify-content: space-between; width: 100%;">
+        <div class="row account-summary">
           <div>
             <strong>Signed in</strong>
             <p id="userEmail" class="user-email"></p>
           </div>
           <button id="logoutBtn" class="ghost" title="Logout">Logout</button>
         </div>
-        <div class="row wrap">
-          <label for="spacesSelect">Space</label>
-          <select id="spacesSelect"></select>
-          <button id="setDefaultSpaceBtn" class="ghost">Set default</button>
-          <span class="leftpad"></span>
-          <input id="newSpaceName" placeholder="Create new space…" />
-          <button id="createSpaceBtn">Create</button>
+        <div class="row wrap account-actions">
+          <div class="account-segment">
+            <span class="segment-label">Space</span>
+            <div class="segment-control">
+              <select id="spacesSelect"></select>
+              <button id="setDefaultSpaceBtn" class="ghost">Set default</button>
+            </div>
+          </div>
+          <div class="account-segment">
+            <span class="segment-label">New space</span>
+            <div class="segment-control">
+              <input id="newSpaceName" placeholder="Create new space…" />
+              <button id="createSpaceBtn">Create</button>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -2184,15 +2192,9 @@
             const link = `<a href="#" data-doc-id="${doc.id}">${escapeHtml(docTitle)}</a>`;
             const metaChips = [];
             if (doc.source_type) metaChips.push(`<span class="badge badge-soft">${escapeHtml(doc.source_type)}</span>`);
-            if (typeof doc.chunk_count === 'number') metaChips.push(`<span class="badge badge-soft">${doc.chunk_count} chunks</span>`);
             const created = formatDateLabel(doc.created_at);
             if (created) metaChips.push(`<span class="badge badge-soft">${escapeHtml(created)}</span>`);
             if (doc.metadata && doc.metadata.object_url) metaChips.push(renderStorageBadge(state.storageBackend));
-            if (doc.image_embedding_status === 'stored') {
-              metaChips.push('<span class="badge badge-soft">Image embedding stored</span>');
-            } else if (doc.image_embedding_status === 'missing') {
-              metaChips.push('<span class="badge badge-warn">Image embedding missing</span>');
-            }
             const metaHtml = metaChips.length ? `<div class="kb-doc-meta">${metaChips.join('')}</div>` : '';
 
             const docImages = Array.isArray(doc.images) ? doc.images : [];
@@ -2201,16 +2203,20 @@
             const previewBlock = previewSrc ? `<div class="kb-doc-preview"><img src="${escapeHtml(previewSrc)}" alt="Preview for ${escapeHtml(docTitle)}" loading="lazy" /></div>` : '';
 
             const infoLines = [];
-            if (created) infoLines.push(`<li><strong>Created:</strong> ${escapeHtml(created)}</li>`);
-            if (typeof doc.chunk_count === 'number') infoLines.push(`<li><strong>Chunks:</strong> ${doc.chunk_count}</li>`);
-            if (doc.metadata && doc.metadata.summary) infoLines.push(`<li><strong>Summary:</strong> ${escapeHtml(doc.metadata.summary)}</li>`);
-            if (Array.isArray(doc.metadata?.image_tags) && doc.metadata.image_tags.length) {
-              infoLines.push(`<li><strong>Tags:</strong> ${doc.metadata.image_tags.map(t => escapeHtml(String(t))).join(', ')}</li>`);
-            }
+            if (doc.metadata && doc.metadata.summary) infoLines.push(`<li><strong>Summary</strong> ${escapeHtml(doc.metadata.summary)}</li>`);
             if (doc.metadata && doc.metadata.image_caption && !doc.metadata?.summary) {
-              infoLines.push(`<li><strong>Caption:</strong> ${escapeHtml(doc.metadata.image_caption)}</li>`);
+              infoLines.push(`<li><strong>Caption</strong> ${escapeHtml(doc.metadata.image_caption)}</li>`);
             }
-            const infoHtml = infoLines.length ? `<ul class="kb-meta-list">${infoLines.join('')}</ul>` : '<p class="muted">No additional metadata yet.</p>';
+            const infoHtml = infoLines.length ? `<ul class="kb-meta-list">${infoLines.join('')}</ul>` : '<p class="muted">No additional notes yet.</p>';
+
+            const subMetaParts = [];
+            if (typeof doc.chunk_count === 'number') subMetaParts.push(`${doc.chunk_count} chunks`);
+            if (docImages.length) subMetaParts.push(`${docImages.length} image${docImages.length === 1 ? '' : 's'}`);
+            if (Array.isArray(doc.metadata?.image_tags) && doc.metadata.image_tags.length) {
+              const tags = doc.metadata.image_tags.slice(0, 3).map(t => escapeHtml(String(t))).join(', ');
+              subMetaParts.push(`Tags: ${tags}${doc.metadata.image_tags.length > 3 ? '…' : ''}`);
+            }
+            const subMetaHtml = subMetaParts.length ? `<div class="kb-doc-submeta">${subMetaParts.map(part => `<span>${part}</span>`).join('')}</div>` : '';
 
             const gallery = docImages.map((img) => {
               const thumbSrc = img.thumbnail_url || img.thumbnail_object_url || img.thumbnail_path || img.file_path || '';
@@ -2248,6 +2254,7 @@
                     
                 </div>
                 ${metaHtml}
+                ${subMetaHtml}
                 <div class="kb-doc-body">
                   ${previewBlock}
                   <div class="kb-doc-details">
@@ -2378,7 +2385,7 @@
         added.push(f);
       }
       droppedFiles.push(...added);
-      if (dzStatus) dzStatus.textContent = droppedFiles.length ? `${droppedFiles.length} file(s) ready` : 'Drop files here or use the file chooser below';
+      if (dzStatus) dzStatus.textContent = droppedFiles.length ? `${droppedFiles.length} file(s) ready` : 'Drop files here or use the file chooser above';
       if (opts.isFolder && (skippedType > 0 || (fileList.length + (droppedFiles.length - added.length)) > MAX_FILES)) {
         showToast(`Folder contains unsupported types or too many files. Please upload a folder with 100 files or less and only supported types: ${SUPPORTED_TYPES_TXT}.`);
       } else if (skipped.length) {
@@ -2442,7 +2449,7 @@
         const count = filesInputEl.files ? filesInputEl.files.length : 0;
         const badge = document.getElementById('fileSelectionText');
         if (badge) badge.textContent = count ? `${count} file(s) selected.` : 'No files selected.';
-        if (dzStatus) dzStatus.textContent = count ? `${count} file(s) selected` : 'Drop files here or use the file chooser below';
+        if (dzStatus) dzStatus.textContent = count ? `${count} file(s) selected` : 'Drop files here or use the file chooser above';
       });
     }
 
@@ -2462,7 +2469,7 @@
         if (listRow) listRow.hidden = true;
         if (statusRow) statusRow.hidden = true;
         droppedFiles = [];
-        if (dzStatus) dzStatus.textContent = 'Drop files here or use the file chooser below';
+        if (dzStatus) dzStatus.textContent = 'Drop files here or use the file chooser above';
         if (badge) badge.textContent = 'No files selected.';
         showToast('Cleared');
       } catch {}
@@ -2644,7 +2651,7 @@
       if (searchInputEl) searchInputEl.value = '';
       if (files) files.value = '';
       if (status) status.textContent = '';
-      if (dzStatus) dzStatus.textContent = 'Drop files here or use the file chooser below';
+      if (dzStatus) dzStatus.textContent = 'Drop files here or use the file chooser above';
       if (badge) badge.textContent = 'No files selected.';
       droppedFiles = [];
       await initUser();

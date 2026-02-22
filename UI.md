@@ -33,6 +33,8 @@
 - Refactored auth cards with larger radii, gradient surface, and full-width CTAs.
 - Added pressed states for buttons and cards.
 - Restyled the Account toolbar into stacked segmented-control blocks for Space selection and New space creation.
+- Added a logged-out landing panel with a “Try SpacesAI” CTA that opens the auth modal only on click.
+- Limited the Account tab to Spaces when logged in.
 
 ### iOS-Style Polish Recommendations
 - Use a consistent 8/12/16 spacing scale across panels, cards, and list rows.
@@ -45,6 +47,17 @@
 - Added press/hover transitions on buttons, tabs, and cards.
 - Added subtle fade/slide transitions for search results, image cards, and answer panels.
 - Added active tab states for the bottom navigation to mirror iOS tab selection.
+
+### Image Search
+- Ensured image search card actions stay pinned to the bottom for consistent layouts.
+- Added Enter-key support for image mode searches across the main input, tags, and Top-K fields.
+- Rendered all KB image tags (no truncation) and filtered numeric OCR noise.
+- Styled image tags as purple gradient pills for consistent visual emphasis.
+
+### Deep Research
+- Hid the sign-in lock message once logged in.
+- Auto-generated session titles when missing using the email prefix and a random hash.
+- Set Deep Research to be more local-first by default (web toggle unchecked).
 
 ### Files Updated
 - `search-app/app/templates/index.html`

@@ -273,7 +273,7 @@
     </section>
 
     <section class="app-screen" id="screenAccount" data-screen="account">
-      <div class="screen-header">
+      <div class="screen-header" id="accountHeader">
         <div>
           <p class="screen-kicker">Account</p>
           <h2>Manage your profile</h2>
@@ -342,7 +342,7 @@
     </button>
     <button class="bottom-nav__item" type="button" data-screen-target="research" id="bottomNavResearch">
       <span class="bottom-nav__icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" role="presentation"><path d="M6 3h12v4a6 6 0 0 1-6 6 6 6 0 0 1-6-6V3z"></path><path d="M10 13v4"></path><path d="M14 13v4"></path><path d="M8 21h8"></path></svg>
+        <svg viewBox="0 0 24 24" role="presentation"><path d="M9 3h6"></path><path d="M10 3v5l-5 9a4 4 0 0 0 3.5 6h7a4 4 0 0 0 3.5-6l-5-9V3"></path><path d="M8 15h8"></path></svg>
       </span>
       <span>Research</span>
     </button>
@@ -633,6 +633,7 @@
       const kbLocked = document.getElementById('kbLocked');
       const uploadLocked = document.getElementById('uploadLocked');
       const researchLocked = document.getElementById('researchLocked');
+      const accountHeader = document.getElementById('accountHeader');
       if (state.user) {
         if (auth) auth.hidden = true;
         if (accountPanel) accountPanel.hidden = false;
@@ -642,6 +643,7 @@
         if (kbLocked) kbLocked.hidden = true;
         if (uploadLocked) uploadLocked.hidden = true;
         if (researchLocked) researchLocked.hidden = true;
+        if (accountHeader) accountHeader.hidden = false;
         if (emailEl) emailEl.textContent = state.user.email;
       } else {
         if (auth) auth.hidden = false;
@@ -652,6 +654,7 @@
         if (kbLocked) kbLocked.hidden = false;
         if (uploadLocked) uploadLocked.hidden = false;
         if (researchLocked) researchLocked.hidden = false;
+        if (accountHeader) accountHeader.hidden = true;
         if (emailEl) emailEl.textContent = '';
       }
     }

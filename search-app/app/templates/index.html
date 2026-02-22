@@ -731,7 +731,7 @@
         if (kb) kb.hidden = false;
         if (kbSection) kbSection.hidden = !kbExpanded;
         if (kbLocked) kbLocked.hidden = true;
-        if (uploadLocked) uploadLocked.hidden = !uploadExpanded;
+        if (uploadLocked) uploadLocked.hidden = true;
         if (researchLocked) researchLocked.hidden = true;
         if (researchSection) researchSection.hidden = !researchExpanded;
         if (accountHeader) accountHeader.hidden = false;
@@ -832,7 +832,7 @@
       const uploadLocked = document.getElementById('uploadLocked');
       if (headerToggle) headerToggle.setAttribute('aria-expanded', String(uploadExpanded));
       if (uploadSection) uploadSection.hidden = !uploadExpanded || !state.user;
-      if (uploadLocked) uploadLocked.hidden = !state.user;
+      if (uploadLocked) uploadLocked.hidden = Boolean(state.user);
       if (headerToggle) headerToggle.classList.toggle('is-open', uploadExpanded);
     }
 

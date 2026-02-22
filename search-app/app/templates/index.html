@@ -4,12 +4,14 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SpacesAI</title>
+  <link rel="icon" type="image/png" sizes="64x64" href="/static/icons/favicon-64.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png" />
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body class="saas">
   <header class="topbar topbar--app">
     <div class="topbar-brand" aria-label="SpacesAI space selector">
-      <h4>SpacesAI</h4>
+      <button id="topbarHomeBtn" class="topbar-home" type="button" aria-label="Go to home">SpacesAI</button>
       <select id="topbarSpaceSelect" aria-label="Choose space"></select>
     </div>
     <div class="spacer"></div>
@@ -213,10 +215,13 @@
 
     <section class="app-screen" id="screenUpload" data-screen="upload">
       <div class="screen-header">
-        <div>
-          <p class="screen-kicker">Upload</p>
-          <h2>Add content to your space</h2>
-        </div>
+        <button id="uploadHeaderToggle" class="kb-header-toggle" type="button" aria-expanded="false">
+          <div>
+            <p class="screen-kicker">Upload</p>
+            <h2>Add content to your space</h2>
+          </div>
+          <span class="caret" aria-hidden="true">▸</span>
+        </button>
       </div>
       <div class="screen-locked" id="uploadLocked" hidden>
         <strong>Sign in to upload files.</strong>
@@ -273,12 +278,15 @@
 
     <section class="app-screen" id="screenResearch" data-screen="research">
       <div class="screen-header">
-        <div>
-          <p class="screen-kicker">Research</p>
-          <h2>Deep research workspace</h2>
-        </div>
+        <button id="researchHeaderToggle" class="kb-header-toggle" type="button" aria-expanded="false">
+          <div>
+            <p class="screen-kicker">Research</p>
+            <h2>Deep research workspace</h2>
+          </div>
+          <span class="caret" aria-hidden="true">▸</span>
+        </button>
       </div>
-      <div class="card card--wide research-card">
+      <div id="researchSection" class="card card--wide research-card" hidden>
         <h3>Deep Research</h3>
         <p class="muted">Launch a guided research session to synthesize answers from your spaces and the web.</p>
         <button id="researchOpenBtn" class="primary">Open Deep Research</button>
@@ -291,10 +299,13 @@
 
     <section class="app-screen" id="screenAccount" data-screen="account">
       <div class="screen-header" id="accountHeader">
-        <div>
-          <p class="screen-kicker">Account</p>
-          <h2>Manage your profile</h2>
-        </div>
+        <button id="accountHeaderToggle" class="kb-header-toggle" type="button" aria-expanded="false">
+          <div>
+            <p class="screen-kicker">Account</p>
+            <h2>Manage your profile</h2>
+          </div>
+          <span class="caret" aria-hidden="true">▸</span>
+        </button>
       </div>
       <div id="authPanel" class="auth" hidden>
         <div class="row cols">
@@ -652,6 +663,9 @@
     let kbAlphaOrder = null;
     let kbViewMode = 'list';
     let kbExpanded = false;
+    let uploadExpanded = false;
+    let accountExpanded = false;
+    let researchExpanded = false;
 
     function setTopbarSpaceDisabled(disabled) {
       const topbarSelect = document.getElementById('topbarSpaceSelect');
@@ -669,18 +683,22 @@
       const kbSection = document.getElementById('kbSection');
       const uploadLocked = document.getElementById('uploadLocked');
       const researchLocked = document.getElementById('researchLocked');
+      const researchSection = document.getElementById('researchSection');
       const accountHeader = document.getElementById('accountHeader');
+      const accountHeaderToggle = document.getElementById('accountHeaderToggle');
       if (state.user) {
         if (auth) auth.hidden = true;
         if (accountPanel) accountPanel.hidden = false;
         if (app) app.hidden = false;
-        if (up) up.hidden = false;
+        if (up) up.hidden = !uploadExpanded;
         if (kb) kb.hidden = false;
         if (kbSection) kbSection.hidden = !kbExpanded;
         if (kbLocked) kbLocked.hidden = true;
-        if (uploadLocked) uploadLocked.hidden = true;
-        if (researchLocked) researchLocked.hidden = true;
+        if (uploadLocked) uploadLocked.hidden = !uploadExpanded;
+        if (researchLocked) researchLocked.hidden = !researchExpanded;
+        if (researchSection) researchSection.hidden = !researchExpanded;
         if (accountHeader) accountHeader.hidden = false;
+        if (accountHeaderToggle) accountHeaderToggle.setAttribute('aria-expanded', String(accountExpanded));
         if (emailEl) emailEl.textContent = state.user.email;
       } else {
         if (auth) auth.hidden = false;
@@ -690,8 +708,9 @@
         if (kb) kb.hidden = true;
         if (kbSection) kbSection.hidden = true;
         if (kbLocked) kbLocked.hidden = false;
-        if (uploadLocked) uploadLocked.hidden = false;
-        if (researchLocked) researchLocked.hidden = false;
+        if (uploadLocked) uploadLocked.hidden = true;
+        if (researchLocked) researchLocked.hidden = true;
+        if (researchSection) researchSection.hidden = true;
         if (accountHeader) accountHeader.hidden = true;
         if (emailEl) emailEl.textContent = '';
       }
@@ -764,6 +783,39 @@
       if (kbBody) kbBody.hidden = !kbExpanded;
       if (kbSection) kbSection.hidden = !kbExpanded;
       if (kbHeaderToggle) kbHeaderToggle.classList.toggle('is-open', kbExpanded);
+    }
+
+    function setUploadExpanded(expanded) {
+      uploadExpanded = Boolean(expanded);
+      const headerToggle = document.getElementById('uploadHeaderToggle');
+      const uploadSection = document.getElementById('uploadSection');
+      const uploadLocked = document.getElementById('uploadLocked');
+      if (headerToggle) headerToggle.setAttribute('aria-expanded', String(uploadExpanded));
+      if (uploadSection) uploadSection.hidden = !uploadExpanded || !state.user;
+      if (uploadLocked) uploadLocked.hidden = !uploadExpanded || Boolean(state.user);
+      if (headerToggle) headerToggle.classList.toggle('is-open', uploadExpanded);
+    }
+
+    function setAccountExpanded(expanded) {
+      accountExpanded = Boolean(expanded);
+      const headerToggle = document.getElementById('accountHeaderToggle');
+      const auth = document.getElementById('authPanel');
+      const accountPanel = document.getElementById('accountPanel');
+      if (headerToggle) headerToggle.setAttribute('aria-expanded', String(accountExpanded));
+      if (auth) auth.hidden = !accountExpanded || Boolean(state.user);
+      if (accountPanel) accountPanel.hidden = !accountExpanded || !state.user;
+      if (headerToggle) headerToggle.classList.toggle('is-open', accountExpanded);
+    }
+
+    function setResearchExpanded(expanded) {
+      researchExpanded = Boolean(expanded);
+      const headerToggle = document.getElementById('researchHeaderToggle');
+      const researchSection = document.getElementById('researchSection');
+      const researchLocked = document.getElementById('researchLocked');
+      if (headerToggle) headerToggle.setAttribute('aria-expanded', String(researchExpanded));
+      if (researchSection) researchSection.hidden = !researchExpanded;
+      if (researchLocked) researchLocked.hidden = !researchExpanded || Boolean(state.user);
+      if (headerToggle) headerToggle.classList.toggle('is-open', researchExpanded);
     }
 
     // Auth handlers
@@ -2402,7 +2454,25 @@
       setKbExpanded(!kbExpanded);
     });
 
+    const uploadHeaderToggle = document.getElementById('uploadHeaderToggle');
+    uploadHeaderToggle?.addEventListener('click', () => {
+      setUploadExpanded(!uploadExpanded);
+    });
+
+    const accountHeaderToggle = document.getElementById('accountHeaderToggle');
+    accountHeaderToggle?.addEventListener('click', () => {
+      setAccountExpanded(!accountExpanded);
+    });
+
+    const researchHeaderToggle = document.getElementById('researchHeaderToggle');
+    researchHeaderToggle?.addEventListener('click', () => {
+      setResearchExpanded(!researchExpanded);
+    });
+
     document.getElementById('logoHomeBtn')?.addEventListener('click', () => {
+      resetHomeView().catch(console.error);
+    });
+    document.getElementById('topbarHomeBtn')?.addEventListener('click', () => {
       resetHomeView().catch(console.error);
     });
 
@@ -2769,6 +2839,9 @@
       if (badge) badge.textContent = 'No files selected.';
       droppedFiles = [];
       setKbExpanded(false);
+      setUploadExpanded(false);
+      setAccountExpanded(false);
+      setResearchExpanded(false);
       setKbViewMode('list');
       await initUser();
       await loadProviders();

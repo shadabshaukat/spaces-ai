@@ -1181,7 +1181,7 @@
       setUploadExpanded(false);
       setAccountExpanded(false);
       setResearchExpanded(false);
-      setActiveScreen('search');
+      setActiveScreen(state.user ? 'search' : 'account');
       const settingsPanel = document.getElementById('settingsPanel');
       const settingsBtn = document.getElementById('settingsBtn');
       if (settingsPanel && !settingsPanel.hidden) settingsPanel.hidden = true;
@@ -2910,7 +2910,10 @@
       await loadDeepResearchConfig();
       await loadUploadConfig();
       if (state && state.user) { try { await loadKB(); } catch (e) {} }
-      setActiveScreen('search');
+      setActiveScreen(state.user ? 'search' : 'account');
+      if (!state.user) {
+        setAccountExpanded(true);
+      }
     });
 
     window.addEventListener('beforeunload', () => {

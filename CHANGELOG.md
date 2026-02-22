@@ -36,3 +36,10 @@ All notable changes to this repository are documented in this file. Keep entries
 - Updated upload dropzone helper text to “Drop files here or use the file chooser above.”
 - Limited image embedding status badges to image uploads only, showing warnings only when embeddings fail.
 - Added UI.md recommendations for consistent iOS-like spacing, typography, and modal header alignment.
+- Added a logged-out landing panel with “Try SpacesAI” CTA that opens auth on click (no auto-open).
+- Limited the Account tab to Spaces when logged in.
+- Pinned image search card actions (e.g., “Open document”) to the bottom for consistent layouts.
+- Added Enter-key submission for image searches from the main input, tags, and Top-K fields.
+- Rendered all KB image tags (no truncation) with OCR-noise filtering and purple gradient pill styling.
+- Hid Deep Research lock message when logged in and auto-generated session titles when missing.
+- Defaulted Deep Research to local-first behavior (web toggle unchecked; stricter web-trigger heuristic).

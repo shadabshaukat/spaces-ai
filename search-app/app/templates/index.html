@@ -200,6 +200,11 @@
               <button id="kbSortBtn" class="ghost" title="Toggle sort order">Latest first</button>
               <button id="kbAlphaSortBtn" class="ghost" title="Toggle alphabetical sort">A–Z</button>
             </div>
+            <div class="kb-toolbar-row kb-pagination" id="kbPagination" hidden>
+              <button id="kbPrevPage" class="ghost" type="button">← Prev</button>
+              <div class="kb-page-info" id="kbPageInfo">Page 1</div>
+              <button id="kbNextPage" class="ghost" type="button">Next →</button>
+            </div>
           </div>
         </div>
         <div id="kbBody" class="kb-body">
@@ -663,6 +668,8 @@
     let kbAlphaOrder = null;
     let kbViewMode = 'list';
     let kbExpanded = false;
+    let kbPage = 1;
+    const kbPageSize = 25;
     let uploadExpanded = false;
     let accountExpanded = false;
     let researchExpanded = false;
@@ -1163,6 +1170,11 @@
       clearTextResults();
       clearImageSearch();
       setSearchMode('text');
+      setKbExpanded(false);
+      setUploadExpanded(false);
+      setAccountExpanded(false);
+      setResearchExpanded(false);
+      setActiveScreen('search');
       const settingsPanel = document.getElementById('settingsPanel');
       const settingsBtn = document.getElementById('settingsBtn');
       if (settingsPanel && !settingsPanel.hidden) settingsPanel.hidden = true;
@@ -2309,10 +2321,19 @@
         if (state.spaceId) qsParts.push(`space_id=${encodeURIComponent(state.spaceId)}`);
         if (kbOrder) qsParts.push(`order=${encodeURIComponent(kbOrder)}`);
         if (kbAlphaOrder) qsParts.push(`alpha=${encodeURIComponent(kbAlphaOrder)}`);
+        qsParts.push(`limit=${kbPageSize}`);
+        qsParts.push(`offset=${(kbPage - 1) * kbPageSize}`);
         const qs = qsParts.length ? `?${qsParts.join('&')}` : '';
         const data = await api(`/api/kb${qs}`);
         const list = document.getElementById('kbList');
         const sec = document.getElementById('kbSection');
+        const pagination = document.getElementById('kbPagination');
+        const pageInfo = document.getElementById('kbPageInfo');
+        const prevBtn = document.getElementById('kbPrevPage');
+        const nextBtn = document.getElementById('kbNextPage');
+        const total = Number(data.total || 0);
+        const totalPages = Math.max(1, Math.ceil(total / kbPageSize));
+        if (kbPage > totalPages) kbPage = totalPages;
         list.innerHTML = '';
         if (Array.isArray(data.documents) && data.documents.length) {
           data.documents.forEach((doc) => {
@@ -2400,6 +2421,12 @@
         } else {
           list.textContent = 'No documents yet.';
         }
+        if (pagination) {
+          pagination.hidden = totalPages <= 1;
+          if (pageInfo) pageInfo.textContent = `Page ${kbPage} of ${totalPages}`;
+          if (prevBtn) prevBtn.disabled = kbPage <= 1;
+          if (nextBtn) nextBtn.disabled = kbPage >= totalPages;
+        }
         setKbViewMode(kbViewMode);
         sec.hidden = !kbExpanded;
         if (kbExpanded) {
@@ -2427,6 +2454,7 @@
     if (kbSortBtn) kbSortBtn.addEventListener('click', () => {
       kbOrder = (kbOrder === 'desc') ? 'asc' : 'desc';
       kbSortBtn.textContent = kbOrder === 'desc' ? 'Latest first' : 'Oldest first';
+      kbPage = 1;
       loadKB();
     });
 
@@ -2441,6 +2469,18 @@
       }
       kbAlphaSortBtn.textContent = kbAlphaOrder === 'asc' ? 'A–Z' : (kbAlphaOrder === 'desc' ? 'Z–A' : 'A–Z');
       kbAlphaSortBtn.classList.toggle('active', Boolean(kbAlphaOrder));
+      kbPage = 1;
+      loadKB();
+    });
+
+    document.getElementById('kbPrevPage')?.addEventListener('click', () => {
+      if (kbPage > 1) {
+        kbPage -= 1;
+        loadKB();
+      }
+    });
+    document.getElementById('kbNextPage')?.addEventListener('click', () => {
+      kbPage += 1;
       loadKB();
     });
 
@@ -2452,6 +2492,10 @@
     const kbHeaderToggle = document.getElementById('kbHeaderToggle');
     kbHeaderToggle?.addEventListener('click', () => {
       setKbExpanded(!kbExpanded);
+      if (kbExpanded) {
+        kbPage = 1;
+        loadKB();
+      }
     });
 
     const uploadHeaderToggle = document.getElementById('uploadHeaderToggle');
@@ -2849,7 +2893,7 @@
       await loadDeepResearchConfig();
       await loadUploadConfig();
       if (state && state.user) { try { await loadKB(); } catch (e) {} }
-      setActiveScreen(state.user ? 'search' : 'account');
+      setActiveScreen('search');
     });
 
     window.addEventListener('beforeunload', () => {

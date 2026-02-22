@@ -151,6 +151,17 @@ html { scrollbar-gutter: stable both-edges; }
   flex-direction: column;
   gap: 10px;
 }
+
+.kb-pagination {
+  justify-content: flex-start;
+  gap: 12px;
+  padding-top: 6px;
+}
+
+.kb-page-info {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
 .kb-toolbar-row {
   display: flex;
   align-items: center;

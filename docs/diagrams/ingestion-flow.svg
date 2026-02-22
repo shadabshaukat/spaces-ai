@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="260" viewBox="0 0 1000 260">
+  <style>
+    .box{fill:#ffffff;stroke:#3b82f6;stroke-width:2;rx:8;ry:8;}
+    .title{fill:#0f172a;font-family:Arial,sans-serif;font-size:13px;font-weight:700;}
+    .caption{fill:#475569;font-family:Arial,sans-serif;font-size:11px;}
+    .arrow{stroke:#64748b;stroke-width:2;fill:none;marker-end:url(#arrowhead);}
+  </style>
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#64748b" />
+    </marker>
+  </defs>
+
+  <rect class="box" x="40" y="90" width="150" height="60" />
+  <text class="title" x="70" y="120">Upload UI</text>
+
+  <rect class="box" x="230" y="90" width="160" height="60" />
+  <text class="title" x="265" y="120">FastAPI</text>
+  <text class="caption" x="250" y="138">/api/upload</text>
+
+  <rect class="box" x="430" y="30" width="190" height="60" />
+  <text class="title" x="455" y="60">Local Upload Dir</text>
+
+  <rect class="box" x="430" y="130" width="190" height="60" />
+  <text class="title" x="448" y="160">OCI Object Storage</text>
+
+  <rect class="box" x="660" y="90" width="200" height="60" />
+  <text class="title" x="675" y="120">Extract + Chunk + Embed</text>
+
+  <rect class="box" x="890" y="90" width="90" height="60" />
+  <text class="title" x="900" y="120">Postgres</text>
+
+  <rect class="box" x="890" y="170" width="90" height="60" />
+  <text class="title" x="898" y="200">OpenSearch</text>
+
+  <path class="arrow" d="M190 120 L230 120" />
+  <path class="arrow" d="M390 120 L430 60" />
+  <path class="arrow" d="M390 120 L430 160" />
+  <path class="arrow" d="M620 120 L660 120" />
+  <path class="arrow" d="M860 120 L890 120" />
+  <path class="arrow" d="M935 150 L935 170" />
+  <text class="caption" x="905" y="160">dual-write</text>
+</svg>

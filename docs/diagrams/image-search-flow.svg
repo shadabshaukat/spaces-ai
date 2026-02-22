@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="240" viewBox="0 0 980 240">
+  <style>
+    .box{fill:#ffffff;stroke:#f97316;stroke-width:2;rx:8;ry:8;}
+    .title{fill:#7c2d12;font-family:Arial,sans-serif;font-size:13px;font-weight:700;}
+    .arrow{stroke:#64748b;stroke-width:2;fill:none;marker-end:url(#arrowhead);}
+  </style>
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#64748b" />
+    </marker>
+  </defs>
+
+  <rect class="box" x="40" y="90" width="170" height="60" />
+  <text class="title" x="60" y="120">Image Query</text>
+
+  <rect class="box" x="240" y="90" width="190" height="60" />
+  <text class="title" x="265" y="120">OpenCLIP Embed</text>
+
+  <rect class="box" x="460" y="30" width="180" height="60" />
+  <text class="title" x="485" y="60">OpenSearch KNN</text>
+
+  <rect class="box" x="460" y="130" width="180" height="60" />
+  <text class="title" x="490" y="160">Postgres Search</text>
+
+  <rect class="box" x="680" y="90" width="200" height="60" />
+  <text class="title" x="705" y="120">Ranked Results</text>
+
+  <path class="arrow" d="M210 120 L240 120" />
+  <path class="arrow" d="M430 120 L460 60" />
+  <path class="arrow" d="M430 120 L460 160" />
+  <path class="arrow" d="M640 60 L680 120" />
+  <path class="arrow" d="M640 160 L680 120" />
+</svg>

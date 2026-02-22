@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="260" viewBox="0 0 980 260">
+  <style>
+    .box{fill:#ffffff;stroke:#06b6d4;stroke-width:2;rx:8;ry:8;}
+    .title{fill:#0f172a;font-family:Arial,sans-serif;font-size:13px;font-weight:700;}
+    .caption{fill:#475569;font-family:Arial,sans-serif;font-size:11px;}
+    .arrow{stroke:#64748b;stroke-width:2;fill:none;marker-end:url(#arrowhead);}
+  </style>
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#64748b" />
+    </marker>
+  </defs>
+
+  <rect class="box" x="40" y="90" width="140" height="60" />
+  <text class="title" x="60" y="120">Search UI</text>
+
+  <rect class="box" x="210" y="90" width="150" height="60" />
+  <text class="title" x="240" y="120">FastAPI</text>
+
+  <rect class="box" x="390" y="30" width="160" height="60" />
+  <text class="title" x="418" y="60">Valkey Cache</text>
+
+  <rect class="box" x="390" y="130" width="160" height="60" />
+  <text class="title" x="420" y="160">OpenSearch</text>
+
+  <rect class="box" x="580" y="90" width="170" height="60" />
+  <text class="title" x="595" y="120">Context Builder</text>
+
+  <rect class="box" x="780" y="90" width="170" height="60" />
+  <text class="title" x="810" y="120">LLM Synthesis</text>
+
+  <path class="arrow" d="M180 120 L210 120" />
+  <path class="arrow" d="M360 120 L390 60" />
+  <path class="arrow" d="M360 120 L390 160" />
+  <path class="arrow" d="M550 160 L580 120" />
+  <path class="arrow" d="M750 120 L780 120" />
+  <path class="arrow" d="M865 150 L865 210" />
+  <path class="arrow" d="M865 210 L470 210" />
+  <path class="arrow" d="M470 210 L470 190" />
+  <text class="caption" x="500" y="226">cache answer</text>
+</svg>

@@ -229,8 +229,8 @@
         </button>
       </div>
       <div class="screen-locked" id="uploadLocked" hidden>
-        <strong>Sign in to upload files.</strong>
-        <p class="muted">Uploads are tied to your active space.</p>
+        <strong>Sign in to access your library.</strong>
+        <p class="muted">Once logged in, you can review and manage your documents here.</p>
       </div>
       <section id="uploadSection" class="card card--wide card-soft" hidden>
         <div class="upload-header">
@@ -297,8 +297,8 @@
         <button id="researchOpenBtn" class="primary">Open Deep Research</button>
       </div>
       <div class="screen-locked" id="researchLocked" hidden>
-        <strong>Sign in to start research.</strong>
-        <p class="muted">Your sessions are saved per space.</p>
+        <strong>Sign in to access your library.</strong>
+        <p class="muted">Once logged in, you can review and manage your documents here.</p>
       </div>
     </section>
 
@@ -679,6 +679,11 @@
       if (topbarSelect) topbarSelect.disabled = disabled;
     }
 
+    function setTopbarSpaceVisible(visible) {
+      const topbarSelect = document.getElementById('topbarSpaceSelect');
+      if (topbarSelect) topbarSelect.hidden = !visible;
+    }
+
     function setLoggedInUI() {
       const auth = document.getElementById('authPanel');
       const accountPanel = document.getElementById('accountPanel');
@@ -707,6 +712,7 @@
         if (accountHeader) accountHeader.hidden = false;
         if (accountHeaderToggle) accountHeaderToggle.setAttribute('aria-expanded', String(accountExpanded));
         if (emailEl) emailEl.textContent = state.user.email;
+        setTopbarSpaceVisible(true);
       } else {
         if (auth) auth.hidden = false;
         if (accountPanel) accountPanel.hidden = true;
@@ -715,11 +721,12 @@
         if (kb) kb.hidden = true;
         if (kbSection) kbSection.hidden = true;
         if (kbLocked) kbLocked.hidden = false;
-        if (uploadLocked) uploadLocked.hidden = true;
-        if (researchLocked) researchLocked.hidden = true;
+        if (uploadLocked) uploadLocked.hidden = false;
+        if (researchLocked) researchLocked.hidden = false;
         if (researchSection) researchSection.hidden = true;
         if (accountHeader) accountHeader.hidden = true;
         if (emailEl) emailEl.textContent = '';
+        setTopbarSpaceVisible(false);
       }
     }
 
@@ -799,7 +806,7 @@
       const uploadLocked = document.getElementById('uploadLocked');
       if (headerToggle) headerToggle.setAttribute('aria-expanded', String(uploadExpanded));
       if (uploadSection) uploadSection.hidden = !uploadExpanded || !state.user;
-      if (uploadLocked) uploadLocked.hidden = !uploadExpanded || Boolean(state.user);
+      if (uploadLocked) uploadLocked.hidden = !state.user;
       if (headerToggle) headerToggle.classList.toggle('is-open', uploadExpanded);
     }
 
@@ -809,7 +816,7 @@
       const auth = document.getElementById('authPanel');
       const accountPanel = document.getElementById('accountPanel');
       if (headerToggle) headerToggle.setAttribute('aria-expanded', String(accountExpanded));
-      if (auth) auth.hidden = !accountExpanded || Boolean(state.user);
+      if (auth) auth.hidden = Boolean(state.user) ? !accountExpanded : false;
       if (accountPanel) accountPanel.hidden = !accountExpanded || !state.user;
       if (headerToggle) headerToggle.classList.toggle('is-open', accountExpanded);
     }
@@ -821,7 +828,7 @@
       const researchLocked = document.getElementById('researchLocked');
       if (headerToggle) headerToggle.setAttribute('aria-expanded', String(researchExpanded));
       if (researchSection) researchSection.hidden = !researchExpanded;
-      if (researchLocked) researchLocked.hidden = !researchExpanded || Boolean(state.user);
+      if (researchLocked) researchLocked.hidden = !state.user;
       if (headerToggle) headerToggle.classList.toggle('is-open', researchExpanded);
     }
 
@@ -2092,7 +2099,16 @@
     document.querySelectorAll('.bottom-nav__item[data-screen-target]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const target = btn.dataset.screenTarget;
-        if (target) setActiveScreen(target);
+        if (!target) return;
+        if (!state.user && target !== 'account' && target !== 'search') {
+          setActiveScreen('library');
+          setKbExpanded(false);
+          setUploadExpanded(false);
+          setResearchExpanded(false);
+          showToast('Sign in to access your library.');
+          return;
+        }
+        setActiveScreen(target);
       });
     });
 
@@ -2882,6 +2898,7 @@
       if (dzStatus) dzStatus.textContent = 'Drop files here or use the file chooser above';
       if (badge) badge.textContent = 'No files selected.';
       droppedFiles = [];
+      setTopbarSpaceVisible(false);
       setKbExpanded(false);
       setUploadExpanded(false);
       setAccountExpanded(false);

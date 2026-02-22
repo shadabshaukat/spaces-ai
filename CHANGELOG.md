@@ -27,3 +27,4 @@ All notable changes to this repository are documented in this file. Keep entries
 - Reworked Knowledge Base entries into iOS table-style rows with separators and tighter metadata.
 - Added micro-interactions (press states, fade/slide-in results, staggered result animations).
 - Documented UI updates in UI.md.
+- Added iOS PWA shell/tab layout styling with active tab states and screen headers.

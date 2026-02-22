@@ -10,51 +10,26 @@
   <header class="topbar topbar--app">
     <h4>SpacesAI</h4>
     <div class="spacer"></div>
-    <div id="userControls" class="user-controls" hidden>
-      <span id="userEmail" class="user-email"></span>
-      <button id="logoutBtn" class="ghost" title="Logout">Logout</button>
-    </div>
     <button id="themeBtn" class="ghost" title="Toggle dark mode">🌓</button>
   </header>
 
-  <main class="container app-shell">
-    <!-- Hero and Auth -->
-    <section class="card card--wide hero">
-      <button class="logo" id="logoHomeBtn" type="button" aria-label="SPACES home">
-        <span class="g g-blue">S</span>
-        <span class="g g-red">P</span>
-        <span class="g g-yellow">A</span>
-        <span class="g g-blue">C</span>
-        <span class="g g-green">E</span>
-        <span class="g g-red">S</span>
-      </button>
-
-      <div id="authPanel" class="auth" hidden>
-        <div class="row cols">
-          <div class="auth-card" id="loginCard">
-            <h3>Sign in</h3>
-            <label class="block">Email</label>
-            <input id="loginEmail" type="email" placeholder="you@example.com" />
-            <label class="block">Password</label>
-            <input id="loginPassword" type="password" placeholder="••••••••" />
-            <button id="loginBtn" class="primary">Login</button>
-            <p class="small">New here? <a href="#" id="showRegisterLink">Create account</a></p>
-          </div>
-          <div class="auth-card" id="registerCard" hidden>
-            <h3>Create account</h3>
-            <label class="block">Email</label>
-            <input id="regEmail" type="email" placeholder="you@example.com" />
-            <label class="block">Password</label>
-            <input id="regPassword" type="password" placeholder="At least 8 characters" />
-            <button id="registerBtn">Register</button>
-            <p class="small"><a href="#" id="cancelRegisterLink">Back to sign in</a></p>
-          </div>
+  <main class="app-shell app-shell--ios">
+    <section class="app-screen active" id="screenSearch" data-screen="search">
+      <div class="screen-header">
+        <div>
+          <p class="screen-kicker">Search</p>
+          <h2>Find answers across your spaces</h2>
         </div>
+        <button class="logo" id="logoHomeBtn" type="button" aria-label="SPACES home">
+          <span class="g g-blue">S</span>
+          <span class="g g-red">P</span>
+          <span class="g g-yellow">A</span>
+          <span class="g g-blue">C</span>
+          <span class="g g-green">E</span>
+          <span class="g g-red">S</span>
+        </button>
       </div>
-
       <div id="appPanel" class="app-panel" hidden>
-
-
         <section id="unifiedSearchPanel" class="search-panel" role="region" aria-label="Search workspace">
           <div class="search-tabs" role="tablist" aria-label="Search mode">
             <button id="searchModeText" class="search-tab active" role="tab" aria-selected="true">Text Search</button>
@@ -124,12 +99,8 @@
                 </div>
               </div>
               <div class="row wrap">
-                <label for="spacesSelect">Space</label>
-                <select id="spacesSelect"></select>
-                <button id="setDefaultSpaceBtn" class="ghost">Set default</button>
-                <span class="leftpad"></span>
-                <input id="newSpaceName" placeholder="Create new space…" />
-                <button id="createSpaceBtn">Create</button>
+                <label>Space</label>
+                <span class="muted">Manage spaces in the Account tab.</span>
               </div>
             </div>
 
@@ -197,83 +168,170 @@
       </div>
     </section>
 
-    <!-- Knowledge Base -->
-    <section id="kbSection" class="card card--wide" hidden>
-      <button class="collapsible-toggle" id="kbToggle" aria-expanded="false"><span class="caret">▸</span> Your Knowledge Base</button>
-      <div id="kbContent" hidden>
-        <div class="row wrap">
-          <button id="kbRefreshBtn" class="primary">Refresh</button>
-          <button id="kbSortBtn" class="ghost" title="Toggle sort order" style="margin-left:8px">Latest first</button>
-          <span class="leftpad"></span>
-          <button id="kbDeleteSelectedBtn" class="ghost" title="Delete selected">Delete selected</button>
-        </div>
-        <div class="row">
-          <label><input type="checkbox" id="kbSelectAll" /> Select all</label>
-        </div>
-        <div class="row">
-          <div id="kbList" class="results"></div>
+    <section class="app-screen" id="screenLibrary" data-screen="library">
+      <div class="screen-header">
+        <div>
+          <p class="screen-kicker">Library</p>
+          <h2>Your Knowledge Base</h2>
         </div>
       </div>
-    </section>
+      <div class="screen-locked" id="kbLocked" hidden>
+        <strong>Sign in to access your library.</strong>
+        <p class="muted">Once logged in, you can review and manage your documents here.</p>
+      </div>
+      <section id="kbSection" class="card card--wide" hidden>
+        <button class="collapsible-toggle" id="kbToggle" aria-expanded="false"><span class="caret">▸</span> Your Knowledge Base</button>
+        <div id="kbContent" hidden>
+          <div class="row wrap">
+            <button id="kbRefreshBtn" class="primary">Refresh</button>
+            <button id="kbSortBtn" class="ghost" title="Toggle sort order" style="margin-left:8px">Latest first</button>
+            <span class="leftpad"></span>
+            <button id="kbDeleteSelectedBtn" class="ghost" title="Delete selected">Delete selected</button>
+          </div>
+          <div class="row">
+            <label><input type="checkbox" id="kbSelectAll" /> Select all</label>
+          </div>
+          <div class="row">
+            <div id="kbList" class="results"></div>
+          </div>
+        </div>
+      </section>
     </section>
 
-    <!-- Upload -->
-    <section id="uploadSection" class="card card--wide" hidden>
-      <button class="collapsible-toggle" id="uploadToggle" aria-expanded="false"><span class="caret">▸</span> Upload to your Space</button>
-      <div id="uploadContent" hidden>
-        <div class="row wrap" style="width:100%; justify-content: space-between; align-items: center;">
+    <section class="app-screen" id="screenUpload" data-screen="upload">
+      <div class="screen-header">
+        <div>
+          <p class="screen-kicker">Upload</p>
+          <h2>Add content to your space</h2>
+        </div>
+      </div>
+      <div class="screen-locked" id="uploadLocked" hidden>
+        <strong>Sign in to upload files.</strong>
+        <p class="muted">Uploads are tied to your active space.</p>
+      </div>
+      <section id="uploadSection" class="card card--wide" hidden>
+        <button class="collapsible-toggle" id="uploadToggle" aria-expanded="false"><span class="caret">▸</span> Upload to your Space</button>
+        <div id="uploadContent" hidden>
+          <div class="row wrap" style="width:100%; justify-content: space-between; align-items: center;">
+            <div>
+              <button id="uploadBtn" class="primary">Upload</button>
+              <div class="loader" id="uploadLoading" hidden style="display:inline-flex; margin-left:8px;">
+                <div class="spinner small"></div>
+                <span>Processing…</span>
+              </div>
+              <span id="uploadEmbeddingStatus" class="badge badge-soft" style="margin-left:8px" hidden></span>
+            </div>
+            <button id="clearUploadBtn" class="ghost" title="Clear uploads"><span class="refresh-icon">↻</span></button>
+          </div>
+          <div class="row">
+            <div id="dropzone" class="dropzone">
+              <div class="dz-inner">
+                <div class="dz-header">Drag & drop files</div>
+                <div class="dz-desc">Documents: PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON • Images: PNG, JPG, JPEG, TIFF, BMP, GIF</div>
+                <div class="dz-hint" id="dzHint">Maximum 50MB per file • Maximum 100 files per batch</div>
+                <div class="dz-status" id="dzStatus">Drop files here or use the file chooser below</div>
+                <div class="dz-meta" id="uploadStorageInfo"></div>
+              </div>
+            </div>
+          </div>
+          <div class="row">
+            <input id="files" type="file" multiple accept=".pdf,.txt,.csv,.md,.json,.html,.htm,.docx,.pptx,.xlsx,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.gif" />
+          </div>
+          <div class="row" id="uploadListRow" hidden>
+            <div id="uploadList" class="progress-list"></div>
+          </div>
+          <div class="row" id="uploadStatusRow" hidden>
+            <pre id="uploadStatus" class="panel"></pre>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <section class="app-screen" id="screenResearch" data-screen="research">
+      <div class="screen-header">
+        <div>
+          <p class="screen-kicker">Research</p>
+          <h2>Deep research workspace</h2>
+        </div>
+      </div>
+      <div class="card card--wide research-card">
+        <h3>Deep Research</h3>
+        <p class="muted">Launch a guided research session to synthesize answers from your spaces and the web.</p>
+        <button id="researchOpenBtn" class="primary">Open Deep Research</button>
+      </div>
+      <div class="screen-locked" id="researchLocked" hidden>
+        <strong>Sign in to start research.</strong>
+        <p class="muted">Your sessions are saved per space.</p>
+      </div>
+    </section>
+
+    <section class="app-screen" id="screenAccount" data-screen="account">
+      <div class="screen-header">
+        <div>
+          <p class="screen-kicker">Account</p>
+          <h2>Manage your profile</h2>
+        </div>
+      </div>
+      <div id="authPanel" class="auth" hidden>
+        <div class="row cols">
+          <div class="auth-card" id="loginCard">
+            <h3>Sign in</h3>
+            <label class="block">Email</label>
+            <input id="loginEmail" type="email" placeholder="you@example.com" />
+            <label class="block">Password</label>
+            <input id="loginPassword" type="password" placeholder="••••••••" />
+            <button id="loginBtn" class="primary">Login</button>
+            <p class="small">New here? <a href="#" id="showRegisterLink">Create account</a></p>
+          </div>
+          <div class="auth-card" id="registerCard" hidden>
+            <h3>Create account</h3>
+            <label class="block">Email</label>
+            <input id="regEmail" type="email" placeholder="you@example.com" />
+            <label class="block">Password</label>
+            <input id="regPassword" type="password" placeholder="At least 8 characters" />
+            <button id="registerBtn">Register</button>
+            <p class="small"><a href="#" id="cancelRegisterLink">Back to sign in</a></p>
+          </div>
+        </div>
+      </div>
+      <div id="accountPanel" class="card card--wide" hidden>
+        <div class="row" style="justify-content: space-between; width: 100%;">
           <div>
-            <button id="uploadBtn" class="primary">Upload</button>
-            <div class="loader" id="uploadLoading" hidden style="display:inline-flex; margin-left:8px;">
-              <div class="spinner small"></div>
-              <span>Processing…</span>
-            </div>
-            <span id="uploadEmbeddingStatus" class="badge badge-soft" style="margin-left:8px" hidden></span>
+            <strong>Signed in</strong>
+            <p id="userEmail" class="user-email"></p>
           </div>
-          <button id="clearUploadBtn" class="ghost" title="Clear uploads"><span class="refresh-icon">↻</span></button>
+          <button id="logoutBtn" class="ghost" title="Logout">Logout</button>
         </div>
-        <div class="row">
-          <div id="dropzone" class="dropzone">
-            <div class="dz-inner">
-              <div class="dz-header">Drag & drop files</div>
-              <div class="dz-desc">Documents: PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON • Images: PNG, JPG, JPEG, TIFF, BMP, GIF</div>
-              <div class="dz-hint" id="dzHint">Maximum 50MB per file • Maximum 100 files per batch</div>
-              <div class="dz-status" id="dzStatus">Drop files here or use the file chooser below</div>
-              <div class="dz-meta" id="uploadStorageInfo"></div>
-            </div>
-          </div>
-        </div>
-        <div class="row">
-          <input id="files" type="file" multiple accept=".pdf,.txt,.csv,.md,.json,.html,.htm,.docx,.pptx,.xlsx,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.gif" />
-        </div>
-        <div class="row" id="uploadListRow" hidden>
-          <div id="uploadList" class="progress-list"></div>
-        </div>
-        <div class="row" id="uploadStatusRow" hidden>
-          <pre id="uploadStatus" class="panel"></pre>
+        <div class="row wrap">
+          <label for="spacesSelect">Space</label>
+          <select id="spacesSelect"></select>
+          <button id="setDefaultSpaceBtn" class="ghost">Set default</button>
+          <span class="leftpad"></span>
+          <input id="newSpaceName" placeholder="Create new space…" />
+          <button id="createSpaceBtn">Create</button>
         </div>
       </div>
     </section>
   </main>
 
   <nav class="bottom-nav" aria-label="Primary">
-    <a class="bottom-nav__item" href="#unifiedSearchPanel">
+    <button class="bottom-nav__item active" type="button" data-screen-target="search">
       <span class="bottom-nav__icon">🔍</span>
       <span>Search</span>
-    </a>
-    <a class="bottom-nav__item" href="#kbSection">
+    </button>
+    <button class="bottom-nav__item" type="button" data-screen-target="library">
       <span class="bottom-nav__icon">📚</span>
       <span>Library</span>
-    </a>
-    <a class="bottom-nav__item" href="#uploadSection">
+    </button>
+    <button class="bottom-nav__item" type="button" data-screen-target="upload">
       <span class="bottom-nav__icon">⬆️</span>
       <span>Upload</span>
-    </a>
-    <button class="bottom-nav__item" type="button" id="bottomNavResearch">
+    </button>
+    <button class="bottom-nav__item" type="button" data-screen-target="research" id="bottomNavResearch">
       <span class="bottom-nav__icon">🧪</span>
       <span>Research</span>
     </button>
-    <button class="bottom-nav__item" type="button" id="bottomNavAccount">
+    <button class="bottom-nav__item" type="button" data-screen-target="account" id="bottomNavAccount">
       <span class="bottom-nav__icon">👤</span>
       <span>Account</span>
     </button>
@@ -550,25 +608,34 @@
 
     function setLoggedInUI() {
       const auth = document.getElementById('authPanel');
+      const accountPanel = document.getElementById('accountPanel');
       const app = document.getElementById('appPanel');
       const up = document.getElementById('uploadSection');
       const kb = document.getElementById('kbSection');
-      const uc = document.getElementById('userControls');
       const emailEl = document.getElementById('userEmail');
+      const kbLocked = document.getElementById('kbLocked');
+      const uploadLocked = document.getElementById('uploadLocked');
+      const researchLocked = document.getElementById('researchLocked');
       if (state.user) {
-        auth.hidden = true;
-        app.hidden = false;
-        up.hidden = false;
-        if (kb) { kb.hidden = false; }
-        uc.hidden = false;
-        emailEl.textContent = state.user.email;
+        if (auth) auth.hidden = true;
+        if (accountPanel) accountPanel.hidden = false;
+        if (app) app.hidden = false;
+        if (up) up.hidden = false;
+        if (kb) kb.hidden = false;
+        if (kbLocked) kbLocked.hidden = true;
+        if (uploadLocked) uploadLocked.hidden = true;
+        if (researchLocked) researchLocked.hidden = true;
+        if (emailEl) emailEl.textContent = state.user.email;
       } else {
-        auth.hidden = false;
-        app.hidden = true;
-        up.hidden = true;
-        if (kb) { kb.hidden = true; }
-        uc.hidden = true;
-        emailEl.textContent = '';
+        if (auth) auth.hidden = false;
+        if (accountPanel) accountPanel.hidden = true;
+        if (app) app.hidden = true;
+        if (up) up.hidden = true;
+        if (kb) kb.hidden = true;
+        if (kbLocked) kbLocked.hidden = false;
+        if (uploadLocked) uploadLocked.hidden = false;
+        if (researchLocked) researchLocked.hidden = false;
+        if (emailEl) emailEl.textContent = '';
       }
     }
 
@@ -1838,20 +1905,45 @@
       drSetHeroStatus('Space switched. Open Deep Research to resume.');
     }
 
+    function setActiveScreen(screenId) {
+      const screens = document.querySelectorAll('.app-screen');
+      screens.forEach((screen) => {
+        screen.classList.toggle('active', screen.dataset.screen === screenId);
+      });
+      const navItems = document.querySelectorAll('.bottom-nav__item');
+      navItems.forEach((item) => {
+        item.classList.toggle('active', item.dataset.screenTarget === screenId);
+      });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    document.querySelectorAll('.bottom-nav__item[data-screen-target]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const target = btn.dataset.screenTarget;
+        if (target) setActiveScreen(target);
+      });
+    });
+
+    const researchOpenBtn = document.getElementById('researchOpenBtn');
+    researchOpenBtn?.addEventListener('click', () => {
+      drOpenModal().catch(console.error);
+    });
+
     // Event wiring for Deep Research UI
     document.getElementById('drBtn')?.addEventListener('click', () => { drOpenModal().catch(console.error); });
     document.getElementById('bottomNavResearch')?.addEventListener('click', () => {
-      drOpenModal().catch(console.error);
+      if (!state.user) {
+        showToast('Sign in to start research');
+        setActiveScreen('account');
+        return;
+      }
     });
     document.getElementById('bottomNavAccount')?.addEventListener('click', () => {
       if (!state.user) {
         showToast('Sign in to manage your account');
-        const auth = document.getElementById('authPanel');
-        auth?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setActiveScreen('account');
       } else {
         showToast(`Signed in as ${state.user.email}`);
-        const userControls = document.getElementById('userControls');
-        userControls?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     });
     drEls.close?.addEventListener('click', () => drCloseModal());
@@ -2577,6 +2669,7 @@
       await loadDeepResearchConfig();
       await loadUploadConfig();
       if (state && state.user) { try { await loadKB(); } catch (e) {} }
+      setActiveScreen('search');
       setupCollapsible('kbToggle', 'kbContent');
       setupCollapsible('uploadToggle', 'uploadContent');
     });

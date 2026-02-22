@@ -9,6 +9,7 @@
 - Added a sticky bottom navigation bar with five primary actions and matching icons.
 - Updated the top bar title to “SpacesAI”.
 - Ensured the app shell has spacing for the mobile bottom nav.
+- Introduced an iOS-style PWA shell with tabbed screens and screen headers.
 
 ### Search Experience
 - Refined search panel spacing, tabs, and settings panel styling for mobile-first layout.
@@ -31,6 +32,7 @@
 ### Micro-Interactions & Motion
 - Added press/hover transitions on buttons, tabs, and cards.
 - Added subtle fade/slide transitions for search results, image cards, and answer panels.
+- Added active tab states for the bottom navigation to mirror iOS tab selection.
 
 ### Files Updated
 - `search-app/app/templates/index.html`

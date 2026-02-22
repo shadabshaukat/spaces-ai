@@ -20,14 +20,26 @@
 - Reworked Knowledge Base list into a clean iOS table-like list.
 - Added separators, reduced padding, and tightened metadata layout.
 - Improved thumbnail/preview sizing for consistency.
+- Simplified KB metadata to highlight source/storage/created date, with a secondary line for chunks/images/tags.
+- Rebalanced image gallery cards so captions and tags sit below left-aligned thumbnails.
 
 ### Upload Flow
 - Updated the upload dropzone with rounded corners, gradients, and press states.
 - Refined progress list styling with elevated cards and iOS-like separators.
+- Updated dropzone helper text to “Drop files here or use the file chooser above.”
+- Limited image embedding status badges to image uploads only, with warnings only when image embeddings fail.
 
 ### Auth & Account
 - Refactored auth cards with larger radii, gradient surface, and full-width CTAs.
 - Added pressed states for buttons and cards.
+- Restyled the Account toolbar into stacked segmented-control blocks for Space selection and New space creation.
+
+### iOS-Style Polish Recommendations
+- Use a consistent 8/12/16 spacing scale across panels, cards, and list rows.
+- Add subtle haptic-like feedback via scale/opacity changes on press states for buttons and tabs.
+- Maintain a single typographic hierarchy (headline/section/label/body) across Search, KB, Upload, and Account.
+- Keep modal headers aligned to iOS sheet patterns with a centered title and optional close button.
+- Use muted monochrome icons with consistent stroke weight across the bottom nav.
 
 ### Micro-Interactions & Motion
 - Added press/hover transitions on buttons, tabs, and cards.

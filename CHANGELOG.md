@@ -28,3 +28,11 @@ All notable changes to this repository are documented in this file. Keep entries
 - Added micro-interactions (press states, fade/slide-in results, staggered result animations).
 - Documented UI updates in UI.md.
 - Added iOS PWA shell/tab layout styling with active tab states and screen headers.
+
+## 2026-02-23
+- Restyled the Account toolbar into stacked segmented-control blocks for Space selection and New space creation.
+- Simplified Knowledge Base metadata to prioritize source/storage/created and add a secondary chunks/images/tags line.
+- Rebalanced Knowledge Base image cards so captions and tags sit beneath left-aligned thumbnails.
+- Updated upload dropzone helper text to “Drop files here or use the file chooser above.”
+- Limited image embedding status badges to image uploads only, showing warnings only when embeddings fail.
+- Added UI.md recommendations for consistent iOS-like spacing, typography, and modal header alignment.

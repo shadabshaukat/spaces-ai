@@ -31,6 +31,17 @@
         </button>
         <p class="screen-subtitle">Search your spaces</p>
       </div>
+      <section id="loggedOutLanding" class="landing" hidden>
+        <div class="landing-card">
+          <span class="landing-kicker">SpacesAI Workspace</span>
+          <h1>Ask questions, organize knowledge, and explore your documents.</h1>
+          <p>SpacesAI brings NotebookLM-style research to your private library so you can chat, summarize, and manage content in one place.</p>
+          <div class="landing-actions">
+            <button id="landingCtaBtn" class="primary">Try SpacesAI</button>
+            <button id="landingLearnBtn" class="ghost" type="button">See how it works</button>
+          </div>
+        </div>
+      </section>
       <div id="appPanel" class="app-panel" hidden>
         <section id="unifiedSearchPanel" class="search-panel" role="region" aria-label="Search workspace">
           <div class="search-tabs" role="tablist" aria-label="Search mode">
@@ -687,6 +698,7 @@
       const auth = document.getElementById('authPanel');
       const accountPanel = document.getElementById('accountPanel');
       const app = document.getElementById('appPanel');
+      const landing = document.getElementById('loggedOutLanding');
       const up = document.getElementById('uploadSection');
       const kb = document.getElementById('kbSection');
       const emailEl = document.getElementById('userEmail');
@@ -699,8 +711,9 @@
       const accountHeaderToggle = document.getElementById('accountHeaderToggle');
       if (state.user) {
         if (auth) auth.hidden = true;
-        if (accountPanel) accountPanel.hidden = false;
+        if (accountPanel) accountPanel.hidden = !accountExpanded;
         if (app) app.hidden = false;
+        if (landing) landing.hidden = true;
         if (up) up.hidden = !uploadExpanded;
         if (kb) kb.hidden = false;
         if (kbSection) kbSection.hidden = !kbExpanded;
@@ -716,6 +729,7 @@
         if (auth) auth.hidden = false;
         if (accountPanel) accountPanel.hidden = true;
         if (app) app.hidden = true;
+        if (landing) landing.hidden = false;
         if (up) up.hidden = true;
         if (kb) kb.hidden = true;
         if (kbSection) kbSection.hidden = true;
@@ -815,7 +829,7 @@
       const auth = document.getElementById('authPanel');
       const accountPanel = document.getElementById('accountPanel');
       if (headerToggle) headerToggle.setAttribute('aria-expanded', String(accountExpanded));
-      if (auth) auth.hidden = Boolean(state.user) ? !accountExpanded : false;
+      if (auth) auth.hidden = Boolean(state.user) ? true : !accountExpanded;
       if (accountPanel) accountPanel.hidden = !accountExpanded || !state.user;
       if (headerToggle) headerToggle.classList.toggle('is-open', accountExpanded);
     }
@@ -840,7 +854,13 @@
         state.user = resp.user; state.spaces = resp.spaces || [];
         const def = (state.spaces.find(s => s.is_default) || {}).id;
         state.spaceId = def || (state.spaces[0] ? state.spaces[0].id : null);
-        populateSpaces(); setLoggedInUI(); setActiveScreen('search'); await loadKB(); showToast('Logged in');
+        populateSpaces();
+        setLoggedInUI();
+        if (document.querySelector('.app-screen.active')?.dataset.screen === 'account') {
+          setActiveScreen('search');
+        }
+        await loadKB();
+        showToast('Logged in');
       } catch (e) {
         let msg = 'Login failed';
         try { const js = JSON.parse(e.message || '{}'); if (js && js.error) msg = js.error; } catch {}
@@ -1180,7 +1200,7 @@
       setUploadExpanded(false);
       setAccountExpanded(false);
       setResearchExpanded(false);
-      setActiveScreen(state.user ? 'search' : 'account');
+      setActiveScreen('search');
       const settingsPanel = document.getElementById('settingsPanel');
       const settingsBtn = document.getElementById('settingsBtn');
       if (settingsPanel && !settingsPanel.hidden) settingsPanel.hidden = true;
@@ -2129,9 +2149,21 @@
       if (!state.user) {
         showToast('Sign in to manage your account');
         setActiveScreen('account');
+        setAccountExpanded(true);
       } else {
         showToast(`Signed in as ${state.user.email}`);
       }
+    });
+
+    document.getElementById('landingCtaBtn')?.addEventListener('click', () => {
+      setActiveScreen('account');
+      setAccountExpanded(true);
+    });
+
+    document.getElementById('landingLearnBtn')?.addEventListener('click', () => {
+      showToast('Sign in to explore SpacesAI features.');
+      setActiveScreen('account');
+      setAccountExpanded(true);
     });
     drEls.close?.addEventListener('click', () => drCloseModal());
     drEls.backdrop?.addEventListener('click', () => drCloseModal());
@@ -2939,10 +2971,7 @@
       await loadDeepResearchConfig();
       await loadUploadConfig();
       if (state && state.user) { try { await loadKB(); } catch (e) {} }
-      setActiveScreen(state.user ? 'search' : 'account');
-      if (!state.user) {
-        setAccountExpanded(true);
-      }
+      setActiveScreen('search');
     });
 
     window.addEventListener('beforeunload', () => {

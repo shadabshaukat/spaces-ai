@@ -44,6 +44,21 @@ html { scrollbar-gutter: stable both-edges; }
   animation: saas-fade-up 0.35s ease;
 }
 .app-screen.active { display: flex; }
+.screen-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+  padding: 16px 0 10px;
+}
+.screen-subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
 .screen-header {
   display: flex;
   align-items: center;

@@ -129,7 +129,7 @@
                   <button id="imageClearBtn" class="ghost" type="button">Clear image inputs</button>
                 </div>
               </div>
-          <div class="muted">Tip: combine descriptive text, tags, or a reference upload to improve similarity results.</div>
+              <div class="muted">Tip: combine descriptive text, tags, or a reference upload to improve similarity results.</div>
             </div>
           </div>
         </section>
@@ -1597,7 +1597,7 @@
             <span>${entry.created_at ? new Date(entry.created_at).toLocaleString() : ''}</span>
             <div class="note-actions">
               <button type="button" class="ghost" data-dr-delete-note="${entry.entry_id}">Delete</button>
-            
+            </div>
           </div>
         `;
         frag.appendChild(card);
@@ -2230,7 +2230,8 @@
                 <div class="kb-image-card">
                   <div class="kb-image-thumb">${thumb ? `<img src="${thumb}" alt="thumbnail for doc ${doc.id}" loading="lazy" />` : '<div class="thumb-placeholder">No preview</div>'}</div>
                   <div class="kb-image-body">
-                    <div class="kb-image-caption">${caption} ${remote}</div>
+                    <div class="kb-image-caption">${caption}</div>
+                    ${remote ? `<div class="kb-image-meta">${remote}</div>` : ''}
                     <div class="kb-image-tags">${tags || '<span class="muted">No tags</span>'}</div>
                     <div class="kb-image-actions">${downloadLink}</div>
                   </div>
@@ -2251,7 +2252,7 @@
                   <div class="kb-doc-actions">
                     ${downloadAction}
                     <button class="ghost" data-delete-doc-id="${doc.id}">Delete</button>
-                    
+                  </div>
                 </div>
                 ${metaHtml}
                 ${subMetaHtml}
@@ -2569,14 +2570,22 @@
                       if (chunks != null) msg.push(`${chunks} chunks`);
                       const row = item.querySelector('.progress-row span');
                       if (row && msg.length) row.textContent = `${row.textContent} — processed (${msg.join(', ')})`;
-                      if (docId != null && embeddingBadge) {
+                      const isImageFile = /\.(png|jpe?g|tiff?|bmp|gif|webp)$/i.test(file.name || '');
+                      if (docId != null && embeddingBadge && isImageFile) {
                         checkImageEmbeddingStatus(docId).then((diag) => {
                           if (diag && diag.postgres) {
                             const ok = diag.postgres.embedding === true;
+                            if (!ok) {
+                              embeddingBadge.hidden = false;
+                              embeddingBadge.textContent = 'Image embedding missing';
+                              embeddingBadge.classList.remove('badge-soft');
+                              embeddingBadge.classList.add('badge-warn');
+                              return;
+                            }
                             embeddingBadge.hidden = false;
-                            embeddingBadge.textContent = ok ? 'Image embedding stored' : 'Image embedding missing';
-                            embeddingBadge.classList.toggle('badge-soft', ok);
-                            embeddingBadge.classList.toggle('badge-warn', !ok);
+                            embeddingBadge.textContent = 'Image embedding stored';
+                            embeddingBadge.classList.add('badge-soft');
+                            embeddingBadge.classList.remove('badge-warn');
                           }
                         });
                       }

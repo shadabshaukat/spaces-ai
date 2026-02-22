@@ -20,3 +20,10 @@ All notable changes to this repository are documented in this file. Keep entries
 - Fixed OpenSearch KNN query vector normalization to avoid string payloads in knn queries.
 - Adjusted OpenSearch recency scale formatting to avoid fractional day parse errors.
 - Fixed Deep Research ordered list rendering to display proper sequential numbering.
+
+## 2026-02-22
+- Implemented a mobile-first SaaS UI refresh with an iOS-ready layout and bottom navigation.
+- Refined auth cards, search settings, upload flow, and progress list styling with updated typography and shadows.
+- Reworked Knowledge Base entries into iOS table-style rows with separators and tighter metadata.
+- Added micro-interactions (press states, fade/slide-in results, staggered result animations).
+- Documented UI updates in UI.md.

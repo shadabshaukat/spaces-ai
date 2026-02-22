@@ -1511,24 +1511,44 @@ async def api_set_default_space(request: Request, payload: Dict[str, Any]):
 
 
 @app.get("/api/kb")
-async def api_kb(request: Request, limit: int = 200, offset: int = 0, space_id: int | None = None, order: str = "desc", include_images: bool = True):
+async def api_kb(
+    request: Request,
+    limit: int = 25,
+    offset: int = 0,
+    space_id: int | None = None,
+    order: str = "desc",
+    alpha: str | None = None,
+    include_images: bool = True,
+):
     user = await get_current_user(request)
     if not user:
         return JSONResponse(status_code=401, content={"error": "unauthorized"})
     uid = int(user.get("user_id") or user.get("id"))
     order = order.lower()
-    ord_dir = "DESC" if order != "asc" else "ASC"
+    alpha_order = alpha.lower() if alpha else None
+    if alpha_order in {"asc", "desc"}:
+        ord_dir = "ASC" if alpha_order == "asc" else "DESC"
+        order_clause = f"ORDER BY LOWER(COALESCE(NULLIF(d.title,''), d.source_path)) {ord_dir}"
+    else:
+        ord_dir = "DESC" if order != "asc" else "ASC"
+        order_clause = f"ORDER BY d.created_at {ord_dir}"
     items: List[Dict[str, Any]] = []
+    total = 0
 
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
+                count_sql = """
+                    SELECT COUNT(*)
+                    FROM documents d
+                    WHERE d.user_id = %s {space_clause}
+                """
                 base_sql = """
                     SELECT d.id, d.source_path, d.source_type, COALESCE(d.title,''), d.created_at,
                            COALESCE(d.metadata,'{{}}'::jsonb) AS metadata
                     FROM documents d
                     WHERE d.user_id = %s {space_clause}
-                    ORDER BY d.created_at {order_dir}
+                    {order_clause}
                     LIMIT %s OFFSET %s
                 """
                 params: List[Any] = [uid]
@@ -1536,8 +1556,10 @@ async def api_kb(request: Request, limit: int = 200, offset: int = 0, space_id: 
                 if space_id is not None:
                     space_clause = "AND d.space_id = %s"
                     params.append(int(space_id))
+                cur.execute(count_sql.format(space_clause=space_clause), params)
+                total = int(cur.fetchone()[0])
                 params.extend([int(limit), int(offset)])
-                sql = base_sql.format(space_clause=space_clause, order_dir=ord_dir)
+                sql = base_sql.format(space_clause=space_clause, order_clause=order_clause)
                 cur.execute(sql, params)
                 rows = cur.fetchall()
 
@@ -1615,8 +1637,10 @@ async def api_kb(request: Request, limit: int = 200, offset: int = 0, space_id: 
         "documents": items,
         "limit": int(limit),
         "offset": int(offset),
+        "total": int(total),
         "space_id": (int(space_id) if space_id is not None else None),
         "order": ord_dir.lower(),
+        "alpha": alpha_order,
         "include_images": bool(include_images),
     }
 

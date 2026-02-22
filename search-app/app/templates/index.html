@@ -428,7 +428,7 @@
       </div>
       <div class="dr-header-actions">
         <label class="ios-toggle" title="Always include web search">
-          <input id="drForceWeb" type="checkbox" checked />
+          <input id="drForceWeb" type="checkbox" />
           <span class="ios-toggle-slider"></span>
           <span class="ios-toggle-label">Web</span>
         </label>
@@ -732,7 +732,7 @@
         if (kbSection) kbSection.hidden = !kbExpanded;
         if (kbLocked) kbLocked.hidden = true;
         if (uploadLocked) uploadLocked.hidden = !uploadExpanded;
-        if (researchLocked) researchLocked.hidden = !researchExpanded;
+        if (researchLocked) researchLocked.hidden = true;
         if (researchSection) researchSection.hidden = !researchExpanded;
         if (accountHeader) accountHeader.hidden = false;
         if (accountHeaderToggle) accountHeaderToggle.setAttribute('aria-expanded', String(accountExpanded));
@@ -853,8 +853,8 @@
       const researchSection = document.getElementById('researchSection');
       const researchLocked = document.getElementById('researchLocked');
       if (headerToggle) headerToggle.setAttribute('aria-expanded', String(researchExpanded));
-      if (researchSection) researchSection.hidden = !researchExpanded;
-      if (researchLocked) researchLocked.hidden = !state.user;
+      if (researchSection) researchSection.hidden = !researchExpanded || !state.user;
+      if (researchLocked) researchLocked.hidden = Boolean(state.user);
       if (headerToggle) headerToggle.classList.toggle('is-open', researchExpanded);
     }
 
@@ -1929,7 +1929,14 @@
         drRenderTimeline();
         drRenderNotebook();
         const convo = detail.conversation || {};
-        if (drEls.titleInput) drEls.titleInput.value = convo.title || 'Untitled session';
+        if (drEls.titleInput) {
+          if (convo.title) {
+            drEls.titleInput.value = convo.title;
+          } else {
+            drEls.titleInput.value = drGenerateSessionTitle();
+            drAutoSaveSessionTitle();
+          }
+        }
         if (drEls.updatedAt) drEls.updatedAt.textContent = convo.updated_at ? `Updated ${new Date(convo.updated_at).toLocaleString()}` : '';
         drSetHeroStatus(drState.steps.length ? `${drState.steps.length} steps captured` : 'Ask a question to begin.');
         const lastAssistant = [...drState.steps].reverse().find(step => step.role === 'assistant');
@@ -2002,7 +2009,7 @@
       drEls.modal.hidden = false;
       drEls.modal.classList.add('open');
       if (drEls.forceWeb && typeof drEls.forceWeb.checked === 'boolean') {
-        drEls.forceWeb.checked = true;
+        drEls.forceWeb.checked = false;
       }
       drState.open = true;
       drHideAllDrawers();

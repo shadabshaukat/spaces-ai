@@ -6,9 +6,9 @@
   <title>SpacesAI</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
-<body>
-  <header class="topbar">
-    <h4>SpacesAI • Personal Knowledge Spaces with RAG</h4>
+<body class="saas">
+  <header class="topbar topbar--app">
+    <h4>SpacesAI</h4>
     <div class="spacer"></div>
     <div id="userControls" class="user-controls" hidden>
       <span id="userEmail" class="user-email"></span>
@@ -17,7 +17,7 @@
     <button id="themeBtn" class="ghost" title="Toggle dark mode">🌓</button>
   </header>
 
-  <main class="container">
+  <main class="container app-shell">
     <!-- Hero and Auth -->
     <section class="card card--wide hero">
       <button class="logo" id="logoHomeBtn" type="button" aria-label="SPACES home">
@@ -255,6 +255,29 @@
       </div>
     </section>
   </main>
+
+  <nav class="bottom-nav" aria-label="Primary">
+    <a class="bottom-nav__item" href="#unifiedSearchPanel">
+      <span class="bottom-nav__icon">🔍</span>
+      <span>Search</span>
+    </a>
+    <a class="bottom-nav__item" href="#kbSection">
+      <span class="bottom-nav__icon">📚</span>
+      <span>Library</span>
+    </a>
+    <a class="bottom-nav__item" href="#uploadSection">
+      <span class="bottom-nav__icon">⬆️</span>
+      <span>Upload</span>
+    </a>
+    <button class="bottom-nav__item" type="button" id="bottomNavResearch">
+      <span class="bottom-nav__icon">🧪</span>
+      <span>Research</span>
+    </button>
+    <button class="bottom-nav__item" type="button" id="bottomNavAccount">
+      <span class="bottom-nav__icon">👤</span>
+      <span>Account</span>
+    </button>
+  </nav>
 
   <div id="toast" class="toast" hidden></div>
   <div id="imagePreviewBackdrop" class="modal-backdrop" hidden></div>
@@ -674,11 +697,16 @@
     function renderResults(hits, query) {
       const wrap = document.getElementById('results');
       const row = document.getElementById('resultsRow');
+      if (wrap) wrap.classList.remove('is-visible');
+      if (row) row.classList.remove('is-visible');
       wrap.innerHTML = '';
       const limited = Array.isArray(hits) ? hits.slice(0, 10) : [];
       if (!limited.length) {
         row.hidden = false;
         wrap.textContent = 'No results';
+        requestAnimationFrame(() => {
+          if (row) row.classList.add('is-visible');
+        });
         return;
       }
       const items = limited.map((h, idx) => {
@@ -692,6 +720,10 @@
       }).join('');
       wrap.innerHTML = items;
       row.hidden = false;
+      requestAnimationFrame(() => {
+        if (wrap) wrap.classList.add('is-visible');
+        if (row) row.classList.add('is-visible');
+      });
     }
 
     let currentSearchController = null;
@@ -872,6 +904,9 @@
       const refsLabel = document.getElementById('refsLabel');
       const hits = document.getElementById('results');
       if (ans) ans.textContent = '';
+      if (answerRow) answerRow.classList.remove('is-visible');
+      if (resultsRow) resultsRow.classList.remove('is-visible');
+      if (refsEl) refsEl.classList.remove('is-visible');
       if (hits) hits.innerHTML = '';
       if (refsEl) refsEl.innerHTML = '';
       if (answerRow) answerRow.hidden = true;
@@ -881,6 +916,8 @@
 
     function resetImageResults() {
       imageResultsGrid.innerHTML = '';
+      imageResultsGrid.classList.remove('is-visible');
+      if (imageResultsSection) imageResultsSection.classList.remove('is-visible');
       unifiedModeState.imageHasResults = false;
       if (imageEmptyState) imageEmptyState.hidden = false;
       if (imageResultsSection) imageResultsSection.hidden = unifiedModeState.active !== 'image';
@@ -926,6 +963,8 @@
 
     function renderImageResults(results) {
       imageResultsGrid.innerHTML = '';
+      imageResultsGrid.classList.remove('is-visible');
+      if (imageResultsSection) imageResultsSection.classList.remove('is-visible');
       if (!Array.isArray(results) || !results.length) {
         unifiedModeState.imageHasResults = false;
         if (imageEmptyState) imageEmptyState.hidden = false;
@@ -968,6 +1007,10 @@
           </div>`;
       }).join('');
       imageResultsGrid.innerHTML = cards;
+      requestAnimationFrame(() => {
+        imageResultsGrid.classList.add('is-visible');
+        if (imageResultsSection) imageResultsSection.classList.add('is-visible');
+      });
     }
 
     function openImagePreview(src, caption) {
@@ -1797,6 +1840,20 @@
 
     // Event wiring for Deep Research UI
     document.getElementById('drBtn')?.addEventListener('click', () => { drOpenModal().catch(console.error); });
+    document.getElementById('bottomNavResearch')?.addEventListener('click', () => {
+      drOpenModal().catch(console.error);
+    });
+    document.getElementById('bottomNavAccount')?.addEventListener('click', () => {
+      if (!state.user) {
+        showToast('Sign in to manage your account');
+        const auth = document.getElementById('authPanel');
+        auth?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        showToast(`Signed in as ${state.user.email}`);
+        const userControls = document.getElementById('userControls');
+        userControls?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
     drEls.close?.addEventListener('click', () => drCloseModal());
     drEls.backdrop?.addEventListener('click', () => drCloseModal());
     drEls.send?.addEventListener('click', () => drHandleSend());

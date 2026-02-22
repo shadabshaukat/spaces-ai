@@ -300,6 +300,55 @@ html { scrollbar-gutter: stable both-edges; }
 /* Hero banner */
 .hero { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; padding-top: 40px; padding-bottom: 28px; min-height: 60vh; }
 
+.landing {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding: 12px 0 24px;
+}
+.landing-card {
+  width: 100%;
+  max-width: 720px;
+  padding: 28px;
+  text-align: center;
+  border-radius: 26px;
+  border: 1px solid var(--border);
+  background: linear-gradient(145deg, #ffffff, #f8fafc);
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.landing-card h1 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.2;
+  color: var(--text);
+}
+.landing-card p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 15px;
+  line-height: 1.6;
+}
+.landing-kicker {
+  display: inline-flex;
+  justify-content: center;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  font-weight: 700;
+}
+.landing-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.landing-actions button { min-width: 160px; }
+
 
 .logo {
   font-size: 96px;

@@ -200,11 +200,6 @@
               <button id="kbSortBtn" class="ghost" title="Toggle sort order">Latest first</button>
               <button id="kbAlphaSortBtn" class="ghost" title="Toggle alphabetical sort">A–Z</button>
             </div>
-            <div class="kb-toolbar-row kb-pagination" id="kbPagination" hidden>
-              <button id="kbPrevPage" class="ghost" type="button">← Prev</button>
-              <div class="kb-page-info" id="kbPageInfo">Page 1</div>
-              <button id="kbNextPage" class="ghost" type="button">Next →</button>
-            </div>
           </div>
         </div>
         <div id="kbBody" class="kb-body">
@@ -213,6 +208,10 @@
           </div>
           <div class="row">
             <div id="kbList" class="results"></div>
+          </div>
+          <div class="kb-toolbar-row kb-pagination" id="kbPagination" hidden>
+            <div class="kb-page-info" id="kbPageInfo">0 documents</div>
+            <div class="kb-page-list" id="kbPageList" aria-label="KB pages"></div>
           </div>
         </div>
       </section>
@@ -2345,8 +2344,7 @@
         const sec = document.getElementById('kbSection');
         const pagination = document.getElementById('kbPagination');
         const pageInfo = document.getElementById('kbPageInfo');
-        const prevBtn = document.getElementById('kbPrevPage');
-        const nextBtn = document.getElementById('kbNextPage');
+        const pageList = document.getElementById('kbPageList');
         const total = Number(data.total || 0);
         const totalPages = Math.max(1, Math.ceil(total / kbPageSize));
         if (kbPage > totalPages) kbPage = totalPages;
@@ -2439,9 +2437,49 @@
         }
         if (pagination) {
           pagination.hidden = totalPages <= 1;
-          if (pageInfo) pageInfo.textContent = `Page ${kbPage} of ${totalPages}`;
-          if (prevBtn) prevBtn.disabled = kbPage <= 1;
-          if (nextBtn) nextBtn.disabled = kbPage >= totalPages;
+          if (pageInfo) {
+            const docLabel = total === 1 ? 'document' : 'documents';
+            pageInfo.textContent = `${total} ${docLabel} • Page ${kbPage} of ${totalPages}`;
+          }
+          if (pageList) {
+            pageList.innerHTML = '';
+            const maxButtons = 5;
+            let start = Math.max(1, kbPage - Math.floor(maxButtons / 2));
+            let end = Math.min(totalPages, start + maxButtons - 1);
+            if (end - start < maxButtons - 1) {
+              start = Math.max(1, end - maxButtons + 1);
+            }
+            const addBtn = (page) => {
+              const btn = document.createElement('button');
+              btn.type = 'button';
+              btn.className = 'ghost kb-page-btn' + (page === kbPage ? ' active' : '');
+              btn.textContent = String(page);
+              btn.addEventListener('click', () => {
+                kbPage = page;
+                loadKB();
+              });
+              pageList.appendChild(btn);
+            };
+            if (start > 1) {
+              addBtn(1);
+              if (start > 2) {
+                const ellipsis = document.createElement('span');
+                ellipsis.className = 'kb-page-ellipsis';
+                ellipsis.textContent = '…';
+                pageList.appendChild(ellipsis);
+              }
+            }
+            for (let p = start; p <= end; p += 1) addBtn(p);
+            if (end < totalPages) {
+              if (end < totalPages - 1) {
+                const ellipsis = document.createElement('span');
+                ellipsis.className = 'kb-page-ellipsis';
+                ellipsis.textContent = '…';
+                pageList.appendChild(ellipsis);
+              }
+              addBtn(totalPages);
+            }
+          }
         }
         setKbViewMode(kbViewMode);
         sec.hidden = !kbExpanded;
@@ -2489,16 +2527,7 @@
       loadKB();
     });
 
-    document.getElementById('kbPrevPage')?.addEventListener('click', () => {
-      if (kbPage > 1) {
-        kbPage -= 1;
-        loadKB();
-      }
-    });
-    document.getElementById('kbNextPage')?.addEventListener('click', () => {
-      kbPage += 1;
-      loadKB();
-    });
+
 
     const kbViewListBtn = document.getElementById('kbViewListBtn');
     const kbViewGridBtn = document.getElementById('kbViewGridBtn');

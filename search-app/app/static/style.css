@@ -122,8 +122,8 @@ button.ghost { background: var(--surface); border: 1px solid var(--border); colo
 /* Topbar ghost button styling for minimalist banner */
 .topbar button.ghost { background: transparent; border: 1px solid #d1d5db; color: inherit; }
 .topbar button.ghost:hover { filter: brightness(0.98); }
-.settings { width: 100%; max-width: 640px; border: 1px solid var(--border); border-radius: 18px; padding: 16px; background: var(--surface); box-shadow: 0 10px 24px rgba(15,23,42,0.08); }
-.settings-pane { display: flex; flex-direction: column; gap: 6px; }
+.settings { width: 100%; max-width: 640px; min-height: 220px; border: 1px solid var(--border); border-radius: 18px; padding: 16px; background: var(--surface); box-shadow: 0 10px 24px rgba(15,23,42,0.08); }
+.settings-pane { display: flex; flex-direction: column; gap: 6px; min-height: 188px; }
 .row { display: flex; align-items: center; gap: 12px; margin: 12px 0; flex-wrap: wrap; }
 .row.wrap { flex-wrap: wrap; }
 .row.no-grow { flex: 0 0 auto; }
@@ -673,7 +673,7 @@ body.dark .dr-followup-chip:hover {
 
 /* Search actions under bar */
 .search-actions-row { display: flex; gap: 10px; justify-content: center; margin-top: 10px; width: 100%; max-width: 640px; margin-left: auto; margin-right: auto; }
-.search-tabs { display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 6px; border: 1px solid var(--border); border-radius: 999px; margin-bottom: 16px; padding: 6px; background: var(--surface); box-shadow: 0 10px 20px rgba(15,23,42,0.06); }
+.search-tabs { display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 6px; border: 1px solid var(--border); border-radius: 999px; margin: 0 auto 16px; padding: 6px; background: var(--surface); box-shadow: 0 10px 20px rgba(15,23,42,0.06); width: fit-content; max-width: 100%; }
 .search-tab { border: none; background: transparent; padding: 8px 16px; border-radius: 999px; font-weight: 600; color: var(--text-muted); }
 .search-tab.active { background: var(--primary); color: #fff; box-shadow: 0 6px 16px rgba(37,99,235,0.25); }
 .search-tab:active { transform: scale(0.98); }

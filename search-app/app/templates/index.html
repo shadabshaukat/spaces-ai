@@ -587,6 +587,19 @@
       if (Number.isNaN(dt.getTime())) return '';
       return dt.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
     }
+    function normalizeImageTags(tags = []) {
+      if (!Array.isArray(tags)) return [];
+      return tags
+        .map(tag => String(tag || '').trim())
+        .filter(tag => {
+          if (!tag) return false;
+          const letters = tag.replace(/[^a-zA-Z]/g, '');
+          const digits = tag.replace(/[^0-9]/g, '');
+          if (digits.length > 0 && letters.length === 0) return false;
+          if (digits.length > letters.length * 2 && letters.length < 2) return false;
+          return true;
+        });
+    }
     function renderLLMText(s) {
       // Minimal markdown-ish renderer: code fences, lists, paragraphs
       const text = s || '';
@@ -1162,6 +1175,21 @@
         clearTimeout(searchTimer);
         searchTimer = setTimeout(() => doSearch().catch(console.error), delay);
       }
+    });
+    searchInputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && unifiedModeState.active === 'image') {
+        e.preventDefault();
+        triggerUnifiedSearch();
+      }
+    });
+
+    [imageTagsEl, imageTopKEl].forEach((el) => {
+      el?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && unifiedModeState.active === 'image') {
+          e.preventDefault();
+          triggerUnifiedSearch();
+        }
+      });
     });
 
     function clearTextResults() {
@@ -2409,9 +2437,10 @@
             const subMetaParts = [];
             if (typeof doc.chunk_count === 'number') subMetaParts.push(`${doc.chunk_count} chunks`);
             if (docImages.length) subMetaParts.push(`${docImages.length} image${docImages.length === 1 ? '' : 's'}`);
-            if (Array.isArray(doc.metadata?.image_tags) && doc.metadata.image_tags.length) {
-              const tags = doc.metadata.image_tags.slice(0, 3).map(t => escapeHtml(String(t))).join(', ');
-              subMetaParts.push(`Tags: ${tags}${doc.metadata.image_tags.length > 3 ? '…' : ''}`);
+            const docTags = normalizeImageTags(doc.metadata?.image_tags || []);
+            if (docTags.length) {
+              const tags = docTags.map(t => escapeHtml(String(t))).join(', ');
+              subMetaParts.push(`Tags: ${tags}`);
             }
             const subMetaHtml = subMetaParts.length ? `<div class="kb-doc-submeta">${subMetaParts.map(part => `<span>${part}</span>`).join('')}</div>` : '';
 
@@ -2419,7 +2448,7 @@
               const thumbSrc = img.thumbnail_url || img.thumbnail_object_url || img.thumbnail_path || img.file_path || '';
               const thumb = thumbSrc ? escapeHtml(thumbSrc) : '';
               const caption = escapeHtml(img.caption || 'No caption');
-              const tags = Array.isArray(img.tags) ? img.tags.map(t => `<span class="badge badge-soft">${escapeHtml(t)}</span>`).join('') : '';
+              const tags = normalizeImageTags(img.tags || []).map(t => `<span class="tag-pill">${escapeHtml(t)}</span>`).join('');
               const remote = (img.object_url || img.thumbnail_object_url) ? renderStorageBadge(state.storageBackend) : '';
               const fileUrl = img.file_url || (doc.id ? `/api/doc-download?doc_id=${doc.id}` : '');
               const downloadLink = fileUrl ? `<a class="ghost" href="${escapeHtml(fileUrl)}" target="_blank" rel="noopener">Open document</a>` : '';

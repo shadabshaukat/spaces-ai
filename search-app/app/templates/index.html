@@ -9,6 +9,10 @@
 <body class="saas">
   <header class="topbar topbar--app">
     <h4>SpacesAI</h4>
+    <div class="topbar-space" aria-label="Active space">
+      <span class="topbar-space-label">Space</span>
+      <select id="topbarSpaceSelect" aria-label="Choose space"></select>
+    </div>
     <div class="spacer"></div>
     <button id="themeBtn" class="ghost" title="Toggle dark mode">🌓</button>
   </header>
@@ -167,10 +171,13 @@
 
     <section class="app-screen" id="screenLibrary" data-screen="library">
       <div class="screen-header">
-        <div>
-          <p class="screen-kicker">Library</p>
-          <h2>Your Knowledge Base</h2>
-        </div>
+        <button id="kbHeaderToggle" class="kb-header-toggle" type="button" aria-expanded="false">
+          <div>
+            <p class="screen-kicker">Library</p>
+            <h2>Your Knowledge Base</h2>
+          </div>
+          <span class="caret" aria-hidden="true">▸</span>
+        </button>
       </div>
       <div class="screen-locked" id="kbLocked" hidden>
         <strong>Sign in to access your library.</strong>
@@ -184,16 +191,23 @@
             <p class="muted">Review and manage your stored documents.</p>
           </div>
           <div class="kb-toolbar-actions">
+            <div class="kb-view-toggle" role="group" aria-label="View toggle">
+              <button id="kbViewListBtn" class="ghost active" type="button">List</button>
+              <button id="kbViewGridBtn" class="ghost" type="button">Grid</button>
+            </div>
             <button id="kbRefreshBtn" class="primary">Refresh</button>
             <button id="kbSortBtn" class="ghost" title="Toggle sort order">Latest first</button>
+            <button id="kbAlphaSortBtn" class="ghost" title="Toggle alphabetical sort">A–Z</button>
             <button id="kbDeleteSelectedBtn" class="ghost" title="Delete selected">Delete selected</button>
           </div>
         </div>
-        <div class="kb-select-row">
-          <label><input type="checkbox" id="kbSelectAll" /> Select all</label>
-        </div>
-        <div class="row">
-          <div id="kbList" class="results"></div>
+        <div id="kbBody" class="kb-body">
+          <div class="kb-select-row">
+            <label><input type="checkbox" id="kbSelectAll" /> Select all</label>
+          </div>
+          <div class="row">
+            <div id="kbList" class="results"></div>
+          </div>
         </div>
       </section>
     </section>
@@ -631,6 +645,16 @@
       storageBackend: null,
     };
 
+    let kbOrder = 'desc';
+    let kbAlphaOrder = null;
+    let kbViewMode = 'list';
+    let kbExpanded = false;
+
+    function setTopbarSpaceDisabled(disabled) {
+      const topbarSelect = document.getElementById('topbarSpaceSelect');
+      if (topbarSelect) topbarSelect.disabled = disabled;
+    }
+
     function setLoggedInUI() {
       const auth = document.getElementById('authPanel');
       const accountPanel = document.getElementById('accountPanel');
@@ -669,14 +693,25 @@
 
     function populateSpaces() {
       const sel = document.getElementById('spacesSelect');
+      const topSel = document.getElementById('topbarSpaceSelect');
       sel.innerHTML = '';
+      if (topSel) topSel.innerHTML = '';
       for (const s of state.spaces) {
         const opt = document.createElement('option');
         opt.value = String(s.id);
         opt.textContent = s.name + (s.is_default ? ' (default)' : '');
         sel.appendChild(opt);
+        if (topSel) {
+          const topOpt = document.createElement('option');
+          topOpt.value = String(s.id);
+          topOpt.textContent = s.name;
+          topSel.appendChild(topOpt);
+        }
       }
-      if (state.spaceId) sel.value = String(state.spaceId);
+      if (state.spaceId) {
+        sel.value = String(state.spaceId);
+        if (topSel) topSel.value = String(state.spaceId);
+      }
     }
 
     async function initUser() {
@@ -688,17 +723,39 @@
           const def = (state.spaces.find(s => s.is_default) || {}).id;
           state.spaceId = def || (state.spaces[0] ? state.spaces[0].id : null);
           populateSpaces();
+          setTopbarSpaceDisabled(false);
         } else {
           state.user = null;
           state.spaces = [];
           state.spaceId = null;
+          setTopbarSpaceDisabled(true);
         }
       } catch (e) {
         state.user = null;
         state.spaces = [];
         state.spaceId = null;
+        setTopbarSpaceDisabled(true);
       }
       setLoggedInUI();
+    }
+
+    function setKbViewMode(nextMode) {
+      const listBtn = document.getElementById('kbViewListBtn');
+      const gridBtn = document.getElementById('kbViewGridBtn');
+      const list = document.getElementById('kbList');
+      kbViewMode = nextMode === 'grid' ? 'grid' : 'list';
+      if (listBtn) listBtn.classList.toggle('active', kbViewMode === 'list');
+      if (gridBtn) gridBtn.classList.toggle('active', kbViewMode === 'grid');
+      if (list) list.classList.toggle('kb-grid', kbViewMode === 'grid');
+    }
+
+    function setKbExpanded(expanded) {
+      kbExpanded = Boolean(expanded);
+      const kbHeaderToggle = document.getElementById('kbHeaderToggle');
+      const kbBody = document.getElementById('kbBody');
+      if (kbHeaderToggle) kbHeaderToggle.setAttribute('aria-expanded', String(kbExpanded));
+      if (kbBody) kbBody.hidden = !kbExpanded;
+      if (kbHeaderToggle) kbHeaderToggle.classList.toggle('is-open', kbExpanded);
     }
 
     // Auth handlers
@@ -786,6 +843,20 @@
       state.spaceId = sid || state.spaceId;
       // Switch to a separate conversation per-space; resume from storage on next open
       drResetSpaceContext();
+      const topSel = document.getElementById('topbarSpaceSelect');
+      if (topSel && topSel.value !== String(state.spaceId)) topSel.value = String(state.spaceId);
+      loadKB();
+    });
+
+    document.getElementById('topbarSpaceSelect').addEventListener('change', (e) => {
+      const sid = parseInt(e.target.value || '0', 10);
+      if (!sid) return;
+      state.spaceId = sid;
+      const accountSel = document.getElementById('spacesSelect');
+      if (accountSel && accountSel.value !== String(state.spaceId)) accountSel.value = String(state.spaceId);
+      drResetSpaceContext();
+      loadKB();
+      showToast('Space updated');
     });
 
     // Search
@@ -2172,13 +2243,12 @@
       return null;
     }
 
-    let kbOrder = 'desc';
-
     async function loadKB() {
       try {
         const qsParts = [];
         if (state.spaceId) qsParts.push(`space_id=${encodeURIComponent(state.spaceId)}`);
         if (kbOrder) qsParts.push(`order=${encodeURIComponent(kbOrder)}`);
+        if (kbAlphaOrder) qsParts.push(`alpha=${encodeURIComponent(kbAlphaOrder)}`);
         const qs = qsParts.length ? `?${qsParts.join('&')}` : '';
         const data = await api(`/api/kb${qs}`);
         const list = document.getElementById('kbList');
@@ -2270,6 +2340,7 @@
         } else {
           list.textContent = 'No documents yet.';
         }
+        setKbViewMode(kbViewMode);
         sec.hidden = false;
         window.scrollTo({ top: sec.offsetTop - 16, behavior: 'smooth' });
       } catch (e) {
@@ -2295,6 +2366,30 @@
       kbOrder = (kbOrder === 'desc') ? 'asc' : 'desc';
       kbSortBtn.textContent = kbOrder === 'desc' ? 'Latest first' : 'Oldest first';
       loadKB();
+    });
+
+    const kbAlphaSortBtn = document.getElementById('kbAlphaSortBtn');
+    if (kbAlphaSortBtn) kbAlphaSortBtn.addEventListener('click', () => {
+      if (!kbAlphaOrder) {
+        kbAlphaOrder = 'asc';
+      } else if (kbAlphaOrder === 'asc') {
+        kbAlphaOrder = 'desc';
+      } else {
+        kbAlphaOrder = null;
+      }
+      kbAlphaSortBtn.textContent = kbAlphaOrder === 'asc' ? 'A–Z' : (kbAlphaOrder === 'desc' ? 'Z–A' : 'A–Z');
+      kbAlphaSortBtn.classList.toggle('active', Boolean(kbAlphaOrder));
+      loadKB();
+    });
+
+    const kbViewListBtn = document.getElementById('kbViewListBtn');
+    const kbViewGridBtn = document.getElementById('kbViewGridBtn');
+    kbViewListBtn?.addEventListener('click', () => setKbViewMode('list'));
+    kbViewGridBtn?.addEventListener('click', () => setKbViewMode('grid'));
+
+    const kbHeaderToggle = document.getElementById('kbHeaderToggle');
+    kbHeaderToggle?.addEventListener('click', () => {
+      setKbExpanded(!kbExpanded);
     });
 
     document.getElementById('logoHomeBtn')?.addEventListener('click', () => {
@@ -2663,6 +2758,8 @@
       if (dzStatus) dzStatus.textContent = 'Drop files here or use the file chooser above';
       if (badge) badge.textContent = 'No files selected.';
       droppedFiles = [];
+      setKbExpanded(false);
+      setKbViewMode('list');
       await initUser();
       await loadProviders();
       await loadSearchConfig();

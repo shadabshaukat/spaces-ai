@@ -27,35 +27,28 @@ html { scrollbar-gutter: stable both-edges; }
 .topbar { background: rgba(255,255,255,0.9); -webkit-backdrop-filter: saturate(180%) blur(6px); backdrop-filter: saturate(180%) blur(6px); color: var(--text); padding: 6px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 30; min-height: 44px; }
 .topbar .spacer { flex: 1; }
 .topbar h1, .topbar h2, .topbar h4 { margin: 0; font-size: var(--font-lg); font-weight: 600; line-height: 1.2; }
-.topbar-space {
+.topbar-brand {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, rgba(99,102,241,0.18), rgba(59,130,246,0.12));
-  border: 1px solid rgba(99,102,241,0.35);
-  color: #1f2937;
-  font-size: 12px;
+  gap: 10px;
   font-weight: 600;
 }
-.topbar-space-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.2em; color: #475569; }
-.topbar-space select {
+.topbar-brand select {
   border: none;
   background: transparent;
   font-weight: 600;
   color: inherit;
-  font-size: 13px;
-  padding: 2px 20px 2px 2px;
+  font-size: 14px;
+  padding: 2px 22px 2px 0;
   appearance: none;
   background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
     linear-gradient(135deg, currentColor 50%, transparent 50%);
-  background-position: calc(100% - 12px) 50%, calc(100% - 7px) 50%;
+  background-position: calc(100% - 12px) 55%, calc(100% - 7px) 55%;
   background-size: 5px 5px, 5px 5px;
   background-repeat: no-repeat;
 }
-.topbar-space select:focus { outline: none; }
-.topbar-space select:disabled { opacity: 0.5; cursor: not-allowed; }
+.topbar-brand select:focus { outline: none; }
+.topbar-brand select:disabled { opacity: 0.5; cursor: not-allowed; }
 .container { max-width: 1100px; margin: 20px auto; padding: 0 16px 96px; display: grid; grid-template-columns: 1fr; gap: 22px; }
 .app-shell { min-height: calc(100vh - 120px); }
 .app-shell--ios {
@@ -131,19 +124,23 @@ html { scrollbar-gutter: stable both-edges; }
 .card-soft .row:last-child { margin-bottom: 0; }
 .kb-toolbar {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
   margin-bottom: 12px;
 }
-.kb-toolbar h3 { margin: 0; }
-.kb-toolbar p { margin: 4px 0 0; }
+.kb-toolbar p { margin: 0; }
 .kb-toolbar-actions {
-  display: inline-flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.kb-toolbar-row {
+  display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 .kb-toolbar-actions .ghost { border-radius: 999px; }
 .kb-view-toggle {
@@ -244,7 +241,7 @@ html { scrollbar-gutter: stable both-edges; }
 }
 .upload-submit .primary { min-width: 160px; }
 .upload-dropzone { min-height: 200px; }
-.upload-dropzone .dz-desc { text-align: center; }
+.upload-dropzone .dz-desc { text-align: center; line-height: 1.6; }
 .upload-dropzone .dz-status { margin-top: 6px; }
 .upload-dropzone .dz-meta { display: none; }
 /* Hero banner */
@@ -1113,13 +1110,7 @@ body.dark .hit:hover { background: #0e1530; border-color: #1f2937; }
 body.dark { background: #0f172a; color: #e5e7eb; }
 body.dark .topbar { background: rgba(15,23,42,0.9); color: #e5e7eb; border-bottom-color: #1f2937; }
 body.dark .topbar button.ghost { background: transparent; border-color: #1f2937; color: #e5e7eb; }
-body.dark .topbar-space {
-  background: linear-gradient(90deg, rgba(129,140,248,0.2), rgba(56,189,248,0.18));
-  border-color: rgba(129,140,248,0.4);
-  color: #e2e8f0;
-}
-body.dark .topbar-space-label { color: #94a3b8; }
-body.dark .topbar-space select { color: #e2e8f0; }
+body.dark .topbar-brand select { color: #e2e8f0; }
 body.dark .card { background: #0b1220; box-shadow: none; border: 1px solid #1f2937; }
 body.dark .settings, body.dark .panel { background: #0b1220; border-color: #1f2937; color: #e5e7eb; box-shadow: none; }
 body.dark .search-input { background: #0b1220; color: #e5e7eb; border-color: #1f2937; }
@@ -1280,6 +1271,9 @@ body.dark .kb-view-toggle .ghost.active { background: #2563eb; border-color: #25
   .upload-submit .primary { width: 100%; }
   .upload-picker-label { width: 100%; }
   .kb-doc-body { grid-template-columns: 1fr; }
+  .kb-toolbar-row { flex-direction: column; align-items: stretch; }
+  .kb-toolbar-row button,
+  .kb-toolbar-row .kb-view-toggle { width: 100%; justify-content: center; }
 }
 
 @media (max-width: 900px) {

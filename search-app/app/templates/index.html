@@ -8,9 +8,8 @@
 </head>
 <body class="saas">
   <header class="topbar topbar--app">
-    <h4>SpacesAI</h4>
-    <div class="topbar-space" aria-label="Active space">
-      <span class="topbar-space-label">Space</span>
+    <div class="topbar-brand" aria-label="SpacesAI space selector">
+      <h4>SpacesAI</h4>
       <select id="topbarSpaceSelect" aria-label="Choose space"></select>
     </div>
     <div class="spacer"></div>
@@ -185,20 +184,20 @@
       </div>
       <section id="kbSection" class="card card--wide card-soft" hidden>
         <div class="kb-toolbar">
-          <div>
-            <p class="screen-kicker">Library</p>
-            <h3>Your Knowledge Base</h3>
-            <p class="muted">Review and manage your stored documents.</p>
-          </div>
+          <p class="muted">Review and manage your stored documents.</p>
           <div class="kb-toolbar-actions">
-            <div class="kb-view-toggle" role="group" aria-label="View toggle">
-              <button id="kbViewListBtn" class="ghost active" type="button">List</button>
-              <button id="kbViewGridBtn" class="ghost" type="button">Grid</button>
+            <div class="kb-toolbar-row">
+              <div class="kb-view-toggle" role="group" aria-label="View toggle">
+                <button id="kbViewListBtn" class="ghost active" type="button">List</button>
+                <button id="kbViewGridBtn" class="ghost" type="button">Grid</button>
+              </div>
+              <button id="kbRefreshBtn" class="primary">Refresh</button>
+              <button id="kbDeleteSelectedBtn" class="ghost" title="Delete selected">Delete selected</button>
             </div>
-            <button id="kbRefreshBtn" class="primary">Refresh</button>
-            <button id="kbSortBtn" class="ghost" title="Toggle sort order">Latest first</button>
-            <button id="kbAlphaSortBtn" class="ghost" title="Toggle alphabetical sort">A–Z</button>
-            <button id="kbDeleteSelectedBtn" class="ghost" title="Delete selected">Delete selected</button>
+            <div class="kb-toolbar-row">
+              <button id="kbSortBtn" class="ghost" title="Toggle sort order">Latest first</button>
+              <button id="kbAlphaSortBtn" class="ghost" title="Toggle alphabetical sort">A–Z</button>
+            </div>
           </div>
         </div>
         <div id="kbBody" class="kb-body">
@@ -253,7 +252,11 @@
           <div id="dropzone" class="dropzone upload-dropzone">
             <div class="dz-inner">
               <div class="dz-header">Drag & drop files</div>
-              <div class="dz-desc">Documents: PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON • Images: PNG, JPG, JPEG, TIFF, BMP, GIF</div>
+              <div class="dz-desc">
+                <strong>Documents:</strong> PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, MD, JSON
+                <br />
+                <strong>Images:</strong> PNG, JPG, JPEG, TIFF, BMP, GIF
+              </div>
               <div class="dz-status" id="dzStatus">Drop files here or use the file chooser above</div>
               <div class="dz-meta" id="uploadStorageInfo"></div>
             </div>
@@ -663,6 +666,7 @@
       const kb = document.getElementById('kbSection');
       const emailEl = document.getElementById('userEmail');
       const kbLocked = document.getElementById('kbLocked');
+      const kbSection = document.getElementById('kbSection');
       const uploadLocked = document.getElementById('uploadLocked');
       const researchLocked = document.getElementById('researchLocked');
       const accountHeader = document.getElementById('accountHeader');
@@ -672,6 +676,7 @@
         if (app) app.hidden = false;
         if (up) up.hidden = false;
         if (kb) kb.hidden = false;
+        if (kbSection) kbSection.hidden = !kbExpanded;
         if (kbLocked) kbLocked.hidden = true;
         if (uploadLocked) uploadLocked.hidden = true;
         if (researchLocked) researchLocked.hidden = true;
@@ -683,6 +688,7 @@
         if (app) app.hidden = true;
         if (up) up.hidden = true;
         if (kb) kb.hidden = true;
+        if (kbSection) kbSection.hidden = true;
         if (kbLocked) kbLocked.hidden = false;
         if (uploadLocked) uploadLocked.hidden = false;
         if (researchLocked) researchLocked.hidden = false;
@@ -753,8 +759,10 @@
       kbExpanded = Boolean(expanded);
       const kbHeaderToggle = document.getElementById('kbHeaderToggle');
       const kbBody = document.getElementById('kbBody');
+      const kbSection = document.getElementById('kbSection');
       if (kbHeaderToggle) kbHeaderToggle.setAttribute('aria-expanded', String(kbExpanded));
       if (kbBody) kbBody.hidden = !kbExpanded;
+      if (kbSection) kbSection.hidden = !kbExpanded;
       if (kbHeaderToggle) kbHeaderToggle.classList.toggle('is-open', kbExpanded);
     }
 
@@ -2341,8 +2349,10 @@
           list.textContent = 'No documents yet.';
         }
         setKbViewMode(kbViewMode);
-        sec.hidden = false;
-        window.scrollTo({ top: sec.offsetTop - 16, behavior: 'smooth' });
+        sec.hidden = !kbExpanded;
+        if (kbExpanded) {
+          window.scrollTo({ top: sec.offsetTop - 16, behavior: 'smooth' });
+        }
       } catch (e) {
         console.error(e);
         showToast('Failed to load knowledge base');
